@@ -27,7 +27,8 @@ selected file to the static host. Multiple archives are processed serially by
 the same worker, so deduplication and overlap correction share one session.
 
 The React interface exposes seven local views: overview, journeys, charging,
-battery, activity, quality, and data management. Period filters and detail
+battery, activity, quality, and data management. Shared preset or custom date
+filters and detail
 selection operate on the in-memory presentation snapshot and therefore require
 no additional processing or network request.
 
@@ -36,15 +37,20 @@ created only after an explicit export action.
 
 ## Portable history
 
-`xpeng-analytics-history` version 1 is a gzip-compressed JSON document containing a
-sanitised SQLite image, its SHA-256 checksum, the schema version, and the local
-pseudonymisation key. Keeping that key allows a future XPENG ZIP for the same
-vehicle to resolve to the same internal identifier. The format contains no raw
-VIN, but it remains sensitive personal data and is not encrypted.
+`xpeng-analytics-history` version 2 uses the `.xpeng` extension. It contains a
+small JSON header followed by a directly XZ/LZMA2-compressed sanitised SQLite
+image. Export and import stream the database in chunks, avoiding the Base64 and
+full-document memory overhead of version 1. The header stores the SHA-256
+checksum, schema version, uncompressed size, and local pseudonymisation key.
+Keeping that key allows a future XPENG ZIP for the same vehicle to resolve to
+the same internal identifier. The format contains no raw VIN, but it remains
+sensitive personal data and is not encrypted. Existing version 1 JSON.GZ
+histories remain importable; new exports always use version 2.
 
-Import validates gzip and expansion limits, format/schema versions, checksum,
-SQLite integrity, required tables, and the XPENG-only source constraint before
-replacing the temporary session. Derived analytics are rebuilt after restore.
+Import validates format and expansion limits, compression completion,
+format/schema versions, declared size, checksum, SQLite integrity, required
+tables, and the XPENG-only source constraint before replacing the temporary
+session. Derived analytics are rebuilt after restore.
 
 All user-facing browser messages are represented by stable codes and translated
 in the UI. European Portuguese (`pt-PT`) and English (`en`) are required and CI

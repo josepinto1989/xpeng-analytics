@@ -15,7 +15,7 @@ privacy messaging and no application server.
 ### Phase 3 — Import and portable history
 
 Process XPENG Data Act ZIP exports locally, deduplicate records, add more data
-to the active session, and export or restore a versioned JSON.GZ history.
+to the active session, and export or restore a versioned portable history.
 
 ### Phase 4 — Detailed analytics
 
@@ -40,6 +40,12 @@ JSON.GZ history; and publish the first stable release.
 ### Phase 7 — User acceptance and operational improvements
 
 This phase is intentionally driven by real use after v1.0.0.
+
+The first Phase 7 cycle ships in v1.1.0: custom date ranges, expanded charging,
+battery, parked-use, and activity views, a corrected journeys-by-month chart,
+sidebar release/support information, and the smaller streaming `.xpeng`
+history format. Phase 7 remains open for the owner's real-world tests and
+incremental operational improvements.
 
 - Test imports from different XPENG export periods and models.
 - Compare representative totals with the source export and the private

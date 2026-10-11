@@ -21,6 +21,8 @@ reports or commit them to Git.
 Portable histories also contain the random pseudonymisation key needed to merge
 future exports from the same vehicle. They do not contain the original VIN and
 are not encrypted; possession of the file grants access to its processed data.
+The `.xpeng` extension and compression reduce size but do not provide
+encryption or access control.
 
 The application must never add telemetry, advertising, remote fonts, remote
 map tiles, crash uploads, or analytics without a separate public design review

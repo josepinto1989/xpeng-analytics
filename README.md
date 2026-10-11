@@ -13,17 +13,19 @@ state unless the user explicitly exports a portable history file.
 
 ## Current status
 
-Phases 1 through 6 are complete and version 1.0.0 is the first public release.
+Phases 1 through 6 are complete and version 1.1.0 contains the first Phase 7
+improvement cycle after the v1.0.0 public release.
 This repository is an isolated, sanitised application with an XPENG-only
 analytics core and a browser processor that keeps
 its SQLite state in a Web Worker's temporary filesystem. The responsive
 analytics dashboard is available in European Portuguese and English and covers
 overview metrics, journeys, charging, battery observations, activity, data
-quality, and session data management. A versioned `json.gz` history can be
-exported and restored locally, preserving deduplication for later XPENG ZIP
-imports. Automated checks and GitHub Pages deployment are configured for the
-public repository. Phase 7 covers user acceptance testing and ongoing
-operational improvements; see [docs/ROADMAP.md](docs/ROADMAP.md).
+quality, and session data management. A compact versioned `.xpeng` history can
+be exported and restored locally, preserving deduplication for later XPENG ZIP
+imports. Version 1 JSON.GZ histories remain importable. Automated checks and
+GitHub Pages deployment are configured for the public repository. Phase 7
+covers user acceptance testing and ongoing operational improvements; see
+[docs/ROADMAP.md](docs/ROADMAP.md).
 
 The dashboard is usable with XPENG ZIP exports and portable histories.
 

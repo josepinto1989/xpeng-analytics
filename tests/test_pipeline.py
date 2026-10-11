@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import base64
 import csv
 import gzip
+import hashlib
 import io
 import json
 import sys
@@ -158,9 +160,10 @@ class PipelineTest(unittest.TestCase):
         finally:
             connection.close()
 
-        portable = Path(self.temp.name) / "history.json.gz"
+        portable = Path(self.temp.name) / "history.xpeng"
         exported = export_portable_history(portable, self.settings)
         self.assertEqual(exported["format"], "xpeng-analytics-history")
+        self.assertEqual(exported["version"], 2)
 
         restored_root = Path(self.temp.name) / "restored"
         restored = Settings(
@@ -172,7 +175,7 @@ class PipelineTest(unittest.TestCase):
             timezone="Europe/Lisbon",
         )
         metadata = import_portable_history(portable, restored)
-        self.assertEqual(metadata["version"], 1)
+        self.assertEqual(metadata["version"], 2)
         duplicate = import_xpeng_archive(archive, restored, batch_size=10)
         self.assertTrue(duplicate.skipped)
         restored_connection = connect(restored.database_path)
@@ -182,14 +185,30 @@ class PipelineTest(unittest.TestCase):
         finally:
             restored_connection.close()
 
-        tampered = Path(self.temp.name) / "tampered.json.gz"
-        with gzip.open(portable, "rt", encoding="utf-8") as handle:
-            document = json.load(handle)
-        document["databaseSha256"] = "0" * 64
-        with gzip.open(tampered, "wt", encoding="utf-8") as handle:
-            json.dump(document, handle)
+        tampered = Path(self.temp.name) / "tampered.xpeng"
+        payload = bytearray(portable.read_bytes())
+        payload[-1] ^= 0x01
+        tampered.write_bytes(payload)
         with self.assertRaises(PortableHistoryError):
             import_portable_history(tampered, restored)
+
+        legacy = Path(self.temp.name) / "legacy-history.json.gz"
+        database = self.settings.database_path.read_bytes()
+        key = (self.settings.private_root / "vehicle_hmac.key").read_bytes()
+        document = {
+            "format": "xpeng-analytics-history",
+            "version": 1,
+            "exportedAtUtc": "2026-10-11T00:00:00Z",
+            "schemaVersion": 1,
+            "timezone": "Europe/Lisbon",
+            "databaseSha256": hashlib.sha256(database).hexdigest(),
+            "databaseBase64": base64.b64encode(database).decode("ascii"),
+            "vehicleKeyBase64": base64.b64encode(key).decode("ascii"),
+        }
+        with gzip.open(legacy, "wt", encoding="utf-8") as handle:
+            json.dump(document, handle, separators=(",", ":"))
+        legacy_metadata = import_portable_history(legacy, restored)
+        self.assertEqual(legacy_metadata["version"], 1)
 
 
 if __name__ == "__main__":

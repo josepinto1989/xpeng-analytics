@@ -275,12 +275,13 @@ def build_dashboard_snapshot(connection, timezone_name: str) -> dict:
         row["rollingCapacityKwh"] = rounded(rolling)
         row["relativeSohPct"] = rounded(rolling / baseline * 100, 1) if baseline else None
 
-    monthly = defaultdict(lambda: {"distanceKm": 0.0, "netEnergyKwh": 0.0, "trips": 0, "charges": 0})
+    monthly = defaultdict(lambda: {"distanceKm": 0.0, "netEnergyKwh": 0.0, "trips": 0, "journeys": 0, "charges": 0})
     for row in daily:
         key = row["date"][:7]
         monthly[key]["distanceKm"] += row["distanceKm"] or 0
         monthly[key]["netEnergyKwh"] += row["netEnergyKwh"] or 0
         monthly[key]["trips"] += row["trips"]
+        monthly[key]["journeys"] += row["journeys"]
         monthly[key]["charges"] += row["charges"]
 
     coverage = []

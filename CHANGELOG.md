@@ -2,6 +2,22 @@
 
 All notable public changes are documented here.
 
+## 1.1.0 — 2026-10-11
+
+- Added a custom date range shared by overview, journeys, charging, battery,
+  and activity views.
+- Expanded charging totals with total duration, maximum power, and explicit
+  total estimated losses in kWh.
+- Rebuilt battery and parked-use cards from the detailed private reference,
+  while keeping capacity and SOH clearly labelled as calculated estimates.
+- Added parked-power and daily parked-loss charts plus a more detailed stop
+  table.
+- Expanded activity with period totals and daily energy, charging-energy, and
+  charging-session charts; fixed journeys by month and clarified its meaning.
+- Added the Ko-fi action and displayed application version to the sidebar.
+- Introduced compact `.xpeng` history version 2 with streaming XZ/LZMA2
+  compression; legacy JSON.GZ histories remain importable.
+
 ## 1.0.0 — 2026-10-11
 
 - First stable public release of XPENG Analytics.

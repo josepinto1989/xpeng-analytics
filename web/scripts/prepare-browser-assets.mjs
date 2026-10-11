@@ -1,4 +1,5 @@
-import { copyFile, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { copyFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -16,6 +17,7 @@ for (const name of ["pyodide.mjs", "pyodide.asm.mjs", "pyodide.asm.wasm", "pytho
 }
 
 const pythonSources = [];
+const processorHash = createHash("sha256");
 const packageRoot = join(projectRoot, "src", "xpeng_data");
 for (const entry of await readdir(packageRoot, { withFileTypes: true })) {
   if (entry.isFile() && entry.name.endsWith(".py")) pythonSources.push(`src/xpeng_data/${entry.name}`);
@@ -24,13 +26,16 @@ for (const entry of await readdir(packageRoot, { withFileTypes: true })) {
 for (const name of pythonSources) {
   const destination = join(outputRoot, "python", name);
   await mkdir(dirname(destination), { recursive: true });
-  await copyFile(join(projectRoot, name), destination);
+  const source = await readFile(join(projectRoot, name));
+  processorHash.update(name).update(source);
+  await writeFile(destination, source);
 }
 
 await writeFile(
   join(outputRoot, "python-files.json"),
   JSON.stringify({
     format: "xpeng-analytics-browser-processor/v1",
+    revision: processorHash.digest("hex").slice(0, 16),
     files: pythonSources.map((name) => name.replaceAll("\\", "/")),
   }),
   "utf8",

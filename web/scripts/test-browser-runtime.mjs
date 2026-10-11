@@ -97,7 +97,7 @@ try:
 finally:
     connection.close()
 
-history_path = Path('/session/history.json.gz')
+history_path = Path('/session/history.xpeng')
 exported_history = export_portable_history(history_path, settings)
 for candidate in (settings.database_path, Path(f'{settings.database_path}-wal'), Path(f'{settings.database_path}-shm')):
     candidate.unlink(missing_ok=True)
@@ -132,7 +132,7 @@ json.dumps({
 const parsed = JSON.parse(result);
 if (parsed.firstSkipped || !parsed.secondSkipped || !parsed.validation || parsed.trips < 1 || parsed.imports !== 1
     || parsed.dashboardFormat !== "xpeng-analytics-dashboard/v1" || parsed.dashboardTrips < 1 || parsed.dashboardCharges < 1
-    || parsed.historyFormat !== "xpeng-analytics-history" || parsed.historyVersion !== 1 || !parsed.duplicateAfterRestore
+    || parsed.historyFormat !== "xpeng-analytics-history" || parsed.historyVersion !== 2 || !parsed.duplicateAfterRestore
     || !parsed.restoredValidation || parsed.restoredTrips < 1) {
   throw new Error(`Unexpected browser runtime result: ${result}`);
 }

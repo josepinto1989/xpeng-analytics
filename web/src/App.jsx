@@ -36,7 +36,9 @@ function formatNumber(value, locale, options = {}) {
 
 function createWorker() {
   const base = new URL(import.meta.env.BASE_URL, window.location.href);
-  return new Worker(new URL("import-worker.js", base), {
+  const workerUrl = new URL("import-worker.js", base);
+  workerUrl.searchParams.set("v", APP_VERSION);
+  return new Worker(workerUrl, {
     type: "module",
     name: "xpeng-analytics-processor",
   });
@@ -92,7 +94,7 @@ export default function App() {
         setBusy(false);
         setProgress({ percent: 100, phase: "complete" });
       } else if (message.type === "history_exported") {
-        const blob = new Blob([message.payload], { type: "application/gzip" });
+        const blob = new Blob([message.payload], { type: "application/octet-stream" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
@@ -110,8 +112,9 @@ export default function App() {
         setProgress({ percent: 100, phase: "reset" });
       } else if (message.type === "error") {
         setError(message.code ?? "unknown_error");
-        if (activeFileRef.current) {
-          setHistory((current) => [{ name: activeFileRef.current.name, status: "failed", rows: 0 }, ...current]);
+        const failedName = activeFileRef.current?.name;
+        if (failedName) {
+          setHistory((current) => [{ name: failedName, status: "failed", rows: 0 }, ...current]);
         }
         queueRef.current = [];
         activeFileRef.current = null;
@@ -155,7 +158,10 @@ export default function App() {
   };
 
   const chooseHistory = (files) => {
-    const selected = [...files].find((file) => file.name.toLowerCase().endsWith(".json.gz"));
+    const selected = [...files].find((file) => {
+      const name = file.name.toLowerCase();
+      return name.endsWith(".xpeng") || name.endsWith(".json.gz");
+    });
     if (!selected || busy || !engineReady) return;
     if (snapshot && !window.confirm(t("replaceWithHistoryConfirm"))) return;
     activeFileRef.current = selected;
@@ -262,7 +268,7 @@ export default function App() {
             disabled={!engineReady || busy}
             onChange={(event) => chooseFiles(event.target.files)}
           />
-          <input ref={historyInputRef} className="visually-hidden" id="history-file" type="file" accept=".gz,application/gzip" disabled={!engineReady || busy} onChange={(event) => chooseHistory(event.target.files)} />
+          <input ref={historyInputRef} className="visually-hidden" id="history-file" type="file" accept=".xpeng,.json.gz,.gz,application/octet-stream,application/gzip" disabled={!engineReady || busy} onChange={(event) => chooseHistory(event.target.files)} />
           <div className="landing-actions">
             <label className={`file-button ${busy || !engineReady ? "is-disabled" : ""}`} htmlFor="xpeng-files"><span aria-hidden="true">＋</span>{busy ? t("importing") : t("chooseFiles")}</label>
             <label className={`file-button file-button-secondary ${busy || !engineReady ? "is-disabled" : ""}`} htmlFor="history-file"><span aria-hidden="true">↥</span>{t("importHistoryFile")}</label>

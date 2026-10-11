@@ -23,12 +23,12 @@ async function runtime() {
       emitProgress(3, "runtime_load");
       const { loadPyodide } = await import(assetUrl("processor/pyodide/pyodide.mjs"));
       const pyodide = await loadPyodide({ indexURL: assetUrl("processor/pyodide/") });
-      const manifestResponse = await fetch(assetUrl("processor/python-files.json"), { cache: "force-cache" });
+      const manifestResponse = await fetch(assetUrl("processor/python-files.json"), { cache: "no-store" });
       if (!manifestResponse.ok) throw new Error("processor_manifest_unavailable");
       const manifest = await manifestResponse.json();
       ensureDirectory(pyodide.FS, "/app");
       for (const name of manifest.files) {
-        const response = await fetch(assetUrl(`processor/python/${name}`), { cache: "force-cache" });
+        const response = await fetch(`${assetUrl(`processor/python/${name}`)}?v=${manifest.revision}`, { cache: "force-cache" });
         if (!response.ok) throw new Error("processor_component_unavailable");
         const destination = `/app/${name}`;
         ensureDirectory(pyodide.FS, destination.slice(0, destination.lastIndexOf("/")));
@@ -155,7 +155,7 @@ json.dumps({
 async function exportHistory() {
   const pyodide = await runtime();
   emitProgress(12, "history_export");
-  const destination = "/session/xpeng-analytics-history.json.gz";
+  const destination = "/session/xpeng-analytics-history.xpeng";
   pyodide.globals.set("browser_history_destination", destination);
   const metadataJson = await pyodide.runPythonAsync(`
 import json
@@ -172,7 +172,7 @@ json.dumps(history_metadata, ensure_ascii=False)
   emitProgress(100, "history_export_complete");
   self.postMessage({
     type: "history_exported",
-    filename: `xpeng-analytics-history-${date}.json.gz`,
+    filename: `xpeng-analytics-history-${date}.xpeng`,
     metadata: JSON.parse(metadataJson),
     payload,
   }, [payload]);
@@ -180,7 +180,7 @@ json.dumps(history_metadata, ensure_ascii=False)
 
 async function importHistory(message) {
   const pyodide = await runtime();
-  const historyPath = "/session/uploads/imported-history.json.gz";
+  const historyPath = "/session/uploads/imported-history.xpeng";
   emitProgress(10, "history_read");
   pyodide.FS.writeFile(historyPath, new Uint8Array(message.archive));
   pyodide.globals.set("browser_history_path", historyPath);
