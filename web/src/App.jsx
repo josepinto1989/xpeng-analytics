@@ -244,9 +244,17 @@ export default function App() {
           <h1>{t("title")}</h1>
           <p>{t("intro")}</p>
         </div>
-        <div className="privacy-card">
-          <div className="privacy-icon" aria-hidden="true">⌁</div>
-          <div><strong>{t("privacyTitle")}</strong><p>{t("privacyBody")}</p></div>
+        <div className="hero-aside">
+          <article className="data-source-card">
+            <span>{t("getDataKicker")}</span>
+            <strong>{t("getDataTitle")}</strong>
+            <p>{t("getDataBody")}</p>
+            <a href="https://www.xpeng.com/data-act/my-data" target="_blank" rel="noreferrer">{t("getDataCta")} <span aria-hidden="true">↗</span></a>
+          </article>
+          <div className="privacy-card">
+            <div className="privacy-icon" aria-hidden="true">⌁</div>
+            <div><strong>{t("privacyTitle")}</strong><p>{t("privacyBody")}</p></div>
+          </div>
         </div>
       </section>
 

@@ -2,6 +2,17 @@
 
 All notable public changes are documented here.
 
+## 1.1.1 — 2026-10-11
+
+- Added a direct link to the XPENG data-request portal on the start page.
+- Clarified that importing XPENG data can take up to 20 minutes on some
+  computers.
+- Separated the charging and battery summaries into individual cards.
+- Simplified public-facing copy in Portuguese and English while preserving
+  the calculated-metric and privacy warnings.
+- Removed the legacy-history compatibility note from the interface; legacy
+  JSON.GZ import remains supported.
+
 ## 1.1.0 — 2026-10-11
 
 - Added a custom date range shared by overview, journeys, charging, battery,

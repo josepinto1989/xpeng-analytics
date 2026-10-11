@@ -13,7 +13,7 @@ state unless the user explicitly exports a portable history file.
 
 ## Current status
 
-Phases 1 through 6 are complete and version 1.1.0 contains the first Phase 7
+Phases 1 through 6 are complete and version 1.1.1 contains the latest Phase 7
 improvement cycle after the v1.0.0 public release.
 This repository is an isolated, sanitised application with an XPENG-only
 analytics core and a browser processor that keeps

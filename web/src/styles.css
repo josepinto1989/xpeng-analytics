@@ -29,6 +29,13 @@ button, select, input { font: inherit; }
 .eyebrow i { width: 25px; height: 1px; background: var(--mint); }
 h1 { font-size: clamp(42px, 6vw, 74px); letter-spacing: -.055em; line-height: .98; margin: 20px 0 24px; max-width: 820px; }
 .hero-copy > p { color: var(--muted); font-size: 18px; line-height: 1.65; max-width: 720px; margin: 0; }
+.hero-aside { display: grid; gap: 14px; }
+.data-source-card { padding: 23px 24px; border: 1px solid rgba(32,169,131,.3); background: linear-gradient(145deg, rgba(32,169,131,.12), var(--panel)); box-shadow: var(--shadow); display: grid; gap: 8px; }
+.data-source-card > span { color: var(--mint-strong); font-size: 10px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.data-source-card > strong { font-size: 17px; line-height: 1.25; }
+.data-source-card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.data-source-card a { margin-top: 5px; color: var(--mint-strong); font-size: 12px; font-weight: 750; text-decoration: none; }
+.data-source-card a:hover { text-decoration: underline; }
 .privacy-card { padding: 24px; background: rgba(15,31,31,.78); border: 1px solid rgba(136,229,194,.24); display: flex; gap: 16px; }
 .privacy-card strong { font-size: 14px; }
 .privacy-card p { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 7px 0 0; }
@@ -311,6 +318,9 @@ body { color: var(--ink); background: var(--panel-soft); transition: background 
 .overview-metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); margin-bottom: 22px; }
 .charging-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 22px; }
 .battery-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 18px; }
+.charging-metrics, .battery-metrics { gap: 14px; background: transparent; border: 0; border-radius: 0; overflow: visible; box-shadow: none; }
+.charging-metrics .dash-metric, .battery-metrics .dash-metric { border: 1px solid var(--line); border-radius: 13px; box-shadow: var(--shadow); }
+.charging-metrics .dash-metric:last-child, .battery-metrics .dash-metric:last-child { border-right: 1px solid var(--line); }
 .activity-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 22px; }
 .quality-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 22px; }
 .detail-metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); border: 0; border-radius: 0; box-shadow: none; }
