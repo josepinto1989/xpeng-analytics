@@ -232,5 +232,9 @@ async function handle(message) {
 self.addEventListener("message", (event) => {
   commandQueue = commandQueue
     .then(() => handle(event.data))
-    .catch((error) => self.postMessage({ type: "error", code: errorCode(error) }));
+    .catch((error) => self.postMessage({
+      type: "error",
+      code: errorCode(error),
+      detail: String(error?.stack ?? error?.message ?? error),
+    }));
 });

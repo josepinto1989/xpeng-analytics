@@ -2,6 +2,14 @@
 
 All notable public changes are documented here.
 
+## Unreleased — 1.2.0-beta.1
+
+- Added a bilingual report area with a custom date range, distance,
+  consumption, charging, and estimated cost summaries.
+- Added fully local PDF generation with daily and charging-session details.
+- Added an optional average energy price and report reference; calculated
+  costs are clearly marked as estimates and not fiscal documents.
+
 ## 1.1.1 — 2026-10-11
 
 - Added a direct link to the XPENG data-request portal on the start page.

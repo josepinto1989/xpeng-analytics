@@ -55,6 +55,8 @@ improvements.
 - Report reproducible bugs through GitHub Issues without attaching vehicle
   exports, histories, VINs, locations, or screenshots containing personal data.
 - Improve long-running progress messages so expensive steps never look frozen.
+- Test the new local PDF report with company-car workflows and representative
+  date ranges before the v1.2.0 release.
 - Triage compatibility, accessibility, memory use, and performance issues.
 - Keep dependencies and browser runtimes current through reviewed patch or
   minor releases.

@@ -2,12 +2,12 @@ import React, { useMemo, useState } from "react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
 import { APP_VERSION } from "./version.js";
 
-const sections = ["overview", "journeys", "charging", "battery", "activity", "quality", "data"];
+const sections = ["overview", "journeys", "charging", "battery", "activity", "report", "quality", "data"];
 const iconPaths = {
   overview: "M4 13h6V4H4v9Zm10 7h6v-9h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z",
   journeys: "M5 19c4-8 10-3 14-14M14 5h5v5", charging: "M13 2 5 14h6l-1 8 8-12h-6l1-8Z",
   battery: "M3 7h17v12H3V7Zm17 4h2v4h-2M6 10h7v6H6v-6Z", activity: "M4 19V9m5 10V5m5 14v-7m5 7V3",
-  quality: "m4 12 5 5L20 6", data: "M12 3v12m-5-5 5 5 5-5M5 20h14",
+  report: "M6 2h9l4 4v16H6V2Zm9 0v5h4M9 11h7M9 15h7M9 19h5", quality: "m4 12 5 5L20 6", data: "M12 3v12m-5-5 5 5 5-5M5 20h14",
 };
 const C = { mint: "#20a983", teal: "#3ab5ae", cyan: "#63b7d4", amber: "#e3a62f", coral: "#e27b66", violet: "#8a82d5" };
 const safe = (rows) => Array.isArray(rows) ? rows : [];
@@ -118,6 +118,53 @@ function Activity({ data, locale, t, period, maxDate, customRange }) {
   </div></>;
 }
 
+function Report({ data, locale, t, minDate, maxDate }) {
+  const [startDate,setStartDate]=useState(minDate), [endDate,setEndDate]=useState(maxDate), [energyPrice,setEnergyPrice]=useState(""), [reference,setReference]=useState(""), [exporting,setExporting]=useState(false), [exportError,setExportError]=useState(false);
+  const firstDate=startDate&&endDate&&startDate>endDate?endDate:startDate, lastDate=startDate&&endDate&&startDate>endDate?startDate:endDate;
+  const range={start:firstDate,end:lastDate};
+  const daily=safe(data.daily).filter((row)=>inPeriod(row.date,"custom",maxDate,range));
+  const journeys=safe(data.journeys).filter((row)=>inPeriod(row.date,"custom",maxDate,range));
+  const trips=safe(data.trips).filter((row)=>inPeriod(row.date,"custom",maxDate,range));
+  const charges=safe(data.charges).filter((row)=>inPeriod(row.date,"custom",maxDate,range));
+  const distance=sum(daily,"distanceKm"), netEnergy=sum(daily,"netEnergyKwh"), wallEnergy=sum(charges,"wallEnergyKwh"), batteryEnergy=sum(charges,"batteryEnergyKwh");
+  const consumption=distance?netEnergy/distance*100:null, efficiency=wallEnergy?batteryEnergy/wallEnergy*100:null;
+  const normalizedPrice=energyPrice.trim()?Number(energyPrice.replace(",",".")):null;
+  const hasPrice=normalizedPrice!=null&&Number.isFinite(normalizedPrice)&&normalizedPrice>=0;
+  const estimatedCost=hasPrice?wallEnergy*normalizedPrice:null, costPer100=hasPrice&&distance?estimatedCost/distance*100:null;
+  const hasRows=daily.length>0||charges.length>0;
+  const exportPdf=async()=>{if(!hasRows||exporting)return;setExporting(true);setExportError(false);try{const {downloadReportPdf}=await import("./report-pdf.js");await downloadReportPdf({data,locale,t,startDate,endDate,energyPrice:hasPrice?normalizedPrice:null,reference});}catch(error){console.error(error);setExportError(true);}finally{setExporting(false);}};
+  return <div className="report-page">
+    <Panel title={t("reportSettings")} subtitle={t("reportSettingsHelp")}>
+      <div className="report-form">
+        <label><span>{t("startDate")}</span><input type="date" min={minDate} max={maxDate} value={startDate} onChange={(event)=>setStartDate(event.currentTarget.value)}/></label>
+        <label><span>{t("endDate")}</span><input type="date" min={minDate} max={maxDate} value={endDate} onChange={(event)=>setEndDate(event.currentTarget.value)}/></label>
+        <label><span>{t("reportEnergyPrice")}</span><div className="input-with-unit"><input type="text" inputMode="decimal" placeholder="0,20" value={energyPrice} onChange={(event)=>setEnergyPrice(event.currentTarget.value)}/><small>€/kWh</small></div></label>
+        <label><span>{t("reportReference")}</span><input type="text" maxLength="80" placeholder={t("reportReferencePlaceholder")} value={reference} onChange={(event)=>setReference(event.currentTarget.value)}/></label>
+        <button className="report-export" type="button" disabled={!hasRows||exporting||(energyPrice.trim()&&!hasPrice)} onClick={exportPdf}><Icon name="report"/><span><strong>{exporting?t("reportGenerating"):t("reportExportPdf")}</strong><small>{t("reportExportHelp")}</small></span></button>
+      </div>
+      <div className="report-local-note"><strong>{t("privacyTitle")}</strong><span>{t("reportLocalHelp")}</span></div>
+      {energyPrice.trim()&&!hasPrice?<div className="report-error">{t("reportInvalidPrice")}</div>:null}
+      {exportError?<div className="report-error">{t("reportExportError")}</div>:null}
+    </Panel>
+    {!hasRows?<Empty t={t}/>:<>
+      <div className="report-period"><span>{t("reportPreview")}</span><strong>{dateText(firstDate,locale)} — {dateText(lastDate,locale)}</strong>{reference?<small>{reference}</small>:null}</div>
+      <div className="metric-grid report-metrics">
+        <Metric tone="mint" label={t("distance")} value={num(distance,locale)} unit=" km" note={`${journeys.length} ${t("journeysLower")}`} />
+        <Metric tone="cyan" label={t("averageConsumption")} value={num(consumption,locale)} unit=" kWh/100" note={`${num(sum(daily,"drivingHours"),locale)} ${t("hourShort")}`} />
+        <Metric tone="violet" label={t("charges")} value={num(charges.length,locale,0)} note={`${num(wallEnergy,locale)} kWh ${t("fromGrid")}`} />
+        <Metric tone="amber" label={t("chargeEfficiency")} value={num(efficiency,locale)} unit="%" note={`${num(sum(charges,"lossKwh"),locale)} kWh ${t("losses").toLowerCase()}`} />
+        <Metric label={t("reportEstimatedCost")} value={hasPrice?num(estimatedCost,locale,2):"—"} unit={hasPrice?" €":""} note={hasPrice?`${num(normalizedPrice,locale,2)} €/kWh`:t("reportPriceNeeded")} />
+        <Metric tone="coral" label={t("reportCostPer100")} value={hasPrice?num(costPer100,locale,2):"—"} unit={hasPrice?" €":""} note={`${trips.length} ${t("tripsLower")}`} />
+      </div>
+      <div className="method-note"><strong>{t("reportEstimateTitle")}</strong><p>{t("reportDisclaimer")}</p></div>
+      <div className="dashboard-grid two report-tables">
+        <Panel title={t("reportDailyBreakdown")} subtitle={t("reportDailyBreakdownHelp")}><div className="report-mini-table"><div className="table-head"><span>{t("date")}</span><span>{t("distance")}</span><span>{t("consumption")}</span><span>{t("gridEnergy")}</span></div>{daily.slice(-14).reverse().map((row)=><div key={row.date}><strong>{dateText(row.date,locale)}</strong><span>{num(row.distanceKm,locale)} km</span><span>{num(row.consumptionKwh100,locale)} kWh/100</span><span>{num(row.wallEnergyKwh,locale)} kWh</span></div>)}</div></Panel>
+        <Panel title={t("reportChargingDetails")} subtitle={t("reportChargingDetailsHelp")}><div className="report-mini-table"><div className="table-head"><span>{t("date")}</span><span>{t("chargeType")}</span><span>{t("batteryEnergy")}</span><span>{t("gridEnergy")}</span></div>{charges.slice(-14).reverse().map((row)=><div key={row.chargeId}><strong>{dateText(row.startedAtUtc,locale)}</strong><span>{row.chargeType||"—"}</span><span>{num(row.batteryEnergyKwh,locale)} kWh</span><span>{num(row.wallEnergyKwh,locale)} kWh</span></div>)}</div></Panel>
+      </div>
+    </>}
+  </div>;
+}
+
 function Quality({ data, locale, t }) { const coverage = safe(data.quality?.coverage), events = safe(data.quality?.events); return <><div className="quality-summary"><div><span>{t("qualityStatus")}</span><strong>{events.length ? t("reviewRecommended") : t("noCriticalIssues")}</strong><p>{t("qualityStatusHelp")}</p></div><div className="quality-count"><strong>{events.length}</strong><span>{t("qualityEvents")}</span></div></div><div className="metric-grid quality-metrics">{coverage.map((row) => <Metric key={row.family} label={t(`family_${row.family}`)} value={num(row.rows, locale,0)} note={`${dateText(row.firstUtc,locale)} — ${dateText(row.lastUtc,locale)}`} />)}</div><Panel title={t("qualityEvents")} subtitle={t("qualityEventsHelp")}><div className="data-table"><div className="table-head"><span>{t("severity")}</span><span>{t("family")}</span><span>{t("rule")}</span><span>{t("affected")}</span><span>{t("field")}</span></div>{events.map((row,index)=><div key={`${row.rule}-${index}`}><span><i className={`severity severity-${row.severity}`}>{t(`severity_${row.severity}`)}</i></span><span>{t(`family_${row.family}`)}</span><span>{t(`rule_${row.rule}`)}</span><span>{num(row.affectedRows,locale,0)}</span><span>{row.field || "—"}</span></div>)}</div>{!events.length?<div className="inline-success">{t("noQualityEvents")}</div>:null}</Panel><div className="threshold-note"><strong>{t("interpretationRules")}</strong><p>{t("interpretationRulesHelp")}</p></div></>; }
 
 function DataSection({ data, locale, t, busy, onChoose, onChooseHistory, onExport, onReset }) { return <div className="dashboard-grid two data-layout"><Panel title={t("addMoreData")} subtitle={t("addMoreHelp")}><div className="data-actions"><label className={`dashboard-upload ${busy ? "is-disabled" : ""}`}><input type="file" multiple accept=".zip,application/zip" disabled={busy} onChange={(event)=>{onChoose(event.target.files);event.target.value="";}}/><Icon name="data"/><strong>{busy?t("importing"):t("chooseFiles")}</strong><small>{t("dropHint")}</small></label><label className="secondary-action"><input type="file" accept=".xpeng,.json.gz,.gz,application/octet-stream,application/gzip" disabled={busy} onChange={(event)=>{onChooseHistory(event.target.files);event.target.value="";}}/><strong>{t("replaceFromHistory")}</strong></label><button className="primary-action" type="button" disabled={busy} onClick={onExport}>{t("exportHistory")}</button><p className="export-help">{t("exportHistoryHelp")}</p><p className="history-warning">{t("historySensitiveWarning")}</p><button className="danger-link" type="button" disabled={busy} onClick={onReset}>{t("reset")}</button></div></Panel><Panel title={t("importHistory")} subtitle={`${safe(data.imports).length} ${t("filesLower")}`}><div className="import-history">{safe(data.imports).map((row)=><div key={row.sha256}><span><strong>{row.name}</strong><small>{dateText(row.completedAtUtc,locale)} · {num(row.rows,locale,0)} {t("rowsLower")}</small></span><code>{row.sha256?.slice(0,10)}…</code></div>)}</div></Panel></div>; }
@@ -128,7 +175,7 @@ export default function Dashboard({ data, locale, setLocale, t, busy, progress, 
   const minDate=availableDates.at(0)??"", maxDate=availableDates.at(-1)??new Date().toISOString().slice(0,10);
   const [customRange,setCustomRange]=useState(()=>({start:minDate,end:maxDate}));
   const shared={data,locale,t,period,maxDate,customRange};
-  const content=useMemo(()=>({overview:<Overview {...shared} openSection={setSection}/>,journeys:<Journeys {...shared}/>,charging:<Charging {...shared}/>,battery:<Battery {...shared}/>,activity:<Activity {...shared}/>,quality:<Quality data={data} locale={locale} t={t}/>,data:<DataSection data={data} locale={locale} t={t} busy={busy} onChoose={onChoose} onChooseHistory={onChooseHistory} onExport={onExport} onReset={onReset}/>})[section],[section,data,locale,t,period,maxDate,customRange,busy]);
+  const content=useMemo(()=>({overview:<Overview {...shared} openSection={setSection}/>,journeys:<Journeys {...shared}/>,charging:<Charging {...shared}/>,battery:<Battery {...shared}/>,activity:<Activity {...shared}/>,report:<Report data={data} locale={locale} t={t} minDate={minDate} maxDate={maxDate}/>,quality:<Quality data={data} locale={locale} t={t}/>,data:<DataSection data={data} locale={locale} t={t} busy={busy} onChoose={onChoose} onChooseHistory={onChooseHistory} onExport={onExport} onReset={onReset}/>})[section],[section,data,locale,t,period,minDate,maxDate,customRange,busy]);
   const filteredSections=["overview","journeys","charging","battery","activity"];
   return <div className="dashboard-shell"><aside className="dashboard-sidebar"><div className="dashboard-brand"><span className="brand-mark"><img src={`${import.meta.env.BASE_URL}assets/xpeng-analytics-mark-minimal.png`} alt="" /></span><span><strong>XPENG</strong><small>Analytics</small></span></div><nav>{sections.map((item)=><button key={item} className={section===item?"is-active":""} onClick={()=>setSection(item)}><Icon name={item}/><span>{t(`nav_${item}`)}</span></button>)}</nav><div className="sidebar-bottom"><a className="sidebar-kofi" href="https://ko-fi.com/mpinto" target="_blank" rel="noreferrer">☕ {t("supportCta")}</a><div className="privacy-mini"><i/><span><strong>{t("localOnly")}</strong><small>{t("sessionOnly")}</small></span></div><small className="sidebar-version">XPENG Analytics · v{APP_VERSION}</small></div></aside><main className="dashboard-main"><header className="dashboard-topbar"><div><span className="dashboard-eyebrow">{t("dashboard")}</span><h1>{t(`section_${section}`)}</h1><p>{t(`section_${section}_help`)}</p></div><div className="topbar-actions"><button className="theme-toggle" type="button" onClick={onToggleTheme} aria-label={theme==="light"?t("darkTheme"):t("lightTheme")}><span/>{theme==="light"?t("dark"):t("light")}</button><label className="language-picker"><span>{t("language")}</span><select value={locale} onChange={(event)=>setLocale(event.target.value)}><option value="pt-PT">Português</option><option value="en">English</option></select></label></div></header><div className="mobile-nav">{sections.map((item)=><button key={item} className={section===item?"is-active":""} onClick={()=>setSection(item)} title={t(`nav_${item}`)}><Icon name={item}/></button>)}</div>{filteredSections.includes(section)?<PeriodBar period={period} setPeriod={setPeriod} customRange={customRange} setCustomRange={setCustomRange} minDate={minDate} maxDate={maxDate} t={t}/>:null}{busy?<div className="dashboard-progress"><div className="dashboard-progress-heading"><strong>{Math.round(progress.percent||0)}%</strong><span>{t(`phase_${progress.phase}`)}</span></div><div><i style={{width:`${Math.max(3,progress.percent||0)}%`}}/></div></div>:null}{error?<div className="dashboard-error">{t(`error_${error}`)}</div>:null}<div className="dashboard-content">{content}</div><footer className="site-footer dashboard-footer"><span>{t("unofficial")}</span><span>{t("ownerLabel")}: Miguel Pinto</span><span>v{APP_VERSION}</span><a href="https://github.com/josepinto1989/xpeng-analytics/issues" target="_blank" rel="noreferrer">{t("reportIssue")}</a><a href="https://ko-fi.com/mpinto" target="_blank" rel="noreferrer">Ko-fi</a></footer></main></div>;
 }

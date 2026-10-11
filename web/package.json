@@ -1,7 +1,7 @@
 {
   "name": "xpeng-analytics-web",
   "private": true,
-  "version": "1.1.1",
+  "version": "1.2.0-beta.1",
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "scripts": {
@@ -12,6 +12,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "pdf-lib": "1.17.1",
     "pyodide": "314.0.7",
     "react": "19.2.3",
     "react-dom": "19.2.3",

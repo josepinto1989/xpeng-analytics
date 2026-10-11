@@ -111,6 +111,7 @@ export default function App() {
         setBusy(false);
         setProgress({ percent: 100, phase: "reset" });
       } else if (message.type === "error") {
+        if (message.detail) console.error("XPENG Analytics processor error:", message.detail);
         setError(message.code ?? "unknown_error");
         const failedName = activeFileRef.current?.name;
         if (failedName) {
