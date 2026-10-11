@@ -1,8 +1,8 @@
 # XPENG Analytics
 
-Working title for an open-source, local-first viewer for XPENG Data Act exports.
+An open-source, local-first viewer for XPENG Data Act exports.
 
-The finished application will run entirely in the user's browser. Vehicle
+The application runs entirely in the user's browser. Vehicle
 exports will be processed locally and will not be uploaded to this project or
 to an application server. Closing the browser session will discard the active
 state unless the user explicitly exports a portable history file.
@@ -13,19 +13,21 @@ state unless the user explicitly exports a portable history file.
 
 ## Current status
 
-Phases 1 through 5 are complete. This repository is an isolated, sanitised
-application with an XPENG-only analytics core and a browser processor that keeps
+Phases 1 through 6 are complete and version 1.0.0 is the first public release.
+This repository is an isolated, sanitised application with an XPENG-only
+analytics core and a browser processor that keeps
 its SQLite state in a Web Worker's temporary filesystem. The responsive
 analytics dashboard is available in European Portuguese and English and covers
 overview metrics, journeys, charging, battery observations, activity, data
 quality, and session data management. A versioned `json.gz` history can be
 exported and restored locally, preserving deduplication for later XPENG ZIP
 imports. Automated checks and GitHub Pages deployment are configured for the
-public repository.
+public repository. Phase 7 covers user acceptance testing and ongoing
+operational improvements; see [docs/ROADMAP.md](docs/ROADMAP.md).
 
 The dashboard is usable with XPENG ZIP exports and portable histories.
 
-Once published, the application will be available at
+The application is available at
 [josepinto1989.github.io/xpeng-analytics](https://josepinto1989.github.io/xpeng-analytics/).
 Problems can be reported through
 [GitHub Issues](https://github.com/josepinto1989/xpeng-analytics/issues) without
