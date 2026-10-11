@@ -1,0 +1,27 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+*.egg-info/
+node_modules/
+.pnpm-cache/
+dist/
+coverage/
+web/public/processor/
+
+# Vehicle data and generated local state must never be committed.
+*.zip
+*.json.gz
+*.sqlite
+*.sqlite3
+*.db
+*.db.gz
+*.xpeng
+data/
+var/
+tmp/
+.env
+.env.*
+*.key
+*.pem
+

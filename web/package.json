@@ -1,0 +1,23 @@
+{
+  "name": "xpeng-analytics-web",
+  "private": true,
+  "version": "0.4.0",
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "dev": "vite",
+    "prepare:browser": "node scripts/prepare-browser-assets.mjs",
+    "build": "node scripts/prepare-browser-assets.mjs && vite build",
+    "test": "node scripts/test-i18n.mjs && node scripts/test-browser-runtime.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "pyodide": "314.0.7",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "recharts": "3.8.1"
+  },
+  "devDependencies": {
+    "vite": "8.0.8"
+  }
+}
