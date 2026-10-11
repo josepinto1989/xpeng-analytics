@@ -1,0 +1,47 @@
+name: Feature idea
+description: Suggest a useful improvement for XPENG owners
+title: "[Idea]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to suggest an improvement.
+
+        Please describe the problem or use case rather than sharing real vehicle data. Never attach an XPENG export, portable history, VIN, location, or screenshot containing personal data.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would this help you do?
+      description: Tell us about the real-world need or problem.
+      placeholder: I would like to…
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would a useful solution look like?
+      description: A rough idea is enough. Screenshots must use synthetic or fully redacted data.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Import and history
+        - Journeys and activity
+        - Charging
+        - Battery estimates
+        - PDF reports
+        - Interface and accessibility
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I have not attached or pasted real vehicle data or other personal information.
+          required: true

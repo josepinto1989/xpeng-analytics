@@ -33,7 +33,7 @@ body:
       label: What were you importing?
       options:
         - XPENG Data Act ZIP
-        - XPENG Analytics JSON.GZ history
+        - XPENG Analytics .xpeng history
         - Nothing / interface problem
     validations:
       required: true

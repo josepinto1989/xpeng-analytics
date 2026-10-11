@@ -2,7 +2,7 @@
 
 All notable public changes are documented here.
 
-## Unreleased — 1.2.0-beta.1
+## 1.2.0 — 2026-10-11
 
 - Added a bilingual report area with a custom date range, distance,
   consumption, charging, and estimated cost summaries.

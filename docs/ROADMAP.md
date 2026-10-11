@@ -41,12 +41,13 @@ JSON.GZ history; and publish the first stable release.
 
 This phase is intentionally driven by real use after v1.0.0.
 
-The first Phase 7 cycles ship in v1.1.x: custom date ranges, expanded charging,
-battery, parked-use, and activity views, a corrected journeys-by-month chart,
+The first Phase 7 cycles shipped in v1.1.x and v1.2.0: custom date ranges,
+expanded charging, battery, parked-use, and activity views, a corrected
+journeys-by-month chart,
 sidebar release/support information, the smaller streaming `.xpeng` history
-format, clearer import guidance, and a simplified bilingual interface. Phase 7
-remains open for the owner's real-world tests and incremental operational
-improvements.
+format, clearer import guidance, a simplified bilingual interface, and local
+PDF usage and cost reports. Phase 7 remains open for real-world feedback and
+incremental operational improvements.
 
 - Test imports from different XPENG export periods and models.
 - Compare representative totals with the source export and the private
@@ -55,8 +56,8 @@ improvements.
 - Report reproducible bugs through GitHub Issues without attaching vehicle
   exports, histories, VINs, locations, or screenshots containing personal data.
 - Improve long-running progress messages so expensive steps never look frozen.
-- Test the new local PDF report with company-car workflows and representative
-  date ranges before the v1.2.0 release.
+- Collect feedback on the local PDF report from company-car and expense-report
+  workflows.
 - Triage compatibility, accessibility, memory use, and performance issues.
 - Keep dependencies and browser runtimes current through reviewed patch or
   minor releases.
