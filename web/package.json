@@ -8,7 +8,7 @@
     "dev": "vite",
     "prepare:browser": "node scripts/prepare-browser-assets.mjs",
     "build": "node scripts/prepare-browser-assets.mjs && vite build",
-    "test": "node scripts/test-i18n.mjs && node scripts/test-browser-runtime.mjs",
+    "test": "node scripts/prepare-browser-assets.mjs && node scripts/test-i18n.mjs && node scripts/test-browser-runtime.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
