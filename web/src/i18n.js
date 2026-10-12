@@ -193,7 +193,7 @@ export const translations = {
   },
 };
 
-export const defaultLocale = () => navigator.language?.toLowerCase().startsWith("pt") ? "pt-PT" : "en";
+export const defaultLocale = () => "en";
 
 export function translator(locale) {
   const selected = translations[locale] ?? translations.en;

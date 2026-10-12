@@ -2,6 +2,11 @@
 
 All notable public changes are documented here.
 
+## 1.2.1 — 2026-10-12
+
+- Changed the default interface language to English in every browser while
+  keeping European Portuguese available from the language selector.
+
 ## 1.2.0 — 2026-10-11
 
 - Added a bilingual report area with a custom date range, distance,

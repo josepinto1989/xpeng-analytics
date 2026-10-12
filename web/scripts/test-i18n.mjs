@@ -1,4 +1,6 @@
-import { translations } from "../src/i18n.js";
+import { defaultLocale, translations } from "../src/i18n.js";
+
+if (defaultLocale() !== "en") throw new Error("English must be the default locale");
 
 const requiredLocales = ["pt-PT", "en"];
 const referenceKeys = Object.keys(translations[requiredLocales[0]]).sort();
