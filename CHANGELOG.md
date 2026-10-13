@@ -2,6 +2,11 @@
 
 All notable public changes are documented here.
 
+## 1.3.1 — 2026-10-13
+
+- Ordered journey and charging-session lists explicitly from newest to oldest,
+  including the recent items shown on the overview page.
+
 ## 1.3.0 — 2026-10-13
 
 - Replaced the normal Python/SQLite import path with a streaming JavaScript Web
