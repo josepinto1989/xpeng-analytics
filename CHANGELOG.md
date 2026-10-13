@@ -2,6 +2,24 @@
 
 All notable public changes are documented here.
 
+## 1.3.0 — 2026-10-13
+
+- Replaced the normal Python/SQLite import path with a streaming JavaScript Web
+  Worker and typed columnar storage, while retaining the old processor only for
+  version 1 and 2 history compatibility.
+- Reduced the tested 30-day import from minutes to well under one minute on the
+  development computer; exact performance still depends on the browser and PC.
+- Added compact `.xpeng` history version 3 with per-column gzip compression and
+  integrity checks. A 3.4-million-row test export produced an 11.6 MB history.
+- Added driving analytics for speed, accelerator use, regeneration, g-g
+  distribution, and notable dynamic events.
+- Added charging-habit indicators, XPENG-indicated range, SOC and thermal
+  ranges, tyre-pressure trends, and an hourly activity heatmap.
+- Added conservative memory checks, detailed processing progress, and full
+  European Portuguese and English copy for the new metrics.
+- Added visible LogbooX credit and preserved its MIT notice in
+  `THIRD_PARTY_NOTICES.md`.
+
 ## 1.2.1 — 2026-10-12
 
 - Changed the default interface language to English in every browser while

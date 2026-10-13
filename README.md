@@ -38,7 +38,12 @@ you choose to export a portable `.xpeng` history yourself.
 
 - Distance, journeys, driving time, consumption, and recovered energy.
 - Charging sessions, energy from the grid, efficiency, losses, and power.
+- Speed and accelerator distributions, a g-g diagram, dynamic events, and an
+  actual-use heatmap.
+- Charging schedules and limits when a repeated pattern is visible.
 - Calculated range, usable-capacity, relative-SOH, and parked-use estimates.
+- XPENG-indicated range, used SOC band, battery temperature spread, and tyre
+  pressure trends.
 - Daily and monthly activity patterns with custom date ranges.
 - Data-quality coverage and gaps in the exported telemetry.
 - A bilingual PDF report for a selected period, including optional estimated
@@ -55,14 +60,16 @@ dark themes.
 4. Explore the dashboard, add more exports, create a PDF report, or save a
    compact `.xpeng` history for next time.
 
-A 30-day export can take several minutes to process depending on the computer
-and browser. Firefox, Chrome, and Edge are tested; other browsers may work but
-are not currently verified.
+A 30-day export normally takes around one minute on a recent computer, although
+the exact time depends on available memory, processor, and browser. Firefox,
+Chrome, and Edge are tested; other browsers may work but are not currently
+verified.
 
 ## Private by design
 
 - There is no application server, account, tracking database, or cloud upload.
-- Vehicle identifiers are pseudonymised with a random key created locally.
+- Vehicle identifiers are not retained by the fast import engine or included in
+  the dashboard snapshot.
 - The public repository contains synthetic tests only — never real vehicle
   exports, histories, identifiers, or location data.
 - Portable histories are not encrypted. Treat them like the original XPENG
@@ -86,9 +93,18 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-The browser processor is assembled from the audited Python source during the
-build. The analytics core itself has no runtime dependencies outside Python's
-standard library.
+The normal import path is a dedicated JavaScript Web Worker that streams the
+ZIP, keeps the required signals in typed columns, and computes the dashboard in
+memory. The earlier Python/WebAssembly processor remains bundled only so that
+existing version 1 and 2 history files can still be opened.
+
+## Open-source acknowledgement
+
+The fast import architecture was inspired by
+[LogbooX](https://github.com/schliflo/logboox), created by Florian
+Schlittenbauer. Thank you for making the approach public and for authorising
+its use here. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the MIT
+licence notice.
 
 ## Contributing
 
@@ -103,4 +119,5 @@ Built and maintained by **Miguel Pinto** as an independent community project.
 XPENG Analytics is not affiliated with, endorsed by, or sponsored by XPeng
 Inc. XPENG is a trademark of its respective owner.
 
-Released under the [MIT Licence](LICENSE).
+Released under the [MIT Licence](LICENSE). Third-party acknowledgements are
+listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

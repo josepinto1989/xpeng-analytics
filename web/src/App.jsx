@@ -16,6 +16,12 @@ const phaseKeys = {
   history_export_complete: "phaseHistoryExportComplete",
   complete: "phaseComplete",
   reset: "phaseReset",
+  native_ready: "phaseNativeReady",
+  native_scan: "phaseNativeScan",
+  native_parse: "phaseNativeParse",
+  native_merge: "phaseNativeMerge",
+  native_analytics: "phaseNativeAnalytics",
+  native_snapshot: "phaseNativeSnapshot",
 };
 
 const errorKeys = {
@@ -28,6 +34,7 @@ const errorKeys = {
   history_integrity: "errorHistoryIntegrity",
   engine_error: "errorEngine",
   unknown_error: "errorUnknown",
+  cancelled: "errorCancelled",
 };
 
 function formatNumber(value, locale, options = {}) {
@@ -35,6 +42,13 @@ function formatNumber(value, locale, options = {}) {
 }
 
 function createWorker() {
+  return new Worker(new URL("./engine/worker.js", import.meta.url), {
+    type: "module",
+    name: "xpeng-analytics-native-processor",
+  });
+}
+
+function createLegacyWorker() {
   const base = new URL(import.meta.env.BASE_URL, window.location.href);
   const workerUrl = new URL("import-worker.js", base);
   workerUrl.searchParams.set("v", APP_VERSION);
@@ -43,6 +57,21 @@ function createWorker() {
     name: "xpeng-analytics-processor",
   });
 }
+
+function memoryBudgetBytes() {
+  const gib = 1024 ** 3;
+  const reported = Number(navigator.deviceMemory || 0);
+  const heap = Number(globalThis.performance?.memory?.jsHeapSizeLimit || 0);
+  const mobile = Boolean(navigator.userAgentData?.mobile) || window.matchMedia?.("(max-width: 760px)")?.matches;
+  const inferred = heap ? heap * .42 : reported ? reported * gib * .12 : mobile ? 420 * 1024 ** 2 : 1.5 * gib;
+  return Math.max(mobile ? 300 * 1024 ** 2 : 900 * 1024 ** 2, Math.min(mobile ? 640 * 1024 ** 2 : 2.5 * gib, inferred));
+}
+
+const nativeHistoryMagic = [88, 80, 69, 78, 71, 65, 0, 3];
+const isNativeHistory = (buffer) => {
+  const bytes = new Uint8Array(buffer, 0, Math.min(buffer.byteLength, nativeHistoryMagic.length));
+  return bytes.length === nativeHistoryMagic.length && nativeHistoryMagic.every((value, index) => bytes[index] === value);
+};
 
 export default function App() {
   const [locale, setLocale] = useState(defaultLocale);
@@ -56,8 +85,12 @@ export default function App() {
   const inputRef = useRef(null);
   const historyInputRef = useRef(null);
   const workerRef = useRef(null);
+  const workerModeRef = useRef("native");
+  const replaceWorkerRef = useRef(null);
+  const pendingMessageRef = useRef(null);
   const queueRef = useRef([]);
   const activeFileRef = useRef(null);
+  const cancelRequestedRef = useRef(false);
   const t = useMemo(() => translator(locale), [locale]);
 
   useEffect(() => {
@@ -69,16 +102,20 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    const worker = createWorker();
-    workerRef.current = worker;
-    worker.addEventListener("message", (event) => {
+    const onMessage = (event) => {
       const message = event.data ?? {};
       if (message.type === "progress") {
-        setProgress({ percent: message.percent ?? 0, phase: message.phase });
+        setProgress({ percent: message.percent ?? 0, phase: message.phase, detail: message.detail || "" });
       } else if (message.type === "ready") {
         setEngineReady(true);
-        setBusy(false);
-        setProgress({ percent: 0, phase: null });
+        if (pendingMessageRef.current) {
+          const pending = pendingMessageRef.current;
+          pendingMessageRef.current = null;
+          workerRef.current.postMessage(pending, pending.archive ? [pending.archive] : []);
+        } else {
+          setBusy(false);
+          setProgress({ percent: 0, phase: null });
+        }
       } else if (message.type === "imported") {
         setSnapshot(message.snapshot);
         setHistory((current) => [{
@@ -111,6 +148,14 @@ export default function App() {
         setBusy(false);
         setProgress({ percent: 100, phase: "reset" });
       } else if (message.type === "error") {
+        if (message.code === "cancelled") {
+          queueRef.current = [];
+          activeFileRef.current = null;
+          setError(null);
+          setBusy(false);
+          setProgress({ percent: 0, phase: null });
+          return;
+        }
         if (message.detail) console.error("XPENG Analytics processor error:", message.detail);
         setError(message.code ?? "unknown_error");
         const failedName = activeFileRef.current?.name;
@@ -121,13 +166,25 @@ export default function App() {
         activeFileRef.current = null;
         setBusy(false);
       }
-    });
-    worker.addEventListener("error", () => {
+    };
+    const onError = () => {
       setError("engine_error");
       setBusy(false);
-    });
-    worker.postMessage({ type: "initialise" });
-    return () => worker.terminate();
+    };
+    const attach = (mode, pending = null) => {
+      workerRef.current?.terminate();
+      const worker = mode === "legacy" ? createLegacyWorker() : createWorker();
+      workerModeRef.current = mode;
+      pendingMessageRef.current = pending;
+      workerRef.current = worker;
+      worker.addEventListener("message", onMessage);
+      worker.addEventListener("error", onError);
+      setEngineReady(false);
+      worker.postMessage({ type: "initialise" });
+    };
+    replaceWorkerRef.current = attach;
+    attach("native");
+    return () => workerRef.current?.terminate();
   }, []);
 
   const processNext = () => {
@@ -139,11 +196,18 @@ export default function App() {
       return;
     }
     activeFileRef.current = next;
+    cancelRequestedRef.current = false;
     setBusy(true);
     setError(null);
     setProgress({ percent: 8, phase: "archive_write" });
     next.arrayBuffer().then((archive) => {
-      workerRef.current.postMessage({ type: "import", filename: next.name, archive }, [archive]);
+      if (cancelRequestedRef.current) {
+        activeFileRef.current = null;
+        setBusy(false);
+        setProgress({ percent: 0, phase: null });
+        return;
+      }
+      workerRef.current.postMessage({ type: "import", filename: next.name, archive, memoryBudgetBytes: memoryBudgetBytes() }, [archive]);
     }).catch(() => {
       setError("invalid_archive");
       setBusy(false);
@@ -166,11 +230,21 @@ export default function App() {
     if (!selected || busy || !engineReady) return;
     if (snapshot && !window.confirm(t("replaceWithHistoryConfirm"))) return;
     activeFileRef.current = selected;
+    cancelRequestedRef.current = false;
     setBusy(true);
     setError(null);
     setProgress({ percent: 5, phase: "history_read" });
     selected.arrayBuffer().then((archive) => {
-      workerRef.current.postMessage({ type: "import_history", filename: selected.name, archive }, [archive]);
+      if (cancelRequestedRef.current) {
+        activeFileRef.current = null;
+        setBusy(false);
+        setProgress({ percent: 0, phase: null });
+        return;
+      }
+      const mode = isNativeHistory(archive) ? "native" : "legacy";
+      const message = { type: "import_history", filename: selected.name, archive };
+      if (workerModeRef.current !== mode) replaceWorkerRef.current?.(mode, message);
+      else workerRef.current.postMessage(message, [archive]);
     }).catch(() => {
       setError("invalid_history");
       setBusy(false);
@@ -180,6 +254,7 @@ export default function App() {
 
   const exportHistory = () => {
     if (!snapshot || busy || !engineReady) return;
+    cancelRequestedRef.current = false;
     setBusy(true);
     setError(null);
     setProgress({ percent: 5, phase: "history_export" });
@@ -191,6 +266,13 @@ export default function App() {
     setBusy(true);
     setError(null);
     workerRef.current.postMessage({ type: "reset" });
+  };
+
+  const cancelProcessing = () => {
+    if (!busy || workerModeRef.current !== "native") return;
+    cancelRequestedRef.current = true;
+    queueRef.current = [];
+    workerRef.current.postMessage({ type: "cancel" });
   };
 
   const source = snapshot?.summary?.source ?? {};
@@ -215,6 +297,8 @@ export default function App() {
       onChooseHistory={chooseHistory}
       onExport={exportHistory}
       onReset={reset}
+      onCancel={cancelProcessing}
+      canCancel={workerModeRef.current === "native"}
       history={history}
       theme={theme}
       onToggleTheme={() => setTheme((current) => current === "light" ? "dark" : "light")}
@@ -265,7 +349,7 @@ export default function App() {
             {busy ? <strong className="progress-percent">{Math.round(progress.percent ?? 0)}%</strong> : <><span className={`status-dot ${error ? "is-error" : engineReady ? "is-ready" : ""}`} /><strong>{statusText}</strong></>}
             <span className="local-badge">{t("localOnly")}</span>
           </div>
-          {busy ? <><div className="progress"><span style={{ width: `${Math.max(3, progress.percent)}%` }} /></div><p className="progress-phase" aria-live="polite">{statusText}</p></> : null}
+          {busy ? <><div className="progress"><span style={{ width: `${Math.max(3, progress.percent)}%` }} /></div><p className="progress-phase" aria-live="polite">{statusText}{progress.detail ? ` · ${progress.detail}` : ""}</p>{engineReady&&workerModeRef.current==="native"?<button className="cancel-processing" type="button" onClick={cancelProcessing}>{t("cancelProcessing")}</button>:null}</> : null}
           {error ? <div className="error-message" role="alert">{t(errorKeys[error] ?? "errorUnknown")}</div> : null}
           <input
             ref={inputRef}
@@ -307,6 +391,11 @@ export default function App() {
         <a href="https://ko-fi.com/mpinto" target="_blank" rel="noreferrer">{t("supportCta")}</a>
       </section>
 
+      <section className="project-credit">
+        <span>{t("creditKicker")}</span>
+        <p>{t("creditBody")} <a href="https://logboox.app" target="_blank" rel="noreferrer">LogbooX</a>, {t("creditAuthor")} <a href="https://github.com/schliflo/logboox" target="_blank" rel="noreferrer">{t("creditSource")}</a>.</p>
+      </section>
+
       {history.length ? <section className="history-card">
         <h2>{t("historyTitle")}</h2>
         <div className="history-table">
@@ -319,7 +408,7 @@ export default function App() {
         </div>
       </section> : null}
 
-      <footer className="site-footer"><span>{t("unofficial")}</span><span>{t("ownerLabel")}: Miguel Pinto</span><span>v{APP_VERSION}</span><a href="https://github.com/josepinto1989/xpeng-analytics/issues" target="_blank" rel="noreferrer">{t("reportIssue")}</a><a href="https://ko-fi.com/mpinto" target="_blank" rel="noreferrer">Ko-fi</a></footer>
+      <footer className="site-footer"><span>{t("unofficial")}</span><span>{t("ownerLabel")}: Miguel Pinto</span><span>v{APP_VERSION}</span><a href="https://logboox.app" target="_blank" rel="noreferrer">LogbooX</a><a href="https://github.com/josepinto1989/xpeng-analytics/issues" target="_blank" rel="noreferrer">{t("reportIssue")}</a><a href="https://ko-fi.com/mpinto" target="_blank" rel="noreferrer">Ko-fi</a></footer>
     </main>
   );
 }

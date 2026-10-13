@@ -1,67 +1,70 @@
 # Public architecture
 
-## Scope of this foundation
+## Processing model
 
-The repository currently contains a Python analytics core with four layers:
+XPENG Analytics is a static site. Its normal import path runs in a dedicated
+JavaScript Web Worker and has four stages:
 
-1. validate a user-selected XPENG Data Act archive;
-2. normalise operation, energy, and status samples by vehicle and second;
-3. derive trips, journeys, stops, charging sessions, and daily metrics;
-4. validate database integrity and source-schema changes.
+1. inspect the user-selected ZIP and locate operation, energy, and status CSVs;
+2. stream each CSV into typed, columnar arrays while validating sentinel values;
+3. sort, deduplicate, and merge overlapping exports by timestamp, with the new
+   import winning on overlap;
+4. derive trips, journeys, charging sessions, battery, driving, activity, and
+   data-quality metrics.
 
-The presentation layer converts those tables into a versioned
-`xpeng-analytics-dashboard/v1` snapshot. It includes only aggregates, derived trip,
-journey, charge, battery, activity, and quality data needed by the interface.
-Raw vehicle identifiers and route coordinates are not part of this contract.
+Only the signals needed for public analytics are retained. VINs and route
+coordinates are not part of the in-memory state or presentation snapshot. An
+exact SHA-256 archive hash makes repeat imports idempotent.
 
-Exact archive hashes make repeated imports idempotent. Overlapping exports are
-merged on `(vehicle_id, timer)`, and a later changed row replaces the earlier
-normalised value while retaining import provenance.
+The worker returns a versioned `xpeng-analytics-dashboard/v2` snapshot to React.
+Date filters and detail selection operate on this snapshot and require no
+server or network request. The interface exposes overview, journeys, driving,
+charging, battery, activity, report, quality, and data-management views.
 
-## Browser boundary
+The previous Python/WebAssembly and SQLite processor remains available as a
+compatibility reader for version 1 and 2 histories. It is not loaded for a new
+XPENG ZIP or a version 3 history.
 
-The static site starts a dedicated Web Worker, loads Python through WebAssembly,
-and creates SQLite state in the worker's temporary filesystem. The main UI
-receives only progress events and a presentation snapshot. It does not send the
-selected file to the static host. Multiple archives are processed serially by
-the same worker, so deduplication and overlap correction share one session.
+## Memory and browser boundary
 
-The React interface exposes seven local views: overview, journeys, charging,
-battery, activity, quality, and data management. Shared preset or custom date
-filters and detail
-selection operate on the in-memory presentation snapshot and therefore require
-no additional processing or network request.
+CSV contents are decompressed and parsed as streams; they are not expanded into
+one large string. Signals are stored as `Uint32Array` timelines and
+`Float32Array` columns. Before parsing, the worker compares a conservative
+memory projection with the browser's reported device memory and rejects files
+that are unlikely to fit safely.
 
-No browser persistence will be enabled by default. A portable history will be
-created only after an explicit export action.
+The selected archive, parsed columns, and dashboard stay inside the tab. No
+browser persistence is enabled by default, and no request containing vehicle
+data is sent to the static host. Closing or refreshing the tab clears the
+session.
 
 ## Portable history
 
-`xpeng-analytics-history` version 2 uses the `.xpeng` extension. It contains a
-small JSON header followed by a directly XZ/LZMA2-compressed sanitised SQLite
-image. Export and import stream the database in chunks, avoiding the Base64 and
-full-document memory overhead of version 1. The header stores the SHA-256
-checksum, schema version, uncompressed size, and local pseudonymisation key.
-Keeping that key allows a future XPENG ZIP for the same vehicle to resolve to
-the same internal identifier. The format contains no raw VIN, but it remains
-sensitive personal data and is not encrypted. Existing version 1 JSON.GZ
-histories remain importable; new exports always use version 2.
+New exports use `xpeng-analytics-columnar-history` version 3 with the `.xpeng`
+extension. The file contains a small JSON manifest followed by individually
+gzip-compressed timeline and signal columns. Each block has its own SHA-256
+checksum, original size, and byte range. Restoring a history validates the
+format, version, bounds, checksum, decompressed size, and required streams
+before rebuilding all derived analytics.
 
-Import validates format and expansion limits, compression completion,
-format/schema versions, declared size, checksum, SQLite integrity, required
-tables, and the XPENG-only source constraint before replacing the temporary
-session. Derived analytics are rebuilt after restore.
+Per-column compression avoids Base64 and SQLite overhead and lets the file stay
+close to the size of the original XPENG ZIP. Histories remain unencrypted and
+must be treated as sensitive personal files. Version 1 JSON.GZ and version 2
+SQLite/XZ histories remain importable through the compatibility processor; new
+exports always use version 3.
 
-All user-facing browser messages are represented by stable codes and translated
-in the UI. European Portuguese (`pt-PT`) and English (`en`) are required and CI
-rejects missing or mismatched translation keys.
+## Attribution
+
+The streaming, columnar import direction was inspired by
+[LogbooX](https://github.com/schliflo/logboox) by Florian Schlittenbauer. The
+public acknowledgement and MIT licence notice are preserved in
+[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
 
 ## Deliberate exclusions
 
 - application servers and server-side processing;
 - hosted databases and object storage;
-- account authentication;
-- automatic vehicle acquisition;
+- account authentication or automatic vehicle acquisition;
 - third-party telemetry sources;
-- real vehicle fixtures or bundled dashboard snapshots.
-
+- raw vehicle identifiers, route coordinates, or real vehicle fixtures;
+- automatic browser persistence.
