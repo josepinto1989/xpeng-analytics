@@ -17,9 +17,10 @@ coordinates are not part of the in-memory state or presentation snapshot. An
 exact SHA-256 archive hash makes repeat imports idempotent.
 
 The worker returns a versioned `xpeng-analytics-dashboard/v2` snapshot to React.
-Date filters and detail selection operate on this snapshot and require no
-server or network request. The interface exposes overview, journeys, driving,
-charging, battery, activity, report, quality, and data-management views.
+Date filters, record selection, unit conversion, synchronized chart cursors,
+and PDF generation operate on this snapshot and require no server or network
+request. The interface exposes overview, journeys, driving, charging, battery,
+tyres, activity, report, quality, and data-management views.
 
 The previous Python/WebAssembly and SQLite processor remains available as a
 compatibility reader for version 1 and 2 histories. It is not loaded for a new

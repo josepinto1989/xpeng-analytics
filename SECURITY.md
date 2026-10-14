@@ -9,17 +9,19 @@ problem cannot be demonstrated safely.
 
 ## Security boundaries
 
-The portable-history importer enforces compressed and uncompressed size limits,
-a compression-ratio limit, a content hash, a strict format/schema version, and
-database integrity/source checks before replacing the active session. The
-existing ZIP importer reads members directly without extracting paths and
-validates the required schemas.
+The version 3 portable-history importer enforces manifest and block-size
+limits, strict format and schema versions, per-block bounds and SHA-256 checks,
+decompressed-size checks, and required-stream validation before replacing the
+active session. Compatibility readers apply their own limits and integrity
+checks to version 1 and 2 histories. The ZIP importer reads members without
+extracting filesystem paths and validates the expected source schemas.
 
 The checksum detects accidental corruption; it is not a digital signature and
 does not prove who created a history file. Only import histories from sources
 you trust.
 
-Pseudonymisation is not anonymisation. A portable history remains sensitive
-even when it does not contain the original vehicle identifier. It contains the
-local pseudonymisation key so later exports from the same vehicle can be merged.
+A portable history remains sensitive even though version 3 does not retain the
+original vehicle identifier. It contains timestamped vehicle telemetry and
+import provenance that may reveal personal routines. Future exports are merged
+by timestamp and archive content, not by treating the history as anonymous.
 

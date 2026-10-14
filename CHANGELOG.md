@@ -2,6 +2,58 @@
 
 All notable public changes are documented here.
 
+## 1.5.0 — 2026-10-14
+
+- Added Metric/Imperial display controls and an independent bar/psi tyre
+  pressure selector to the sidebar.
+- Synchronized the four technical charging charts and expanded their tooltip
+  to show power, peak power, SOC, voltage, current, and battery temperature for
+  the same instant.
+- Expanded the PDF report with the highest-distance day, average and longest
+  journey, regeneration share, AC/DC energy, and peak charging power.
+- Added Miguel Pinto's authorship and the public application URL to every PDF
+  page footer.
+- Completed the colour accents across Driving, Charging, Battery, and Tyres
+  summary cards.
+- Added complete English and European Portuguese user guides and refreshed the
+  public documentation for the release.
+- Added a dedicated Tyres section and removed tyre-pressure views from the
+  Battery section.
+- Fixed clipped tyre-pressure axis labels so full kPa values are visible.
+- Removed the fixed Lisbon timezone from charging habits and activity charts;
+  time-based analysis now follows the browser's local timezone.
+- Added AC/DC energy totals, session counts, a type breakdown chart, and
+  distinct AC/DC colours in the energy-per-charge chart.
+- Made recent journeys and charging sessions on the overview open the exact
+  selected record in its detailed section.
+- Synchronized all journey telemetry charts so one hover position reveals the
+  same moment across speed, power, battery, temperature, forces, pedals,
+  motor, and tyre-pressure views.
+- Added an explicitly unofficial software estimate of driving profile based on
+  accelerator use, high-speed share, and observed driving forces.
+- Treat zero-only rotor-temperature signals as unavailable observations rather
+  than reporting a physical temperature of 0 °C.
+- Expanded each journey with lateral acceleration, steering angle, rear-motor
+  torque and rotor temperature highlights.
+- Added journey charts for driving forces, pedal inputs, rear-motor behaviour,
+  and all four tyre pressures.
+- Added maximum cornering to the driving summary.
+- Added real-world versus XPENG range, tyre-imbalance, and trip
+  temperature-versus-consumption charts to the battery area.
+- Added a period energy-flow comparison to the overview.
+- Added a readable signal-availability panel that explains which metrics each
+  XPENG export can support.
+- Extended native-engine round-trip tests for the new journey telemetry and
+  availability metadata.
+- Restored progressive multi-ZIP feedback so the complete dashboard is rendered
+  after every imported file while the remaining archives continue in the
+  background.
+- Improved Firefox import performance by throttling progress messages,
+  preventing unchanged charts from re-rendering, disabling repeated chart
+  animations, and replacing per-sample allocations and binary searches with
+  sequential aggregation.
+- Made every main navigation tab return to the top of the page.
+
 ## 1.4.1 — 2026-10-14
 
 - Replaced the subtle start-page upload controls with a large, familiar

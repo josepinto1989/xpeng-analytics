@@ -1,5 +1,26 @@
 # Publication checklist
 
+## v1.5.0 release candidate — 2026-10-14
+
+- [x] Public-tree privacy audit passes.
+- [x] Python tests, browser tests, and production build pass.
+- [x] English and PT-PT translation keys match.
+- [x] README, user guides, privacy, security, architecture, roadmap, and
+  changelog reflect the release.
+- [x] Documentation links resolve to tracked files or intended public URLs.
+- [x] Five-file Firefox import remains progressive and completes without the
+  v1.5.0 pre-release slowdown.
+- [x] Charging and journey synchronized tooltips work with real telemetry.
+- [x] Metric/Imperial and bar/psi controls update the relevant values.
+- [x] A PDF is generated and visually checked in both unit systems.
+- [x] No real export, portable history, generated PDF, or private screenshot is
+  tracked.
+- [ ] Firefox, Chrome, and Edge smoke tests are complete.
+- [ ] GitHub Pages deployment and the public version number are verified after
+  publishing.
+
+## v1.0.0 release — 2026-10-11
+
 Completed for the v1.0.0 public release on 2026-10-11.
 
 - [x] `python scripts/audit_public_tree.py` passes.

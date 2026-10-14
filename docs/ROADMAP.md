@@ -41,13 +41,12 @@ JSON.GZ history; and publish the first stable release.
 
 This phase is intentionally driven by real use after v1.0.0.
 
-The first Phase 7 cycles shipped in v1.1.x and v1.2.0: custom date ranges,
-expanded charging, battery, parked-use, and activity views, a corrected
-journeys-by-month chart,
-sidebar release/support information, the smaller streaming `.xpeng` history
-format, clearer import guidance, a simplified bilingual interface, and local
-PDF usage and cost reports. Phase 7 remains open for real-world feedback and
-incremental operational improvements.
+Phase 7 cycles through v1.5.0 delivered custom date ranges, expanded charging,
+battery, parked-use, driving, tyres, and activity views, the smaller streaming
+`.xpeng` v3 history format, fast progressive multi-ZIP imports, synchronized
+journey and charging charts, Metric/Imperial and bar/psi controls, detailed
+signal availability, and richer local PDF usage and cost reports. Phase 7
+remains open for real-world feedback and incremental operational improvements.
 
 - Test imports from different XPENG export periods and models.
 - Compare representative totals with the source export and the private

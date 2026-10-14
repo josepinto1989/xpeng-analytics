@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { consumptionUnit, consumptionValue, distanceUnit, distanceValue } from "./units.js";
 
 const PAGE = [595.28, 841.89];
 const MARGIN = 42;
@@ -67,7 +68,7 @@ function wrapText(text, font, size, maxWidth) {
   return lines;
 }
 
-export async function downloadReportPdf({ data, locale, t, startDate, endDate, energyPrice, reference }) {
+export async function downloadReportPdf({ data, locale, t, startDate, endDate, energyPrice, reference, units = { system: "metric", pressure: "bar" } }) {
   const first = startDate && endDate && startDate > endDate ? endDate : startDate;
   const last = startDate && endDate && startDate > endDate ? startDate : endDate;
   const inside = (row) => {
@@ -85,13 +86,24 @@ export async function downloadReportPdf({ data, locale, t, startDate, endDate, e
   const batteryEnergy = total(charges, "batteryEnergyKwh");
   const losses = total(charges, "lossKwh");
   const estimatedCost = hasPrice ? wallEnergy * energyPrice : null;
-  const costPer100 = hasPrice && distance ? estimatedCost / distance * 100 : null;
+  const displayDistance = distanceValue(distance, units.system);
+  const distanceLabel = distanceUnit(units.system);
+  const consumptionLabel = consumptionUnit(units.system);
+  const costPer100 = hasPrice && displayDistance ? estimatedCost / displayDistance * 100 : null;
   const consumption = distance ? netEnergy / distance * 100 : null;
   const efficiency = wallEnergy ? batteryEnergy / wallEnergy * 100 : null;
+  const mostActiveDay = daily.reduce((best, row) => number(row.distanceKm) > number(best?.distanceKm) ? row : best, null);
+  const averageJourney = journeys.length ? distance / journeys.length : null;
+  const longestJourney = journeys.reduce((best, row) => number(row.distanceKm) > number(best?.distanceKm) ? row : best, null);
+  const usedEnergy = total(trips, "energyUsedKwh"), regeneratedEnergy = total(trips, "regeneratedKwh");
+  const regenerationShare = usedEnergy + regeneratedEnergy ? regeneratedEnergy / (usedEnergy + regeneratedEnergy) * 100 : null;
+  const acEnergy = total(charges.filter((row) => row.chargeType === "AC"), "batteryEnergyKwh");
+  const dcEnergy = total(charges.filter((row) => row.chargeType === "DC"), "batteryEnergyKwh");
+  const peakChargingPower = charges.reduce((peak, row) => Math.max(peak, number(row.maxPowerKw)), 0) || null;
 
   const pdf = await PDFDocument.create();
   pdf.setTitle(clean(t("reportPdfTitle")));
-  pdf.setAuthor("XPENG Analytics");
+  pdf.setAuthor("Miguel Pinto");
   pdf.setSubject(clean(t("reportPdfSubject")));
   pdf.setCreator("XPENG Analytics");
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
@@ -134,14 +146,14 @@ export async function downloadReportPdf({ data, locale, t, startDate, endDate, e
   y -= 10;
 
   const metrics = [
-    [t("distance"), `${formatNumber(distance, locale)} km`],
+    [t("distance"), `${formatNumber(displayDistance, locale)} ${distanceLabel}`],
     [t("journeys"), `${formatNumber(journeys.length, locale, 0)} (${formatNumber(trips.length, locale, 0)} ${t("tripsLower")})`],
     [t("drivingTime"), `${formatNumber(total(daily, "drivingHours"), locale)} ${t("hourShort")}`],
-    [t("averageConsumption"), `${formatNumber(consumption, locale)} kWh/100 km`],
+    [t("averageConsumption"), `${formatNumber(consumptionValue(consumption, units.system), locale)} ${consumptionLabel}`],
     [t("charges"), formatNumber(charges.length, locale, 0)],
     [t("gridEnergy"), `${formatNumber(wallEnergy, locale)} kWh`],
     [t("reportEstimatedCost"), hasPrice ? formatMoney(estimatedCost, locale) : t("reportNotProvided")],
-    [t("reportCostPer100"), hasPrice ? `${formatMoney(costPer100, locale)} / 100 km` : t("reportNotProvided")],
+    [`${t("reportCostPer100")} ${distanceLabel}`, hasPrice ? `${formatMoney(costPer100, locale)} / 100 ${distanceLabel}` : t("reportNotProvided")],
   ];
   const gap = 10;
   const cardWidth = (CONTENT_WIDTH - gap) / 2;
@@ -168,6 +180,23 @@ export async function downloadReportPdf({ data, locale, t, startDate, endDate, e
     page.drawText(fitText(value, bold, 11, CONTENT_WIDTH / 4 - 10), { x, y: y - 17, size: 11, font: bold, color: COLORS.ink });
   });
   y -= 46;
+
+  sectionTitle(t("reportInsights"), t("reportInsightsHelp"));
+  const insightRows = [
+    [t("reportMostActiveDay"), mostActiveDay ? `${formatDate(mostActiveDay.date, locale)} - ${formatNumber(distanceValue(mostActiveDay.distanceKm, units.system), locale)} ${distanceLabel}` : t("reportNotProvided")],
+    [t("reportAverageJourney"), `${formatNumber(distanceValue(averageJourney, units.system), locale)} ${distanceLabel}`],
+    [t("reportLongestJourney"), longestJourney ? `${formatNumber(distanceValue(longestJourney.distanceKm, units.system), locale)} ${distanceLabel}` : t("reportNotProvided")],
+    [t("reportRegenerationShare"), `${formatNumber(regenerationShare, locale)}%`],
+    [t("reportAcDcSplit"), `${formatNumber(acEnergy, locale)} / ${formatNumber(dcEnergy, locale)} kWh`],
+    [t("reportPeakChargingPower"), `${formatNumber(peakChargingPower, locale)} kW`],
+  ];
+  insightRows.forEach(([label, value], index) => {
+    if (index && index % 2 === 0) y -= 34;
+    const x = MARGIN + (index % 2) * (cardWidth + gap);
+    page.drawText(fitText(label, regular, 7.5, cardWidth - 10), { x, y, size: 7.5, font: regular, color: COLORS.muted });
+    page.drawText(fitText(value, bold, 10.5, cardWidth - 10), { x, y: y - 16, size: 10.5, font: bold, color: COLORS.ink });
+  });
+  y -= 48;
 
   page.drawRectangle({ x: MARGIN, y: y - 42, width: CONTENT_WIDTH, height: 42, color: COLORS.amberSoft });
   y -= 13;
@@ -222,9 +251,9 @@ export async function downloadReportPdf({ data, locale, t, startDate, endDate, e
     [t("date"), t("distance"), t("used"), t("averageConsumption"), t("gridEnergy"), t("reportEstimatedCost")],
     daily.map((row) => [
       formatDate(row.date, locale),
-      `${formatNumber(row.distanceKm, locale)} km`,
+      `${formatNumber(distanceValue(row.distanceKm, units.system), locale)} ${distanceLabel}`,
       `${formatNumber(row.energyUsedKwh, locale)} kWh`,
-      `${formatNumber(row.consumptionKwh100, locale)} kWh/100`,
+      `${formatNumber(consumptionValue(row.consumptionKwh100, units.system), locale)} ${consumptionLabel}`,
       `${formatNumber(row.wallEnergyKwh, locale)} kWh`,
       hasPrice ? formatMoney(number(row.wallEnergyKwh) * energyPrice, locale) : "-",
     ]),
@@ -252,9 +281,12 @@ export async function downloadReportPdf({ data, locale, t, startDate, endDate, e
     current.drawText(clean(t("unofficial")), { x: MARGIN, y: 34, size: 6.8, font: regular, color: COLORS.muted });
     const pageText = `${t("reportPage")} ${index + 1}/${pages.length}`;
     current.drawText(pageText, { x: PAGE[0] - MARGIN - regular.widthOfTextAtSize(pageText, 6.8), y: 34, size: 6.8, font: regular, color: COLORS.muted });
+    const creditText = `${t("reportCreatedBy")} Miguel Pinto - https://josepinto1989.github.io/xpeng-analytics/`;
+    current.drawText(creditText, { x: (PAGE[0] - regular.widthOfTextAtSize(creditText, 6.8)) / 2, y: 22, size: 6.8, font: regular, color: COLORS.mint });
   });
 
   const bytes = await pdf.save();
+  if (typeof document === "undefined") return bytes;
   const blob = new Blob([bytes], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -264,4 +296,5 @@ export async function downloadReportPdf({ data, locale, t, startDate, endDate, e
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return bytes;
 }

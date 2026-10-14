@@ -128,7 +128,7 @@ export default function App() {
           status: message.result.skipped ? "alreadyImported" : "added",
           rows: message.result.totalRows ?? 0,
         }, ...current]);
-        processNext();
+        requestAnimationFrame(() => setTimeout(processNext, 0));
       } else if (message.type === "history_imported") {
         setSnapshot(message.snapshot);
         setHistory([{ name: activeFileRef.current?.name ?? "—", status: "historyLoaded", rows: message.snapshot?.overview?.tripCount ?? 0 }]);

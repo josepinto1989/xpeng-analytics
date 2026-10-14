@@ -25,5 +25,11 @@ Keep European Portuguese and English translation keys in sync. Changes to
 calculated battery metrics must state clearly that they are observational
 estimates and not official BMS values.
 
+User-facing workflow changes should update the English README and both user
+guides when relevant:
+
+- `docs/USER_GUIDE.md`
+- `docs/USER_GUIDE.pt-PT.md`
+
 Security-sensitive reports should follow [SECURITY.md](SECURITY.md) instead of
 being posted with private data in a public issue.

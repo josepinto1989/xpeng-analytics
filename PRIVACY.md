@@ -2,7 +2,7 @@
 
 ## Design promise
 
-The planned web application processes XPENG Data Act exports in the browser.
+The web application processes XPENG Data Act exports in the browser.
 The project does not require an application account, an application backend,
 or remote storage for vehicle data.
 
@@ -18,11 +18,11 @@ patterns, charging behaviour, and other personal information. Users should
 store exported histories as sensitive files and should not attach them to bug
 reports or commit them to Git.
 
-Portable histories also contain the random pseudonymisation key needed to merge
-future exports from the same vehicle. They do not contain the original VIN and
-are not encrypted; possession of the file grants access to its processed data.
-The `.xpeng` extension and compression reduce size but do not provide
-encryption or access control.
+Version 3 portable histories contain normalised telemetry, model information
+when available, and import provenance such as source filenames and archive
+hashes. They do not contain the original VIN and are not encrypted; possession
+of the file grants access to its processed data. The `.xpeng` extension and
+compression reduce size but do not provide encryption or access control.
 
 The application must never add telemetry, advertising, remote fonts, remote
 map tiles, crash uploads, or analytics without a separate public design review

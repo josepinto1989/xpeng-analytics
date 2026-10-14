@@ -3,11 +3,20 @@ import { buildSnapshot, emptyState, exportHistory, importArchive, importHistory 
 let state = emptyState();
 let queue = Promise.resolve();
 let cancelRequested = false;
+let lastProgressAt = 0;
+let lastProgressPercent = -1;
+let lastProgressPhase = "";
 
 const progress = (percent, phase, detail = "") => self.postMessage({ type: "progress", percent, phase, detail });
 const guardedProgress = (percent, phase, detail = "") => {
   if (cancelRequested) throw new Error("cancelled");
-  progress(percent, phase, detail);
+  const now = performance.now();
+  if (phase !== lastProgressPhase || percent >= 96 || percent - lastProgressPercent >= .5 || now - lastProgressAt >= 120) {
+    lastProgressAt = now;
+    lastProgressPercent = percent;
+    lastProgressPhase = phase;
+    progress(percent, phase, detail);
+  }
 };
 
 function errorCode(error) {
@@ -30,6 +39,9 @@ async function handle(message) {
   }
   if (message?.type === "import") {
     cancelRequested = false;
+    lastProgressAt = 0;
+    lastProgressPercent = -1;
+    lastProgressPhase = "";
     progress(2, "native_scan", message.filename || "XPENG ZIP");
     const result = await importArchive(state, message.archive, message.filename, guardedProgress, message.memoryBudgetBytes);
     progress(72, "native_analytics", "Calculating locally");

@@ -18,6 +18,8 @@
 <p align="center">
   <a href="https://josepinto1989.github.io/xpeng-analytics/"><strong>Try it in your browser</strong></a>
   ·
+  <a href="docs/USER_GUIDE.md">User guide</a>
+  ·
   <a href="https://github.com/josepinto1989/xpeng-analytics/issues">Report a problem</a>
   ·
   <a href="https://ko-fi.com/mpinto">Support the project</a>
@@ -37,17 +39,32 @@ you choose to export a portable `.xpeng` history yourself.
 ## What you can explore
 
 - Distance, journeys, driving time, consumption, and recovered energy.
-- Charging sessions, energy from the grid, efficiency, losses, and power.
+- Charging sessions, energy from the grid, efficiency, losses, power, and
+  separate AC/DC totals and colours.
 - Speed and accelerator distributions, a g-g diagram, dynamic events, and an
   actual-use heatmap.
+- Journey-level driving forces, steering, pedal, rear-motor, rotor-temperature,
+  and four-tyre telemetry where the export provides those signals. Journey
+  charts share a synchronized time cursor for direct comparison.
+- Synchronized charging telemetry: hovering any technical charging chart shows
+  power, peak power, SOC, voltage, current, and battery temperature for the
+  same moment.
+- An estimated driving profile derived from accelerator, speed, and g-force
+  patterns, clearly labelled as an unofficial software estimate.
 - Charging schedules and limits when a repeated pattern is visible.
 - Calculated range, usable-capacity, relative-SOH, and parked-use estimates.
-- XPENG-indicated range, used SOC band, battery temperature spread, and tyre
-  pressure trends.
+- Real-world versus XPENG-indicated range, used SOC band, and battery
+  temperature spread.
+- A dedicated tyre area with full-scale pressure trends and left-to-right axle
+  imbalance.
 - Daily and monthly activity patterns with custom date ranges.
-- Data-quality coverage and gaps in the exported telemetry.
+- Data-quality coverage, signal availability, and gaps in the exported
+  telemetry.
 - A bilingual PDF report for a selected period, including optional estimated
-  electricity costs for company-car or expense reporting.
+  electricity costs, AC/DC use, regeneration, peak charging power, and useful
+  journey comparisons for company-car or expense reporting.
+- Metric or imperial display units and an independent bar/psi tyre-pressure
+  selector.
 
 The interface is available in European Portuguese and English, with light and
 dark themes.
@@ -61,6 +78,10 @@ dark themes.
    the ZIP exports are then merged into the same local session.
 4. Explore the dashboard, add more exports, create a PDF report, or save a
    compact `.xpeng` history for next time.
+
+For detailed instructions, filters, reports, portable histories, units, and
+troubleshooting, read the **[English user guide](docs/USER_GUIDE.md)** or the
+**[European Portuguese guide](docs/USER_GUIDE.pt-PT.md)**.
 
 A 30-day export normally takes around one minute on a recent computer, although
 the exact time depends on available memory, processor, and browser. Firefox,
@@ -83,6 +104,21 @@ readings, invoices, receipts, or fiscal documents.
 
 Read the full [privacy notes](PRIVACY.md), [security guidance](SECURITY.md), and
 [technical architecture](docs/ARCHITECTURE.md).
+
+## Documentation
+
+| Document | Purpose |
+| --- | --- |
+| [User guide](docs/USER_GUIDE.md) | Complete English instructions for using the application |
+| [User guide — European Portuguese](docs/USER_GUIDE.pt-PT.md) | Complete instructions in European Portuguese |
+| [Privacy](PRIVACY.md) | What stays local and how to handle sensitive files |
+| [Security](SECURITY.md) | Safe reporting and importer security boundaries |
+| [Architecture](docs/ARCHITECTURE.md) | Browser engine, data flow, and portable-history design |
+| [`.xpeng` v3 format](docs/XPENG_HISTORY_V3_SPEC.md) | Technical format specification for developers |
+| [v1.5.0 release notes](docs/RELEASE_NOTES_1.5.0.md) | Detailed summary of the current release |
+| [Deployment](docs/DEPLOYMENT.md) | GitHub Pages build and deployment notes |
+| [Contributing](CONTRIBUTING.md) | How to propose a safe change |
+| [Changelog](CHANGELOG.md) | User-visible changes by version |
 
 ## Run it locally
 
