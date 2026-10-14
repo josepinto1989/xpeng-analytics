@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import Dashboard from "./Dashboard.jsx";
 import { defaultLocale, translator } from "./i18n.js";
 import { APP_VERSION } from "./version.js";
+import { classifyLocalFiles, createImportPlan } from "./file-selection.js";
 
 
 const phaseKeys = {
@@ -35,6 +36,8 @@ const errorKeys = {
   engine_error: "errorEngine",
   unknown_error: "errorUnknown",
   cancelled: "errorCancelled",
+  invalid_selection: "errorInvalidSelection",
+  multiple_histories: "errorMultipleHistories",
 };
 
 function formatNumber(value, locale, options = {}) {
@@ -82,15 +85,17 @@ export default function App() {
   const [snapshot, setSnapshot] = useState(null);
   const [history, setHistory] = useState([]);
   const [error, setError] = useState(null);
+  const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef(null);
-  const historyInputRef = useRef(null);
   const workerRef = useRef(null);
   const workerModeRef = useRef("native");
   const replaceWorkerRef = useRef(null);
   const pendingMessageRef = useRef(null);
   const queueRef = useRef([]);
+  const historyFollowupQueueRef = useRef([]);
   const activeFileRef = useRef(null);
   const cancelRequestedRef = useRef(false);
+  const dragDepthRef = useRef(0);
   const t = useMemo(() => translator(locale), [locale]);
 
   useEffect(() => {
@@ -128,8 +133,15 @@ export default function App() {
         setSnapshot(message.snapshot);
         setHistory([{ name: activeFileRef.current?.name ?? "—", status: "historyLoaded", rows: message.snapshot?.overview?.tripCount ?? 0 }]);
         activeFileRef.current = null;
-        setBusy(false);
-        setProgress({ percent: 100, phase: "complete" });
+        const followupArchives = historyFollowupQueueRef.current;
+        historyFollowupQueueRef.current = [];
+        if (followupArchives.length) {
+          queueRef.current = followupArchives;
+          processNext();
+        } else {
+          setBusy(false);
+          setProgress({ percent: 100, phase: "complete" });
+        }
       } else if (message.type === "history_exported") {
         const blob = new Blob([message.payload], { type: "application/octet-stream" });
         const url = URL.createObjectURL(blob);
@@ -150,6 +162,7 @@ export default function App() {
       } else if (message.type === "error") {
         if (message.code === "cancelled") {
           queueRef.current = [];
+          historyFollowupQueueRef.current = [];
           activeFileRef.current = null;
           setError(null);
           setBusy(false);
@@ -163,6 +176,7 @@ export default function App() {
           setHistory((current) => [{ name: failedName, status: "failed", rows: 0 }, ...current]);
         }
         queueRef.current = [];
+        historyFollowupQueueRef.current = [];
         activeFileRef.current = null;
         setBusy(false);
       }
@@ -222,13 +236,10 @@ export default function App() {
     if (inputRef.current) inputRef.current.value = "";
   };
 
-  const chooseHistory = (files) => {
-    const selected = [...files].find((file) => {
-      const name = file.name.toLowerCase();
-      return name.endsWith(".xpeng") || name.endsWith(".json.gz");
-    });
+  const importHistoryFile = (selected, followupArchives = []) => {
     if (!selected || busy || !engineReady) return;
     if (snapshot && !window.confirm(t("replaceWithHistoryConfirm"))) return;
+    historyFollowupQueueRef.current = followupArchives;
     activeFileRef.current = selected;
     cancelRequestedRef.current = false;
     setBusy(true);
@@ -247,9 +258,54 @@ export default function App() {
       else workerRef.current.postMessage(message, [archive]);
     }).catch(() => {
       setError("invalid_history");
+      historyFollowupQueueRef.current = [];
       setBusy(false);
     });
-    if (historyInputRef.current) historyInputRef.current.value = "";
+  };
+
+  const chooseHistory = (files) => {
+    const { histories } = classifyLocalFiles(files);
+    const selected = histories[0];
+    if (!selected) return;
+    importHistoryFile(selected);
+  };
+
+  const chooseLocalFiles = (files) => {
+    if (busy || !engineReady) return;
+    const plan = createImportPlan(files);
+    if (plan.kind === "history") {
+      importHistoryFile(plan.history, plan.archives);
+    } else if (plan.kind === "archives") {
+      chooseFiles(plan.archives);
+    } else {
+      setError(plan.kind);
+    }
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const handleDragEnter = (event) => {
+    event.preventDefault();
+    if (busy || !engineReady) return;
+    dragDepthRef.current += 1;
+    setDragActive(true);
+  };
+
+  const handleDragOver = (event) => {
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = busy || !engineReady ? "none" : "copy";
+  };
+
+  const handleDragLeave = (event) => {
+    event.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (!dragDepthRef.current) setDragActive(false);
+  };
+
+  const handleDrop = (event) => {
+    event.preventDefault();
+    dragDepthRef.current = 0;
+    setDragActive(false);
+    chooseLocalFiles(event.dataTransfer?.files);
   };
 
   const exportHistory = () => {
@@ -272,6 +328,7 @@ export default function App() {
     if (!busy || workerModeRef.current !== "native") return;
     cancelRequestedRef.current = true;
     queueRef.current = [];
+    historyFollowupQueueRef.current = [];
     workerRef.current.postMessage({ type: "cancel" });
   };
 
@@ -343,7 +400,7 @@ export default function App() {
         </div>
       </section>
 
-      <section className="workspace" aria-busy={busy}>
+      <section className={`workspace ${dragActive ? "is-dragging" : ""}`} aria-busy={busy} onDragEnter={handleDragEnter} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
         <div className="upload-card">
           <div className="upload-heading">
             {busy ? <strong className="progress-percent">{Math.round(progress.percent ?? 0)}%</strong> : <><span className={`status-dot ${error ? "is-error" : engineReady ? "is-ready" : ""}`} /><strong>{statusText}</strong></>}
@@ -356,17 +413,18 @@ export default function App() {
             className="visually-hidden"
             id="xpeng-files"
             type="file"
-            accept=".zip,application/zip"
+            accept=".zip,.xpeng,.json.gz,.gz,application/zip,application/octet-stream,application/gzip"
             multiple
             disabled={!engineReady || busy}
-            onChange={(event) => chooseFiles(event.target.files)}
+            onChange={(event) => chooseLocalFiles(event.target.files)}
           />
-          <input ref={historyInputRef} className="visually-hidden" id="history-file" type="file" accept=".xpeng,.json.gz,.gz,application/octet-stream,application/gzip" disabled={!engineReady || busy} onChange={(event) => chooseHistory(event.target.files)} />
           <div className="landing-actions">
             <label className={`file-button ${busy || !engineReady ? "is-disabled" : ""}`} htmlFor="xpeng-files"><span aria-hidden="true">＋</span>{busy ? t("importing") : t("chooseFiles")}</label>
-            <label className={`file-button file-button-secondary ${busy || !engineReady ? "is-disabled" : ""}`} htmlFor="history-file"><span aria-hidden="true">↥</span>{t("importHistoryFile")}</label>
           </div>
-          <p className="drop-hint">{t("dropHint")}</p>
+          <div className="drop-zone-copy" aria-live="polite">
+            <strong>{dragActive ? t("dropActive") : t("dropTitle")}</strong>
+            <p className="drop-hint">{t("dropHint")}</p>
+          </div>
           <div className="processing-time-alert"><strong>{t("processingTimeTitle")}</strong><p>{t("processingTimeBody")}</p></div>
           {snapshot ? <button className="reset-button" type="button" disabled={busy} onClick={reset}>{t("reset")}</button> : null}
         </div>

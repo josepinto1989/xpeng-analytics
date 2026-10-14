@@ -41,6 +41,8 @@ h1 { font-size: clamp(42px, 6vw, 74px); letter-spacing: -.055em; line-height: .9
 .privacy-card p { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 7px 0 0; }
 .privacy-icon { color: var(--mint); border: 1px solid rgba(136,229,194,.3); width: 35px; height: 35px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; }
 .workspace { border: 1px solid var(--line); background: rgba(11,21,25,.92); display: grid; grid-template-columns: minmax(300px, .8fr) minmax(380px, 1.2fr); min-height: 330px; }
+.workspace.is-dragging { border-color: var(--mint-strong); box-shadow: 0 0 0 4px rgba(32,169,131,.12), var(--shadow); }
+.workspace.is-dragging .upload-card { background: rgba(32,169,131,.07); }
 .upload-card { padding: 36px; border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: flex-start; }
 .upload-heading { display: flex; align-items: center; gap: 10px; width: 100%; font-size: 14px; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #82919a; box-shadow: 0 0 0 5px rgba(130,145,154,.1); }
@@ -57,6 +59,11 @@ h1 { font-size: clamp(42px, 6vw, 74px); letter-spacing: -.055em; line-height: .9
 .file-button-secondary { color: var(--mint); background: transparent; border: 1px solid rgba(136,229,194,.35); }
 .file-button-secondary:hover { color: #071411; background: var(--mint); }
 .drop-hint { color: var(--muted); font-size: 12px; line-height: 1.5; max-width: 290px; margin: 15px 0 0; }
+.drop-zone-copy { margin-top: 18px; padding: 15px 16px; width: 100%; max-width: 330px; border: 1px dashed var(--line); border-radius: 9px; transition: border-color .18s ease, background .18s ease; }
+.drop-zone-copy strong { color: var(--ink); font-size: 12px; }
+.drop-zone-copy .drop-hint { margin-top: 6px; }
+.workspace.is-dragging .drop-zone-copy { border-color: var(--mint-strong); background: rgba(32,169,131,.08); }
+.workspace.is-dragging .drop-zone-copy strong { color: var(--mint-strong); }
 .reset-button { margin-top: auto; color: var(--muted); background: transparent; border: 0; padding: 16px 0 0; border-bottom: 1px solid #52626b; cursor: pointer; }
 .error-message { color: #ffc0bb; background: rgba(255,133,125,.09); border-left: 2px solid var(--red); padding: 10px 12px; font-size: 13px; margin-top: 18px; }
 .results { padding: 36px; }

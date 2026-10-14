@@ -2,6 +2,15 @@
 
 All notable public changes are documented here.
 
+## 1.4.0 — 2026-10-14
+
+- Added drag and drop to the start page for XPENG exports and histories.
+- A single picker now accepts multiple Data Act ZIPs or one `.xpeng` history.
+- When a history and ZIPs are selected together, the history is restored first
+  and the additional exports are then merged into the same local session.
+- Added clear validation for unsupported files and ambiguous selections with
+  more than one history.
+
 ## 1.3.1 — 2026-10-13
 
 - Ordered journey and charging-session lists explicitly from newest to oldest,

@@ -56,7 +56,9 @@ dark themes.
 
 1. Request your export from the [XPENG Data Act portal](https://www.xpeng.com/data-act/my-data).
 2. Open [XPENG Analytics](https://josepinto1989.github.io/xpeng-analytics/).
-3. Select the XPENG ZIP file and keep the tab open while it is processed.
+3. Select or drag in one or more XPENG ZIP files. You can also restore a
+   `.xpeng` history; if selected together, the history is restored first and
+   the ZIP exports are then merged into the same local session.
 4. Explore the dashboard, add more exports, create a PDF report, or save a
    compact `.xpeng` history for next time.
 
