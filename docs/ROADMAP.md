@@ -64,3 +64,90 @@ remains open for real-world feedback and incremental operational improvements.
 
 Phase 7 has no fixed end date. It is the operating cycle for testing, feedback,
 maintenance, and incremental releases.
+
+### Phase 8 — Opt-in persistent local history
+
+Allow returning users to keep a working history on the same device without
+having to select the portable file on every visit.
+
+- Add a disabled-by-default `Remember this history on this device` option.
+- Store the processed history in browser-local storage, with no account or
+  application server.
+- Request persistent browser storage when supported and clearly explain that
+  browser data can still be removed by the user, browser, or operating system.
+- Restore the most recent local history automatically after explicit consent.
+- Add new XPENG ZIP exports to the remembered history using the existing
+  deduplication rules.
+- Keep `.xpeng` export and import as the recommended portable backup.
+- Provide an obvious action to inspect storage use and permanently erase all
+  locally remembered vehicle data.
+- Decide during the prototype whether one device can hold one history or a
+  small library of separately named vehicles.
+
+### Phase 9 — Optional local and offline application
+
+Package the existing interface as a lightweight desktop application while
+keeping the browser version available.
+
+- Reuse the current frontend, import worker, metrics, reports, and `.xpeng`
+  format instead of creating a second analytics implementation.
+- Store the selected history directly on the user's computer and reopen it on
+  launch.
+- Support Windows first, then evaluate macOS and Linux packages.
+- Run without an application backend and without requiring an internet
+  connection for vehicle analysis.
+- Keep updates optional and publish reproducible, signed release artefacts.
+
+### Phase 10 — Long-term ownership and expense workflows
+
+Build on persistent history with tools that become more useful over several
+months.
+
+- Add monthly trends for consumption, range, estimated capacity, relative SOH,
+  parked use, charging, and tyre pressure.
+- Allow journeys to be labelled as personal or business and included in
+  monthly PDF or CSV summaries.
+- Allow charging sessions to be categorised manually as home, work, or public
+  without requiring location data.
+- Support optional electricity tariffs and clearer cost summaries while
+  continuing to label costs as estimates rather than invoices or fiscal
+  documents.
+
+### Phase 11 — Optional GPS route matching and journey maps
+
+Research and prototype local import of GPS logger files so recorded positions
+can be matched to XPENG journeys by timestamp. Location import remains
+optional, but once accepted by the user the matched tracks become part of the
+portable `.xpeng` history so the complete archive can be restored from one
+file.
+
+- Start with open interchange formats such as GPX and CSV rather than locking
+  the project to one GPS logger application.
+- Use [BasicAirData GPS Logger for Android](https://play.google.com/store/apps/details?id=eu.basicairdata.graziano.gpslogger)
+  and [Open GPX Tracker for iPhone](https://apps.apple.com/app/open-gpx-tracker/id984503772)
+  as the first compatibility references while continuing to accept files from
+  other applications that follow the supported GPX or CSV formats. Prioritise
+  GPX from BasicAirData because it contains UTC timestamps, coordinates,
+  altitude, speed, and fix information needed for journey matching.
+- Match GPS tracks to journey start and end times with a visible confidence
+  score and a manual correction path for ambiguous matches.
+- Show the matched route in journey details and keep the original XPENG
+  telemetry as the source for vehicle metrics.
+- Extend the versioned `.xpeng` format with compressed GPS track blocks,
+  timestamps, matching metadata, and integrity checks. Histories containing
+  location data remain local, portable, compressed, and unencrypted.
+- Make route trimming an optional import setting. The user can choose to omit
+  the first and last part of every GPS track before it is matched and written
+  to the `.xpeng` history; no trimming is applied by default.
+- Use OpenStreetMap as the initial basemap, preserve the required attribution,
+  and document that requesting online map tiles reveals the viewed map area to
+  the tile provider even though the application does not upload the imported
+  GPS file.
+- Add an explicit PDF option to include or exclude journey maps. Maps are only
+  rendered into the report when the user enables the option.
+- Keep all parsing, matching, coordinate storage, route calculations, and PDF
+  composition on the user's device. XPENG Analytics does not retain a copy of
+  the GPS file or `.xpeng` history.
+- Investigate packaged OpenStreetMap-derived vector data or a provider that
+  explicitly permits offline use for the desktop application. The standard
+  OpenStreetMap tile service must not be bulk-downloaded for offline packs.
