@@ -84,16 +84,19 @@ having to select the portable file on every visit.
 - Decide during the prototype whether one device can hold one history or a
   small library of separately named vehicles.
 
-### Phase 9 — Optional local and offline application
+### Phase 9 — Native local and offline applications
 
-Package the existing interface as a lightweight desktop application while
-keeping the browser version available.
+Package the existing interface as lightweight native desktop applications for
+Windows, macOS, and Linux while keeping the browser version available.
 
 - Reuse the current frontend, import worker, metrics, reports, and `.xpeng`
   format instead of creating a second analytics implementation.
 - Store the selected history directly on the user's computer and reopen it on
   launch.
-- Support Windows first, then evaluate macOS and Linux packages.
+- Publish native installers or packages for Windows, macOS, and Linux from the
+  same shared codebase and analytics engine.
+- Follow each platform's signing, packaging, permissions, and update
+  conventions so installation and local file access remain understandable.
 - Run without an application backend and without requiring an internet
   connection for vehicle analysis.
 - Keep updates optional and publish reproducible, signed release artefacts.
