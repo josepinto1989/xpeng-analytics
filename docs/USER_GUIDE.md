@@ -18,6 +18,10 @@ Other browsers may work but are not currently verified. A 30-day export usually
 loads in around one minute on a recent computer, although file size, processor,
 memory, and browser all affect the result.
 
+Phones and tablets use a lower-memory import profile but retain the same data,
+metrics, and charts as the desktop version. Mobile browsers may take longer on
+large exports and should remain in the foreground while processing.
+
 ## 2. Request your XPENG export
 
 1. Open the [XPENG Data Act portal](https://www.xpeng.com/data-act/my-data).

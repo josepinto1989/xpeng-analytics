@@ -50,10 +50,46 @@ const MOVING = 1, TRIP_BREAK = 300, JOURNEY_BREAK = 3600, CHARGE_POWER = 0.2, CH
 const HISTORY_MAGIC = new Uint8Array([88, 80, 69, 78, 71, 65, 0, 3]);
 const HISTORY_FORMAT = "xpeng-analytics-columnar-history";
 
-class Grower {
-  constructor(Type, capacity = 1024) { this.Type = Type; this.data = new Type(Math.max(1024, capacity)); this.length = 0; }
-  push(value) { if (this.length === this.data.length) { const next = new this.Type(this.data.length * 2); next.set(this.data); this.data = next; } this.data[this.length++] = value; }
-  finish() { return this.data.slice(0, this.length); }
+class ChunkedGrower {
+  constructor(Type, chunkSize = 65_536) {
+    this.Type = Type;
+    this.chunkSize = Math.max(1_024, chunkSize);
+    this.chunks = [];
+    this.current = null;
+    this.currentLength = 0;
+    this.length = 0;
+  }
+
+  push(value) {
+    if (!this.current || this.currentLength === this.current.length) {
+      this.current = new this.Type(this.chunkSize);
+      this.currentLength = 0;
+      this.chunks.push(this.current);
+    }
+    this.current[this.currentLength++] = value;
+    this.length++;
+  }
+
+  setLast(value) {
+    if (!this.length || !this.current) return;
+    this.current[this.currentLength - 1] = value;
+  }
+
+  finish() {
+    const output = new this.Type(this.length);
+    let offset = 0;
+    for (let index = 0; index < this.chunks.length; index++) {
+      const chunk = this.chunks[index];
+      const count = index === this.chunks.length - 1 ? this.currentLength : chunk.length;
+      output.set(chunk.subarray(0, count), offset);
+      offset += count;
+    }
+    this.chunks = [];
+    this.current = null;
+    this.currentLength = 0;
+    this.length = 0;
+    return output;
+  }
 }
 
 const finite = Number.isFinite;
@@ -73,10 +109,41 @@ function findEnd(bytes) {
   throw new Error("invalid_archive");
 }
 
-function listEntries(bytes) {
+function sourceLength(source) {
+  if (typeof Blob !== "undefined" && source instanceof Blob) return source.size;
+  if (source instanceof ArrayBuffer) return source.byteLength;
+  if (ArrayBuffer.isView(source)) return source.byteLength;
+  throw new Error("invalid_archive");
+}
+
+function sourceBytes(source) {
+  if (source instanceof ArrayBuffer) return new Uint8Array(source);
+  if (ArrayBuffer.isView(source)) return new Uint8Array(source.buffer, source.byteOffset, source.byteLength);
+  return null;
+}
+
+async function readSourceRange(source, start, end) {
+  const length = sourceLength(source);
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start || end > length) throw new Error("invalid_archive");
+  if (typeof Blob !== "undefined" && source instanceof Blob) return new Uint8Array(await source.slice(start, end).arrayBuffer());
+  return sourceBytes(source).subarray(start, end);
+}
+
+async function sourceDigest(source) {
+  const bytes = typeof Blob !== "undefined" && source instanceof Blob
+    ? await source.arrayBuffer()
+    : sourceBytes(source);
+  return [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+async function listEntries(source) {
+  const length = sourceLength(source), tailStart = Math.max(0, length - 65_557);
+  const tail = await readSourceRange(source, tailStart, length), tailView = new DataView(tail.buffer, tail.byteOffset, tail.byteLength);
+  const end = findEnd(tail), count = tailView.getUint16(end + 10, true), directorySize = tailView.getUint32(end + 12, true), directoryOffset = tailView.getUint32(end + 16, true);
+  if (directoryOffset + directorySize > length) throw new Error("invalid_archive");
+  const bytes = await readSourceRange(source, directoryOffset, directoryOffset + directorySize);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), decoder = new TextDecoder();
-  const end = findEnd(bytes), count = view.getUint16(end + 10, true), directory = view.getUint32(end + 16, true);
-  const entries = []; let offset = directory;
+  const entries = []; let offset = 0;
   for (let i = 0; i < count; i++) {
     if (view.getUint32(offset, true) !== CENTRAL) throw new Error("invalid_archive");
     const method = view.getUint16(offset + 10, true), compressedSize = view.getUint32(offset + 20, true), uncompressedSize = view.getUint32(offset + 24, true);
@@ -98,12 +165,15 @@ function partOrder(name) {
   return match ? Number(match[1]) + 1 : 0;
 }
 
-function entryStream(archive, entry) {
-  const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
-  if (view.getUint32(entry.localOffset, true) !== LOCAL) throw new Error("invalid_archive");
-  const nameLength = view.getUint16(entry.localOffset + 26, true), extraLength = view.getUint16(entry.localOffset + 28, true);
+async function entryStream(source, entry) {
+  const header = await readSourceRange(source, entry.localOffset, entry.localOffset + 30);
+  const view = new DataView(header.buffer, header.byteOffset, header.byteLength);
+  if (view.getUint32(0, true) !== LOCAL) throw new Error("invalid_archive");
+  const nameLength = view.getUint16(26, true), extraLength = view.getUint16(28, true);
   const start = entry.localOffset + 30 + nameLength + extraLength;
-  const blob = new Blob([archive.subarray(start, start + entry.compressedSize)]);
+  const blob = typeof Blob !== "undefined" && source instanceof Blob
+    ? source.slice(start, start + entry.compressedSize)
+    : new Blob([await readSourceRange(source, start, start + entry.compressedSize)]);
   if (entry.method === 0) return blob.stream();
   if (entry.method !== 8 || typeof DecompressionStream === "undefined") throw new Error("engine_error");
   return blob.stream().pipeThrough(new DecompressionStream("deflate-raw"));
@@ -112,7 +182,11 @@ function entryStream(archive, entry) {
 function keepLast(time) {
   let sorted = true;
   for (let i = 1; i < time.length; i++) if (time[i] < time[i - 1]) { sorted = false; break; }
-  const order = sorted ? null : Array.from({ length: time.length }, (_, i) => i).sort((a, b) => time[a] - time[b] || a - b);
+  const order = sorted ? null : new Uint32Array(time.length);
+  if (order) {
+    for (let index = 0; index < order.length; index++) order[index] = index;
+    order.sort((a, b) => time[a] - time[b] || a - b);
+  }
   const keep = new Uint32Array(time.length); let count = 0, duplicates = 0;
   for (let p = 0; p < time.length; p++) {
     const index = sorted ? p : order[p], value = time[index];
@@ -122,13 +196,53 @@ function keepLast(time) {
   return { keep: keep.slice(0, count), duplicates, wasUnsorted: !sorted };
 }
 
-async function parseFamily(archive, entries, family, report, totals) {
-  const specs = SPECS[family], estimatedRows = Math.max(1024, Math.ceil(entries.reduce((n, e) => n + e.uncompressedSize, 0) / 95));
-  const times = new Grower(Uint32Array, estimatedRows), builders = Object.fromEntries(specs.map(([, target]) => [target, new Grower(Float32Array, estimatedRows)]));
-  const invalidFields = {}, unknownColumns = new Set(); let inputRows = 0, invalidTimers = 0, model = "", parsedBytes = 0;
+function selectedFieldReader(header, indexes) {
+  const selected = [...new Set(indexes.filter((index) => index >= 0))].sort((a, b) => a - b);
+  const slotByColumn = new Int16Array(header.length); slotByColumn.fill(-1);
+  selected.forEach((column, slot) => { slotByColumn[column] = slot; });
+  const values = new Array(selected.length).fill("");
+  const read = (line) => {
+    values.fill("");
+    let column = 0, start = 0;
+    for (let index = 0; index <= line.length; index++) {
+      if (index !== line.length && line.charCodeAt(index) !== 44) continue;
+      if (column < slotByColumn.length) {
+        const slot = slotByColumn[column];
+        if (slot >= 0) values[slot] = line.slice(start, index);
+      }
+      column++;
+      start = index + 1;
+    }
+    return values;
+  };
+  const slot = (column) => column >= 0 && column < slotByColumn.length ? slotByColumn[column] : -1;
+  return { read, slot };
+}
+
+async function parseFamily(source, entries, family, report, totals, profile) {
+  const specs = SPECS[family], chunkRows = profile?.mode === "mobile" ? 32_768 : 131_072;
+  const times = new ChunkedGrower(Uint32Array, chunkRows), builders = Object.fromEntries(specs.map(([, target]) => [target, new ChunkedGrower(Float32Array, chunkRows)]));
+  const invalidFields = {}, unknownColumns = new Set(); let inputRows = 0, invalidTimers = 0, model = "", parsedBytes = 0, duplicates = 0, wasUnsorted = false, lastTimer = -1;
   for (const entry of entries.sort((a, b) => partOrder(a.name) - partOrder(b.name) || a.name.localeCompare(b.name))) {
-    const reader = entryStream(archive, entry).getReader(), decoder = new TextDecoder("utf-8");
-    let carry = "", header = null, timerIndex = -1, modelIndex = -1, plan = [];
+    const reader = (await entryStream(source, entry)).getReader(), decoder = new TextDecoder("utf-8");
+    let carry = "", header = null, timerIndex = -1, modelIndex = -1, plan = [], fieldReader = null;
+    const append = (line) => {
+      const fields = fieldReader.read(line); inputRows++;
+      const timer = Number(fields[fieldReader.slot(timerIndex)]);
+      if (!Number.isSafeInteger(timer) || timer < 0 || timer > 0xffffffff) { invalidTimers++; return; }
+      if (!model && modelIndex >= 0) model = fields[fieldReader.slot(modelIndex)] || "";
+      const replaceLast = timer === lastTimer;
+      if (timer < lastTimer) wasUnsorted = true;
+      if (replaceLast) { times.setLast(timer); duplicates++; }
+      else times.push(timer);
+      for (const field of plan) {
+        const raw = field.slot >= 0 ? fields[field.slot] : ""; let value = raw ? Number.parseFloat(raw) : NaN;
+        if (!finite(value) || field.invalid?.(value)) { if (raw && finite(Number.parseFloat(raw))) invalidFields[field.source] = (invalidFields[field.source] || 0) + 1; value = NaN; }
+        if (replaceLast) builders[field.target].setLast(value);
+        else builders[field.target].push(value);
+      }
+      lastTimer = timer;
+    };
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -147,18 +261,11 @@ async function parseFamily(archive, entries, family, report, totals) {
           const known = new Set(["vin", "vmodel", "timer", "ds", ...specs.flatMap(([source, , aliases]) => aliases ?? [source]).map((v) => v.toLowerCase())]);
           header.filter((name) => !known.has(name)).forEach((name) => unknownColumns.add(name));
           plan = specs.map(([source, target, aliases, invalid]) => ({ source, target, invalid, index: (aliases ?? [source]).map((name) => header.indexOf(name.toLowerCase())).find((candidate) => candidate >= 0) ?? -1 }));
+          fieldReader = selectedFieldReader(header, [timerIndex, modelIndex, ...plan.map((field) => field.index)]);
+          plan.forEach((field) => { field.slot = fieldReader.slot(field.index); });
           continue;
         }
-        const fields = line.split(","); inputRows++;
-        const timer = Number(fields[timerIndex]);
-        if (!Number.isSafeInteger(timer) || timer < 0 || timer > 0xffffffff) { invalidTimers++; continue; }
-        if (!model && modelIndex >= 0) model = fields[modelIndex] || "";
-        times.push(timer);
-        for (const field of plan) {
-          const raw = field.index >= 0 ? fields[field.index] : ""; let value = raw ? Number.parseFloat(raw) : NaN;
-          if (!finite(value) || field.invalid?.(value)) { if (raw && finite(Number.parseFloat(raw))) invalidFields[field.source] = (invalidFields[field.source] || 0) + 1; value = NaN; }
-          builders[field.target].push(value);
-        }
+        append(line);
       }
       carry = start ? carry.slice(start) : carry;
       report(10 + totals.parsed / totals.uncompressed * 58, "native_parse", `${family} · ${inputRows.toLocaleString("en")} rows`);
@@ -166,24 +273,30 @@ async function parseFamily(archive, entries, family, report, totals) {
     carry += decoder.decode();
     if (carry.trim()) {
       const line = carry.endsWith("\r") ? carry.slice(0, -1) : carry;
-      if (header) {
-        const fields = line.split(","), timer = Number(fields[timerIndex]); inputRows++;
-        if (Number.isSafeInteger(timer) && timer >= 0 && timer <= 0xffffffff) {
-          times.push(timer);
-          for (const field of plan) { const raw = field.index >= 0 ? fields[field.index] : ""; let value = raw ? Number.parseFloat(raw) : NaN; if (!finite(value) || field.invalid?.(value)) value = NaN; builders[field.target].push(value); }
-        } else invalidTimers++;
-      }
+      if (header) append(line);
     }
   }
-  const rawTime = times.finish(), ordered = keepLast(rawTime), time = new Uint32Array(ordered.keep.length), columns = {};
-  for (let i = 0; i < ordered.keep.length; i++) time[i] = rawTime[ordered.keep[i]];
+  const rawTime = times.finish(), rawColumns = Object.fromEntries(specs.map(([, target]) => [target, builders[target].finish()]));
+  let time = rawTime, columns = rawColumns, ordered = null;
+  if (wasUnsorted) {
+    ordered = keepLast(rawTime);
+    duplicates += ordered.duplicates;
+    time = new Uint32Array(ordered.keep.length);
+    columns = {};
+    for (let i = 0; i < ordered.keep.length; i++) time[i] = rawTime[ordered.keep[i]];
+    for (const [, target] of specs) {
+      const raw = rawColumns[target], output = new Float32Array(ordered.keep.length);
+      for (let i = 0; i < ordered.keep.length; i++) output[i] = raw[ordered.keep[i]];
+      columns[target] = output;
+    }
+  }
   const emptyColumns = [];
   for (const [, target] of specs) {
-    const raw = builders[target].finish(), output = new Float32Array(ordered.keep.length); let nonNull = 0;
-    for (let i = 0; i < ordered.keep.length; i++) { output[i] = raw[ordered.keep[i]]; if (finite(output[i])) nonNull++; }
-    columns[target] = output; if (!nonNull) emptyColumns.push(target);
+    let nonNull = 0;
+    for (let i = 0; i < columns[target].length; i++) if (finite(columns[target][i])) nonNull++;
+    if (!nonNull) emptyColumns.push(target);
   }
-  return { family, time, columns, model, stats: { inputRows, uniqueRows: time.length, duplicates: ordered.duplicates, invalidTimers, invalidFields, unknownColumns: [...unknownColumns], emptyColumns, wasUnsorted: ordered.wasUnsorted, uncompressedBytes: parsedBytes } };
+  return { family, time, columns, model, stats: { inputRows, uniqueRows: time.length, duplicates, invalidTimers, invalidFields, unknownColumns: [...unknownColumns], emptyColumns, wasUnsorted, uncompressedBytes: parsedBytes } };
 }
 
 function mergeStream(oldStream, fresh) {
@@ -208,17 +321,17 @@ function mergeStream(oldStream, fresh) {
 
 export function emptyState() { return { format: HISTORY_FORMAT, version: 3, streams: {}, imports: [], model: "" }; }
 
-export async function importArchive(state, buffer, filename, report, memoryBudgetBytes) {
-  const archive = new Uint8Array(buffer), digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", archive))].map((v) => v.toString(16).padStart(2, "0")).join("");
+export async function importArchive(state, source, filename, report, processingProfile = {}) {
+  const profile = typeof processingProfile === "number" ? { memoryBudgetBytes: processingProfile, mode: "desktop" } : processingProfile;
+  const digest = await sourceDigest(source);
   if (state.imports.some((item) => item.sha256 === digest)) return { state, skipped: true, archiveSha256: digest, totalRows: 0 };
-  const all = listEntries(archive), entries = all.filter((entry) => familyForName(entry.name));
+  const all = await listEntries(source), entries = all.filter((entry) => familyForName(entry.name));
   const families = new Set(entries.map((entry) => familyForName(entry.name)));
   if (!["operation", "energy", "status"].every((name) => families.has(name))) throw new Error("missing_families");
-  const uncompressed = entries.reduce((n, entry) => n + entry.uncompressedSize, 0), projected = Math.ceil(uncompressed * 2.25);
-  if (memoryBudgetBytes && projected > memoryBudgetBytes) throw new Error("out_of_memory");
+  const uncompressed = entries.reduce((n, entry) => n + entry.uncompressedSize, 0);
   report(6, "native_scan", `${(uncompressed / 1024 / 1024).toFixed(0)} MB`);
   const totals = { parsed: 0, uncompressed }, fresh = {};
-  for (const family of ["operation", "energy", "status"]) fresh[family] = await parseFamily(archive, entries.filter((entry) => familyForName(entry.name) === family), family, report, totals);
+  for (const family of ["operation", "energy", "status"]) fresh[family] = await parseFamily(source, entries.filter((entry) => familyForName(entry.name) === family), family, report, totals, profile);
   report(70, "native_merge", "Merging overlapping exports");
   const streams = {};
   for (const family of ["operation", "energy", "status"]) streams[family] = mergeStream(state.streams[family], fresh[family]);
@@ -385,12 +498,23 @@ export async function exportHistory(state, report = () => {}) {
   return new Blob([HISTORY_MAGIC, length, manifest, ...chunks]).arrayBuffer();
 }
 
-export async function importHistory(buffer, report = () => {}) {
-  const bytes = new Uint8Array(buffer); if (bytes.length < 12 || !HISTORY_MAGIC.every((value, i) => bytes[i] === value)) throw new Error("history_version");
-  const manifestLength = new DataView(bytes.buffer, bytes.byteOffset + 8, 4).getUint32(0, false); if (manifestLength > 2_000_000 || 12 + manifestLength > bytes.length) throw new Error("history_integrity");
-  const manifest = JSON.parse(new TextDecoder().decode(bytes.subarray(12, 12 + manifestLength))); if (manifest.format !== HISTORY_FORMAT || manifest.version !== 3) throw new Error("history_version");
+export async function importHistory(source, report = () => {}) {
+  const sourceSize = sourceLength(source), header = await readSourceRange(source, 0, Math.min(12, sourceSize));
+  if (header.length < 12 || !HISTORY_MAGIC.every((value, i) => header[i] === value)) throw new Error("history_version");
+  const manifestLength = new DataView(header.buffer, header.byteOffset + 8, 4).getUint32(0, false);
+  if (manifestLength > 2_000_000 || 12 + manifestLength > sourceSize) throw new Error("history_integrity");
+  const manifestBytes = await readSourceRange(source, 12, 12 + manifestLength);
+  const manifest = JSON.parse(new TextDecoder().decode(manifestBytes)); if (manifest.format !== HISTORY_FORMAT || manifest.version !== 3) throw new Error("history_version");
   const payloadStart = 12 + manifestLength, streams = {}; let completed = 0, total = Object.values(manifest.streams).reduce((n, stream) => n + 1 + Object.keys(stream.columns).length, 0);
-  const read = async (record, Type) => { if (!Number.isSafeInteger(record.offset) || !Number.isSafeInteger(record.bytes) || !Number.isSafeInteger(record.rawBytes) || record.offset < 0 || record.bytes < 0 || record.rawBytes < 0 || payloadStart + record.offset + record.bytes > bytes.length || record.rawBytes % Type.BYTES_PER_ELEMENT) throw new Error("history_integrity"); const compressed = bytes.slice(payloadStart + record.offset, payloadStart + record.offset + record.bytes); if (await hash(compressed) !== record.sha256) throw new Error("history_integrity"); const raw = await gunzip(compressed); if (raw.byteLength !== record.rawBytes) throw new Error("history_integrity"); report(8 + (++completed / total) * 84, "history_read", record.name); return new Type(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)); };
+  const read = async (record, Type) => {
+    if (!Number.isSafeInteger(record.offset) || !Number.isSafeInteger(record.bytes) || !Number.isSafeInteger(record.rawBytes) || record.offset < 0 || record.bytes < 0 || record.rawBytes < 0 || payloadStart + record.offset + record.bytes > sourceSize || record.rawBytes % Type.BYTES_PER_ELEMENT) throw new Error("history_integrity");
+    const compressed = await readSourceRange(source, payloadStart + record.offset, payloadStart + record.offset + record.bytes);
+    if (await hash(compressed) !== record.sha256) throw new Error("history_integrity");
+    const raw = await gunzip(compressed);
+    if (raw.byteLength !== record.rawBytes || raw.byteOffset % Type.BYTES_PER_ELEMENT) throw new Error("history_integrity");
+    report(8 + (++completed / total) * 84, "history_read", record.name);
+    return new Type(raw.buffer, raw.byteOffset, raw.byteLength / Type.BYTES_PER_ELEMENT);
+  };
   for (const [family, record] of Object.entries(manifest.streams)) { const stream = { family, model: record.model || manifest.model, stats: record.stats, time: await read(record.time, Uint32Array), columns: {} }; for (const [name, column] of Object.entries(record.columns)) stream.columns[name] = await read(column, Float32Array); streams[family] = stream; }
   return { format: HISTORY_FORMAT, version: 3, model: manifest.model || "", imports: manifest.imports || [], streams };
 }

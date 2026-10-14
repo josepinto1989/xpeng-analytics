@@ -2,6 +2,25 @@
 
 All notable public changes are documented here.
 
+## 1.5.1 — 2026-10-14
+
+- Added a mobile-specific import profile while retaining the same telemetry,
+  metrics, charts, and `.xpeng` history format used on desktop.
+- Removed the conservative mobile memory projection that incorrectly rejected
+  a 13.5 MB compressed, 317.5 MB expanded 30-day export before processing.
+- Changed native ZIP and `.xpeng` imports to pass the selected `File` directly
+  to the Web Worker and read only the required byte ranges.
+- Replaced overallocated growing arrays with fixed-size column chunks, using
+  smaller chunks on mobile and larger chunks on desktop.
+- Reduced temporary allocations by parsing only the required CSV fields and by
+  deduplicating already ordered timestamps while they are read.
+- Replaced JavaScript sorting indexes with compact typed indexes for the rare
+  exports whose timestamps are not ordered.
+- Added regression tests for mobile Blob-based ZIP and `.xpeng` imports.
+- Verified the full 30-day test export in a Pixel 9-sized Chrome profile: 3.43
+  million rows, 126 trips, and 11 charging sessions completed with the full
+  dashboard available.
+
 ## 1.5.0 — 2026-10-14
 
 - Added Metric/Imperial display controls and an independent bar/psi tyre

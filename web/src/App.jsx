@@ -61,13 +61,19 @@ function createLegacyWorker() {
   });
 }
 
-function memoryBudgetBytes() {
+function isMobileDevice() {
+  if (typeof navigator.userAgentData?.mobile === "boolean") return navigator.userAgentData.mobile;
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "") || window.matchMedia?.("(pointer: coarse) and (max-width: 1024px)")?.matches;
+}
+
+function processingProfile() {
   const gib = 1024 ** 3;
   const reported = Number(navigator.deviceMemory || 0);
   const heap = Number(globalThis.performance?.memory?.jsHeapSizeLimit || 0);
-  const mobile = Boolean(navigator.userAgentData?.mobile) || window.matchMedia?.("(max-width: 760px)")?.matches;
+  const mobile = isMobileDevice();
   const inferred = heap ? heap * .42 : reported ? reported * gib * .12 : mobile ? 420 * 1024 ** 2 : 1.5 * gib;
-  return Math.max(mobile ? 300 * 1024 ** 2 : 900 * 1024 ** 2, Math.min(mobile ? 640 * 1024 ** 2 : 2.5 * gib, inferred));
+  const memoryBudgetBytes = Math.max(mobile ? 300 * 1024 ** 2 : 900 * 1024 ** 2, Math.min(mobile ? 640 * 1024 ** 2 : 2.5 * gib, inferred));
+  return { mode: mobile ? "mobile" : "desktop", memoryBudgetBytes };
 }
 
 const nativeHistoryMagic = [88, 80, 69, 78, 71, 65, 0, 3];
@@ -214,6 +220,16 @@ export default function App() {
     setBusy(true);
     setError(null);
     setProgress({ percent: 8, phase: "archive_write" });
+    if (workerModeRef.current === "native") {
+      if (cancelRequestedRef.current) {
+        activeFileRef.current = null;
+        setBusy(false);
+        setProgress({ percent: 0, phase: null });
+        return;
+      }
+      workerRef.current.postMessage({ type: "import", filename: next.name, file: next, processingProfile: processingProfile() });
+      return;
+    }
     next.arrayBuffer().then((archive) => {
       if (cancelRequestedRef.current) {
         activeFileRef.current = null;
@@ -221,7 +237,7 @@ export default function App() {
         setProgress({ percent: 0, phase: null });
         return;
       }
-      workerRef.current.postMessage({ type: "import", filename: next.name, archive, memoryBudgetBytes: memoryBudgetBytes() }, [archive]);
+      workerRef.current.postMessage({ type: "import", filename: next.name, archive, memoryBudgetBytes: processingProfile().memoryBudgetBytes }, [archive]);
     }).catch(() => {
       setError("invalid_archive");
       setBusy(false);
@@ -245,14 +261,21 @@ export default function App() {
     setBusy(true);
     setError(null);
     setProgress({ percent: 5, phase: "history_read" });
-    selected.arrayBuffer().then((archive) => {
+    selected.slice(0, nativeHistoryMagic.length).arrayBuffer().then(async (header) => {
       if (cancelRequestedRef.current) {
         activeFileRef.current = null;
         setBusy(false);
         setProgress({ percent: 0, phase: null });
         return;
       }
-      const mode = isNativeHistory(archive) ? "native" : "legacy";
+      const mode = isNativeHistory(header) ? "native" : "legacy";
+      if (mode === "native") {
+        const message = { type: "import_history", filename: selected.name, file: selected };
+        if (workerModeRef.current !== mode) replaceWorkerRef.current?.(mode, message);
+        else workerRef.current.postMessage(message);
+        return;
+      }
+      const archive = await selected.arrayBuffer();
       const message = { type: "import_history", filename: selected.name, archive };
       if (workerModeRef.current !== mode) replaceWorkerRef.current?.(mode, message);
       else workerRef.current.postMessage(message, [archive]);

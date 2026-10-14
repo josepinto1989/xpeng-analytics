@@ -20,6 +20,10 @@ Outros browsers poderão funcionar, mas não são atualmente verificados. Uma
 exportação de 30 dias demora normalmente cerca de um minuto num computador
 recente, embora o tamanho, processador, memória e browser influenciem o tempo.
 
+Em telemóveis e tablets é usado um perfil de importação com menor consumo de
+memória, mantendo os mesmos dados, métricas e gráficos da versão para
+computador. Em exportações grandes, mantém o browser móvel em primeiro plano.
+
 ## 2. Pedir a exportação à XPENG
 
 1. Abre o [portal XPENG Data Act](https://www.xpeng.com/data-act/my-data).

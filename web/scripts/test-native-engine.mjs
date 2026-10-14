@@ -61,6 +61,10 @@ assert.equal(restoredSnapshot.trips.length, snapshot.trips.length);
 assert.equal(restoredSnapshot.charges.length, snapshot.charges.length);
 assert.equal(restoredSnapshot.trips[0].maxSteeringAngleDeg, snapshot.trips[0].maxSteeringAngleDeg);
 assert.equal(restoredSnapshot.trips[0].series[0].rearMotorTorqueNm, snapshot.trips[0].series[0].rearMotorTorqueNm);
+const mobileImported = await importArchive(emptyState(), new Blob([source]), "mobile-fixture.zip", () => {}, { mode: "mobile", memoryBudgetBytes: 1 });
+assert.equal(mobileImported.totalRows, imported.totalRows, "mobile streaming import must retain every row without a conservative memory rejection");
+const mobileRestored = await importHistory(new Blob([history]));
+assert.equal(buildSnapshot(mobileRestored).trips.length, snapshot.trips.length, "mobile history streaming must retain every trip");
 const duplicate = await importArchive(restored, source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength), "fixture.zip", () => {}, 2_000_000_000);
 assert.equal(duplicate.skipped, true);
 if (!process.argv[2]) {

@@ -43,10 +43,11 @@ async function handle(message) {
     lastProgressPercent = -1;
     lastProgressPhase = "";
     progress(2, "native_scan", message.filename || "XPENG ZIP");
-    const result = await importArchive(state, message.archive, message.filename, guardedProgress, message.memoryBudgetBytes);
+    const source = message.file ?? message.archive;
+    const result = await importArchive(state, source, message.filename, guardedProgress, message.processingProfile ?? message.memoryBudgetBytes);
     progress(72, "native_analytics", "Calculating locally");
-    const snapshot = buildSnapshot(result.state, guardedProgress);
     state = result.state;
+    const snapshot = buildSnapshot(state, guardedProgress);
     progress(100, "complete", "Done");
     self.postMessage({
       type: "imported",
@@ -72,7 +73,7 @@ async function handle(message) {
   }
   if (message?.type === "import_history") {
     cancelRequested = false;
-    const restored = await importHistory(message.archive, guardedProgress);
+    const restored = await importHistory(message.file ?? message.archive, guardedProgress);
     const snapshot = buildSnapshot(restored, guardedProgress);
     state = restored;
     progress(100, "complete", "Done");

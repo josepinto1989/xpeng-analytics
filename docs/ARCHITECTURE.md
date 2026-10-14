@@ -29,10 +29,17 @@ XPENG ZIP or a version 3 history.
 ## Memory and browser boundary
 
 CSV contents are decompressed and parsed as streams; they are not expanded into
-one large string. Signals are stored as `Uint32Array` timelines and
-`Float32Array` columns. Before parsing, the worker compares a conservative
-memory projection with the browser's reported device memory and rejects files
-that are unlikely to fit safely.
+one large string. The selected `File` is passed directly to the worker, which
+reads the ZIP directory and compressed entries through bounded Blob slices.
+Only required CSV fields are materialised. Signals are assembled in fixed-size
+`Uint32Array` and `Float32Array` chunks before being compacted into the final
+columns.
+
+Mobile and desktop use the same analytical model and retain the same data.
+Their processing profiles differ only in allocation strategy: mobile uses
+smaller chunks to reduce peak memory, while desktop uses larger chunks for
+throughput. The importer no longer rejects a file from a projection based on
+the complete expanded CSV size because most source columns are never retained.
 
 The selected archive, parsed columns, and dashboard stay inside the tab. No
 browser persistence is enabled by default, and no request containing vehicle
@@ -44,7 +51,8 @@ session.
 New exports use `xpeng-analytics-columnar-history` version 3 with the `.xpeng`
 extension. The file contains a small JSON manifest followed by individually
 gzip-compressed timeline and signal columns. Each block has its own SHA-256
-checksum, original size, and byte range. Restoring a history validates the
+checksum, original size, and byte range. Restoring a history reads each block
+directly from its Blob range and validates the
 format, version, bounds, checksum, decompressed size, and required streams
 before rebuilding all derived analytics.
 
