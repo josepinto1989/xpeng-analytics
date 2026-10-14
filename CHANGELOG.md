@@ -2,6 +2,12 @@
 
 All notable public changes are documented here.
 
+## 1.4.1 — 2026-10-14
+
+- Replaced the subtle start-page upload controls with a large, familiar
+  dashed drop zone that can be clicked or used directly for drag and drop.
+- Kept multi-ZIP and automatic `.xpeng` history detection in the same control.
+
 ## 1.4.0 — 2026-10-14
 
 - Added drag and drop to the start page for XPENG exports and histories.

@@ -400,7 +400,7 @@ export default function App() {
         </div>
       </section>
 
-      <section className={`workspace ${dragActive ? "is-dragging" : ""}`} aria-busy={busy} onDragEnter={handleDragEnter} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+      <section className={`workspace ${dragActive ? "is-dragging" : ""}`} aria-busy={busy}>
         <div className="upload-card">
           <div className="upload-heading">
             {busy ? <strong className="progress-percent">{Math.round(progress.percent ?? 0)}%</strong> : <><span className={`status-dot ${error ? "is-error" : engineReady ? "is-ready" : ""}`} /><strong>{statusText}</strong></>}
@@ -418,13 +418,27 @@ export default function App() {
             disabled={!engineReady || busy}
             onChange={(event) => chooseLocalFiles(event.target.files)}
           />
-          <div className="landing-actions">
-            <label className={`file-button ${busy || !engineReady ? "is-disabled" : ""}`} htmlFor="xpeng-files"><span aria-hidden="true">＋</span>{busy ? t("importing") : t("chooseFiles")}</label>
-          </div>
-          <div className="drop-zone-copy" aria-live="polite">
-            <strong>{dragActive ? t("dropActive") : t("dropTitle")}</strong>
-            <p className="drop-hint">{t("dropHint")}</p>
-          </div>
+          <label
+            className={`landing-drop-zone ${dragActive ? "is-active" : ""} ${busy || !engineReady ? "is-disabled" : ""}`}
+            htmlFor="xpeng-files"
+            aria-disabled={busy || !engineReady}
+            tabIndex={busy || !engineReady ? -1 : 0}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                inputRef.current?.click();
+              }
+            }}
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <span className="drop-upload-icon" aria-hidden="true">↥</span>
+            <strong aria-live="polite">{dragActive ? t("dropActive") : t("dropTitle")}</strong>
+            <small>{t("dropHint")}</small>
+            <span className="drop-browse">{busy ? t("importing") : t("chooseFiles")}</span>
+          </label>
           <div className="processing-time-alert"><strong>{t("processingTimeTitle")}</strong><p>{t("processingTimeBody")}</p></div>
           {snapshot ? <button className="reset-button" type="button" disabled={busy} onClick={reset}>{t("reset")}</button> : null}
         </div>
