@@ -18,9 +18,16 @@ exact SHA-256 archive hash makes repeat imports idempotent.
 
 The worker returns a versioned `xpeng-analytics-dashboard/v2` snapshot to React.
 Date filters, record selection, unit conversion, synchronized chart cursors,
-and PDF generation operate on this snapshot and require no server or network
-request. The interface exposes overview, journeys, driving, charging, battery,
-tyres, activity, report, quality, and data-management views.
+long-term trends, driving-context estimates, and PDF generation operate on
+this snapshot and require no server or network request. The interface exposes
+overview, journeys, driving, charging, battery, tyres, activity, trends,
+report, quality, and data-management views.
+
+Driving context is derived in short telemetry blocks during the same pass that
+builds trips. The classifier considers sustained speed bands, stops,
+longitudinal dynamics, and braking, then emits urban-, road-, or
+motorway-style estimates with a confidence score. It does not use GPS or claim
+to identify the actual road.
 
 The previous Python/WebAssembly and SQLite processor remains available as a
 compatibility reader for version 1 and 2 histories. It is not loaded for a new

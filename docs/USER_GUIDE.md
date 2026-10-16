@@ -117,6 +117,18 @@ axle. Use the sidebar selector to display pressure in bar or psi.
 Provides the actual-use heatmap, daily energy and consumption, monthly distance
 and journey totals, weekday activity, start times, and charging activity.
 
+### Trends
+
+Aggregates the selected period by month for distance, consumption, indicated
+range, estimated capacity, relative SOH, parked use, charging, and tyre
+pressure. A month may contain only part of that month's data, so compare months
+with coverage in mind.
+
+The same page estimates urban-, road-, and motorway-style driving from short
+telemetry blocks. It displays distance, time, energy used, regenerated energy,
+consumption, and confidence. This is a software estimate based on speed, stops,
+acceleration, and braking. It does not use GPS or identify the actual road.
+
 ### Report
 
 Creates a local PDF for a selected date range. The report includes distance,

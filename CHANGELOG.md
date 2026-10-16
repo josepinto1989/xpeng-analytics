@@ -2,6 +2,21 @@
 
 All notable public changes are documented here.
 
+## 1.7.0-beta.1 — 2026-10-16
+
+- Added a dedicated Trends page with monthly distance, consumption, indicated
+  range, estimated capacity, relative SOH, parked use, charging, and tyre
+  pressure views.
+- Added estimated urban-, road-, and motorway-style driving breakdowns using
+  short telemetry blocks rather than whole-trip maximum speed.
+- Driving-context estimates include distance, time, energy used, regenerated
+  energy, consumption, and a confidence score.
+- Context classification uses sustained speed, stops, acceleration, and
+  braking, and is explicitly labelled as a software estimate without GPS or
+  actual road identification.
+- Existing legacy histories receive a low-confidence trip-level fallback while
+  current `.xpeng` histories are recalculated from their full telemetry.
+
 ## 1.6.0-beta.2 — 2026-10-16
 
 - Replaced the fixed 30-day update reminder with a user-selected interval of

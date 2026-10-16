@@ -71,9 +71,9 @@ Allow returning users to keep a working history on the same device without
 having to select the portable file on every visit.
 
 The feature-complete implementation is available in private staging as
-`1.6.0-beta.2`. It supports one remembered history per browser profile, has
-passed owner testing, and is waiting for final validation of the configurable
-reminder before promotion to the public repository.
+`1.6.0-beta.2`. It supports one remembered history per browser profile and has
+passed owner testing, including the configurable reminder. Phase 8 is complete
+and can be promoted with the next reviewed public release.
 
 - Add a disabled-by-default `Remember this history on this device` option.
 - Store the processed history in browser-local storage, with no account or
@@ -98,6 +98,11 @@ reminder before promotion to the public repository.
 
 Build on persistent history with tools that become more useful over several
 months.
+
+The first private-staging implementation is available as `1.7.0-beta.1`. It
+adds monthly trends and telemetry-block driving-context estimates. Manual
+journey and charging labels, tariff profiles, and export summaries remain for
+the next Phase 9 iteration.
 
 - Add monthly trends for consumption, range, estimated capacity, relative SOH,
   parked use, charging, and tyre pressure.

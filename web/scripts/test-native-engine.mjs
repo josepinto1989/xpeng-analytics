@@ -42,6 +42,11 @@ const snapshot = buildSnapshot(imported.state);
 assert.ok(snapshot.trips.length >= 1, "expected at least one trip");
 assert.ok(snapshot.charges.length >= 1, "expected at least one charging session");
 assert.ok(snapshot.driving.speed.length >= 1, "expected driving distribution");
+assert.ok(snapshot.driving.contexts.length >= 1, "expected estimated driving-context segments");
+assert.equal(snapshot.driving.contexts[0].context, "road", "50 km/h fixture should be estimated as road-style driving");
+assert.ok(["low", "medium", "high"].includes(snapshot.driving.contexts[0].confidence), "expected a context confidence label");
+assert.ok(snapshot.driving.contexts.reduce((total, row) => total + row.distanceKm, 0) > 0, "expected context distance");
+assert.ok(Math.abs(snapshot.driving.contexts.reduce((total, row) => total + row.distanceKm, 0) - snapshot.overview.distanceKm) < .1, "context distance should reconcile with trip distance");
 assert.ok(snapshot.activity.heatmap.length >= 1, "expected activity heatmap");
 assert.ok(snapshot.battery.tyres.length >= 1, "expected tyre data");
 assert.ok(snapshot.trips[0].maxLateralG > 0, "expected maximum lateral acceleration");
@@ -68,6 +73,12 @@ assert.equal(buildSnapshot(mobileRestored).trips.length, snapshot.trips.length, 
 const duplicate = await importArchive(restored, source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength), "fixture.zip", () => {}, 2_000_000_000);
 assert.equal(duplicate.skipped, true);
 if (!process.argv[2]) {
+  for (const [speed, expected] of [[25, "urban"], [65, "road"], [110, "motorway"]]) {
+    const contextFixture = fixture(speed), contextImport = await importArchive(emptyState(), contextFixture.buffer.slice(contextFixture.byteOffset, contextFixture.byteOffset + contextFixture.byteLength), `${expected}.zip`, () => {}, 2_000_000_000);
+    const contexts = buildSnapshot(contextImport.state).driving.contexts;
+    assert.ok(contexts.length, `expected ${expected} context rows`);
+    assert.ok(contexts.every((row) => row.context === expected), `${speed} km/h fixture should be classified as ${expected}`);
+  }
   const changed = fixture(60);
   const overlap = await importArchive(restored, changed.buffer.slice(changed.byteOffset, changed.byteOffset + changed.byteLength), "overlap.zip", () => {}, 2_000_000_000);
   assert.equal(overlap.skipped, false);

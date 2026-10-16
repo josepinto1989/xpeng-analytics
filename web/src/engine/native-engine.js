@@ -395,22 +395,83 @@ function binnedSeries(operation, energy, status, startTime, endTime, limit = 180
   return rows;
 }
 
+function newContextBlock() {
+  return { seconds: 0, distanceKm: 0, energyUsedKwh: 0, regeneratedKwh: 0, lowSeconds: 0, middleSeconds: 0, highSeconds: 0, stoppedSeconds: 0, dynamicSeconds: 0, stops: 0 };
+}
+
+function observeContextBlock(block, speedKmh, previousSpeedKmh, seconds, energyKwh, longitudinalG, braking) {
+  block.seconds += seconds;
+  block.distanceKm += speedKmh * seconds / 3600;
+  if (finite(energyKwh)) {
+    if (energyKwh >= 0) block.energyUsedKwh += energyKwh;
+    else block.regeneratedKwh -= energyKwh;
+  }
+  if (speedKmh < 50) block.lowSeconds += seconds;
+  if (speedKmh >= 35 && speedKmh < 95) block.middleSeconds += seconds;
+  if (speedKmh >= 85) block.highSeconds += seconds;
+  if (speedKmh < 3) block.stoppedSeconds += seconds;
+  if (previousSpeedKmh >= 3 && speedKmh < 3) block.stops += 1;
+  if ((finite(longitudinalG) && Math.abs(longitudinalG) >= .12) || braking) block.dynamicSeconds += seconds;
+}
+
+function finishContextBlock(block, trip, position) {
+  if (!block.seconds || block.distanceKm < .005) return null;
+  const share = (value) => value / block.seconds;
+  const clamp = (value) => Math.max(0, Math.min(1, value));
+  const averageSpeedKmh = block.distanceKm / (block.seconds / 3600);
+  const stoppedShare = share(block.stoppedSeconds), dynamicShare = share(block.dynamicSeconds), stableShare = 1 - dynamicShare;
+  const scores = {
+    urban: .55 * share(block.lowSeconds) + .2 * clamp(stoppedShare * 4) + .15 * clamp(dynamicShare * 3) + .1 * clamp((55 - averageSpeedKmh) / 30),
+    road: .55 * share(block.middleSeconds) + .2 * clamp(1 - Math.abs(averageSpeedKmh - 65) / 35) + .15 * stableShare + .1 * (1 - stoppedShare),
+    motorway: .65 * share(block.highSeconds) + .2 * clamp((averageSpeedKmh - 75) / 35) + .1 * stableShare + .05 * (1 - stoppedShare),
+  };
+  const ranked = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  const margin = ranked[0][1] - ranked[1][1];
+  let confidence = ranked[0][1] >= .65 && margin >= .25 ? "high" : ranked[0][1] >= .5 && margin >= .12 ? "medium" : "low";
+  if (block.seconds < 45 && confidence === "high") confidence = "medium";
+  if (block.seconds < 20) confidence = "low";
+  const netEnergyKwh = block.energyUsedKwh - block.regeneratedKwh;
+  return {
+    segmentId: `${trip.tripId}-${position}`,
+    tripId: trip.tripId,
+    date: trip.date,
+    startedAtUtc: new Date(Date.parse(trip.startedAtUtc) + position * 60_000).toISOString(),
+    context: ranked[0][0],
+    confidence,
+    confidenceScore: rounded(ranked[0][1] * 100, 0),
+    durationMinutes: rounded(block.seconds / 60, 2),
+    distanceKm: rounded(block.distanceKm, 3),
+    averageSpeedKmh: rounded(averageSpeedKmh, 1),
+    energyUsedKwh: rounded(block.energyUsedKwh, 4),
+    regeneratedKwh: rounded(block.regeneratedKwh, 4),
+    netEnergyKwh: rounded(netEnergyKwh, 4),
+    consumptionKwh100: rounded(block.distanceKm ? netEnergyKwh / block.distanceKm * 100 : NaN, 1),
+    stopCount: block.stops,
+  };
+}
+
 function buildTrips(operation, energy, status, local) {
-  const trips = [], speed = operation.columns.speed_kmh;
+  const trips = [], contexts = [], speed = operation.columns.speed_kmh;
   for (const [startTime, endTime] of boundaries(operation.time, speed, 0.999, TRIP_BREAK)) {
-    const start = lowerBound(operation.time, startTime), end = upperBound(operation.time, endTime), energyAt = monotonicIndex(energy.time, operation.time[start]); let distance = 0, used = 0, regenerated = 0, moving = 0, gaps = 0, peakDrive = NaN, peakRegen = NaN, e1 = energyAt(operation.time[start]);
+    const start = lowerBound(operation.time, startTime), end = upperBound(operation.time, endTime), energyAt = monotonicIndex(energy.time, operation.time[start]), contextBlocks = new Map(); let distance = 0, used = 0, regenerated = 0, moving = 0, gaps = 0, peakDrive = NaN, peakRegen = NaN, e1 = energyAt(operation.time[start]);
     for (let i = start + 1; i < end; i++) {
       const e2 = energyAt(operation.time[i]), dt = operation.time[i] - operation.time[i - 1]; if (dt <= 0 || dt > MAX_GAP) { if (dt > MAX_GAP) gaps++; e1 = e2; continue; }
       const s1 = finite(speed[i - 1]) ? speed[i - 1] : 0, s2 = finite(speed[i]) ? speed[i] : 0, avgSpeed = (s1 + s2) / 2; distance += avgSpeed * dt / 3600; if (avgSpeed >= MOVING) moving += dt;
       const p1 = powerAt(energy, e1), p2 = powerAt(energy, e2);
-      if (finite(p1) && finite(p2)) { const p = (p1 + p2) / 2, amount = p * dt / 3600; if (amount >= 0) used += amount; else regenerated -= amount; peakDrive = !finite(peakDrive) ? Math.max(p1, p2) : Math.max(peakDrive, p1, p2); peakRegen = !finite(peakRegen) ? Math.min(p1, p2) : Math.min(peakRegen, p1, p2); }
+      let amount = NaN;
+      if (finite(p1) && finite(p2)) { const p = (p1 + p2) / 2; amount = p * dt / 3600; if (amount >= 0) used += amount; else regenerated -= amount; peakDrive = !finite(peakDrive) ? Math.max(p1, p2) : Math.max(peakDrive, p1, p2); peakRegen = !finite(peakRegen) ? Math.min(p1, p2) : Math.min(peakRegen, p1, p2); }
+      const contextPosition = Math.floor((operation.time[i] - startTime) / 60), block = contextBlocks.get(contextPosition) || newContextBlock();
+      observeContextBlock(block, avgSpeed, s1, dt, amount, val(operation, "longitudinal_accel", i), Boolean(val(operation, "brake_status", i)));
+      contextBlocks.set(contextPosition, block);
       e1 = e2;
     }
     if (distance < .05) continue;
     const eStart = lowerBound(energy.time, startTime), eEnd = upperBound(energy.time, endTime), sStart = lowerBound(status.time, startTime), sEnd = upperBound(status.time, endTime), gross = used + regenerated;
-    trips.push({ tripId: id("trip", startTime, endTime), date: local(startTime).date, startedAtUtc: iso(startTime), endedAtUtc: iso(endTime), durationMinutes: rounded((endTime - startTime) / 60, 1), movingMinutes: rounded(moving / 60, 1), distanceKm: rounded(distance), maxSpeedKmh: rounded(maxFinite(speed, start, end), 1), avgSpeedKmh: rounded(distance / ((endTime - startTime) / 3600), 1), energyUsedKwh: rounded(used, 3), netEnergyKwh: rounded(used - regenerated, 3), regeneratedKwh: rounded(regenerated, 3), regenerationSharePct: rounded(gross ? regenerated / gross * 100 : NaN, 1), consumptionKwh100: rounded((used - regenerated) / distance * 100), socStartPct: rounded(firstFinite(energy.columns.soc_pct, eStart, eEnd), 1), socEndPct: rounded(lastFinite(energy.columns.soc_pct, eStart, eEnd), 1), batteryTempMinC: rounded(minFinite(energy.columns.battery_temp_min_c, eStart, eEnd), 1), batteryTempMaxC: rounded(maxFinite(energy.columns.battery_temp_max_c, eStart, eEnd), 1), maxAccelerationG: rounded(maxFinite(operation.columns.longitudinal_accel, start, end), 3), maxBrakingG: rounded(Math.abs(Math.min(0, minFinite(operation.columns.longitudinal_accel, start, end))), 3), maxLateralG: rounded(maxAbsFinite(operation.columns.lateral_accel, start, end), 3), maxSteeringAngleDeg: rounded(maxAbsFinite(operation.columns.steering_angle_deg, start, end), 1), peakDrivePowerKw: rounded(peakDrive, 1), peakRegenPowerKw: rounded(finite(peakRegen) ? Math.abs(Math.min(0, peakRegen)) : NaN, 1), maxRearMotorRpm: rounded(maxFinite(energy.columns.rear_motor_rpm, eStart, eEnd), 0), maxRearTorqueNm: rounded(maxFinite(energy.columns.rear_motor_torque_nm, eStart, eEnd), 1), maxRearRotorTempC: rounded(maxPositiveFinite(energy.columns.rear_rotor_temp_c, eStart, eEnd), 1), tyrePressureMinKpa: rounded(Math.min(...["tyre_pressure_fl_kpa", "tyre_pressure_fr_kpa", "tyre_pressure_rl_kpa", "tyre_pressure_rr_kpa"].map((key) => minFinite(status.columns[key], sStart, sEnd)).filter(finite)), 1), tyrePressureMaxKpa: rounded(Math.max(...["tyre_pressure_fl_kpa", "tyre_pressure_fr_kpa", "tyre_pressure_rl_kpa", "tyre_pressure_rr_kpa"].map((key) => maxFinite(status.columns[key], sStart, sEnd)).filter(finite)), 1), gapCount: gaps, series: binnedSeries(operation, energy, status, startTime, endTime) });
+    const trip = { tripId: id("trip", startTime, endTime), date: local(startTime).date, startedAtUtc: iso(startTime), endedAtUtc: iso(endTime), durationMinutes: rounded((endTime - startTime) / 60, 1), movingMinutes: rounded(moving / 60, 1), distanceKm: rounded(distance), maxSpeedKmh: rounded(maxFinite(speed, start, end), 1), avgSpeedKmh: rounded(distance / ((endTime - startTime) / 3600), 1), energyUsedKwh: rounded(used, 3), netEnergyKwh: rounded(used - regenerated, 3), regeneratedKwh: rounded(regenerated, 3), regenerationSharePct: rounded(gross ? regenerated / gross * 100 : NaN, 1), consumptionKwh100: rounded((used - regenerated) / distance * 100), socStartPct: rounded(firstFinite(energy.columns.soc_pct, eStart, eEnd), 1), socEndPct: rounded(lastFinite(energy.columns.soc_pct, eStart, eEnd), 1), batteryTempMinC: rounded(minFinite(energy.columns.battery_temp_min_c, eStart, eEnd), 1), batteryTempMaxC: rounded(maxFinite(energy.columns.battery_temp_max_c, eStart, eEnd), 1), maxAccelerationG: rounded(maxFinite(operation.columns.longitudinal_accel, start, end), 3), maxBrakingG: rounded(Math.abs(Math.min(0, minFinite(operation.columns.longitudinal_accel, start, end))), 3), maxLateralG: rounded(maxAbsFinite(operation.columns.lateral_accel, start, end), 3), maxSteeringAngleDeg: rounded(maxAbsFinite(operation.columns.steering_angle_deg, start, end), 1), peakDrivePowerKw: rounded(peakDrive, 1), peakRegenPowerKw: rounded(finite(peakRegen) ? Math.abs(Math.min(0, peakRegen)) : NaN, 1), maxRearMotorRpm: rounded(maxFinite(energy.columns.rear_motor_rpm, eStart, eEnd), 0), maxRearTorqueNm: rounded(maxFinite(energy.columns.rear_motor_torque_nm, eStart, eEnd), 1), maxRearRotorTempC: rounded(maxPositiveFinite(energy.columns.rear_rotor_temp_c, eStart, eEnd), 1), tyrePressureMinKpa: rounded(Math.min(...["tyre_pressure_fl_kpa", "tyre_pressure_fr_kpa", "tyre_pressure_rl_kpa", "tyre_pressure_rr_kpa"].map((key) => minFinite(status.columns[key], sStart, sEnd)).filter(finite)), 1), tyrePressureMaxKpa: rounded(Math.max(...["tyre_pressure_fl_kpa", "tyre_pressure_fr_kpa", "tyre_pressure_rl_kpa", "tyre_pressure_rr_kpa"].map((key) => maxFinite(status.columns[key], sStart, sEnd)).filter(finite)), 1), gapCount: gaps, series: binnedSeries(operation, energy, status, startTime, endTime) };
+    trips.push(trip);
+    for (const [position, block] of contextBlocks) { const context = finishContextBlock(block, trip, position); if (context) contexts.push(context); }
   }
-  return trips;
+  return { trips, contexts };
 }
 
 function buildCharges(operation, energy, local) {
@@ -461,7 +522,7 @@ function advanced(operation, energy, status, local) {
 export function buildSnapshot(state, report = () => {}) {
   const { operation, energy, status } = state.streams; if (!operation || !energy || !status) throw new Error("missing_families");
   const local = timeContext(); report(74, "native_analytics", "Trips and charging sessions");
-  const trips = buildTrips(operation, energy, status, local), charges = buildCharges(operation, energy, local);
+  const tripBuild = buildTrips(operation, energy, status, local), trips = tripBuild.trips, contexts = tripBuild.contexts, charges = buildCharges(operation, energy, local);
   const journeys = []; let current = [];
   for (const trip of trips) { const previous = current.at(-1); if (!previous || new Date(trip.startedAtUtc) / 1000 - new Date(previous.endedAtUtc) / 1000 <= JOURNEY_BREAK) current.push(trip); else { journeys.push(current); current = [trip]; } } if (current.length) journeys.push(current);
   const journeyRows = journeys.map((group) => { const first = group[0], last = group.at(-1), distance = sum(group, "distanceKm"), net = sum(group, "netEnergyKwh"), regenerated = sum(group, "regeneratedKwh"), used = sum(group, "energyUsedKwh"), duration = (new Date(last.endedAtUtc) - new Date(first.startedAtUtc)) / 60000; return { journeyId: id("journey", new Date(first.startedAtUtc) / 1000, new Date(last.endedAtUtc) / 1000), date: first.date, startedAtUtc: first.startedAtUtc, endedAtUtc: last.endedAtUtc, durationMinutes: rounded(duration, 1), drivingMinutes: rounded(sum(group, "durationMinutes"), 1), stoppedMinutes: rounded(duration - sum(group, "durationMinutes"), 1), distanceKm: rounded(distance), netEnergyKwh: rounded(net, 3), regeneratedKwh: rounded(regenerated, 3), energyUsedKwh: rounded(used, 3), regenerationSharePct: rounded(used + regenerated ? regenerated / (used + regenerated) * 100 : NaN, 1), consumptionKwh100: rounded(distance ? net / distance * 100 : NaN), maxSpeedKmh: rounded(Math.max(...group.map((row) => row.maxSpeedKmh || 0)), 1), tripIds: group.map((row) => row.tripId) }; });
@@ -482,7 +543,7 @@ export function buildSnapshot(state, report = () => {}) {
   for (const [family, stream] of Object.entries(state.streams)) { if (stream.stats.duplicates) qualityEvents.push({ family, field: null, rule: "duplicate_timestamp", severity: "low", affectedRows: stream.stats.duplicates, totalRows: stream.stats.inputRows }); if (stream.stats.invalidTimers) qualityEvents.push({ family, field: "timer", rule: "invalid_timer", severity: "high", affectedRows: stream.stats.invalidTimers, totalRows: stream.stats.inputRows }); if (stream.stats.wasUnsorted) qualityEvents.push({ family, field: "timer", rule: "unsorted_rows", severity: "medium", affectedRows: 1, totalRows: stream.stats.inputRows }); for (const [field, count] of Object.entries(stream.stats.invalidFields || {})) qualityEvents.push({ family, field, rule: "invalid_values", severity: "medium", affectedRows: count, totalRows: stream.stats.inputRows }); }
   const distance = sum(trips, "distanceKm"), net = sum(trips, "netEnergyKwh"), wall = sum(charges, "wallEnergyKwh"), batteryEnergy = sum(charges, "batteryEnergyKwh");
   report(96, "native_snapshot", "Preparing dashboard");
-  return { format: "xpeng-analytics-dashboard/v2", generatedAtUtc: new Date().toISOString(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "local", overview: { activeDays: daily.filter((row) => row.trips || row.charges).length, tripCount: trips.length, journeyCount: journeyRows.length, chargeCount: charges.length, distanceKm: rounded(distance), drivingHours: rounded(sum(trips, "durationMinutes") / 60, 1), netEnergyKwh: rounded(net), regeneratedKwh: rounded(sum(trips, "regeneratedKwh")), consumptionKwh100: rounded(distance ? net / distance * 100 : NaN), maxSpeedKmh: rounded(Math.max(...trips.map((row) => row.maxSpeedKmh || 0)), 1), wallEnergyKwh: rounded(wall), batteryEnergyKwh: rounded(batteryEnergy), chargeEfficiencyPct: rounded(wall ? batteryEnergy / wall * 100 : NaN, 1), maxChargePowerKw: rounded(Math.max(...charges.map((row) => row.maxPowerKw || 0)), 1), firstUtc: trips.at(0)?.startedAtUtc || null, lastUtc: trips.at(-1)?.endedAtUtc || null }, daily, trips: trips.slice().reverse(), journeys: journeyRows.slice().reverse(), charges: charges.slice().reverse(), driving: { speed: advancedData.speed, pedal: advancedData.pedal, gg: advancedData.gg, events: advancedData.events }, battery: { capacityKwh: rounded(median(health.map((row) => row.capacityKwh))), latestRelativeSohPct: health.at(-1)?.relativeSohPct ?? null, qualifiedCharges: health.length, history: health, parking: parking.reverse(), daily: advancedData.batteryDaily, rangeSamples: advancedData.rangeSamples, tyres: advancedData.tyres }, activity: { monthly: [...monthly.values()].map((row) => ({ ...row, distanceKm: rounded(row.distanceKm), netEnergyKwh: rounded(row.netEnergyKwh) })), weekday: weekday.map((row) => ({ ...row, distanceKm: rounded(row.distanceKm) })), hours, heatmap: advancedData.heatmap }, quality: { coverage: Object.entries(state.streams).map(([family, stream]) => { const emptyColumns = stream.stats?.emptyColumns || [], availableColumns = Object.keys(stream.columns).filter((column) => !emptyColumns.includes(column)); return { family, rows: stream.time.length, firstUtc: iso(stream.time[0]), lastUtc: iso(stream.time.at(-1)), totalColumns: Object.keys(stream.columns).length, availableColumns, emptyColumns, unknownColumns: stream.stats?.unknownColumns || [] }; }), events: qualityEvents }, imports: state.imports };
+  return { format: "xpeng-analytics-dashboard/v2", generatedAtUtc: new Date().toISOString(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "local", overview: { activeDays: daily.filter((row) => row.trips || row.charges).length, tripCount: trips.length, journeyCount: journeyRows.length, chargeCount: charges.length, distanceKm: rounded(distance), drivingHours: rounded(sum(trips, "durationMinutes") / 60, 1), netEnergyKwh: rounded(net), regeneratedKwh: rounded(sum(trips, "regeneratedKwh")), consumptionKwh100: rounded(distance ? net / distance * 100 : NaN), maxSpeedKmh: rounded(Math.max(...trips.map((row) => row.maxSpeedKmh || 0)), 1), wallEnergyKwh: rounded(wall), batteryEnergyKwh: rounded(batteryEnergy), chargeEfficiencyPct: rounded(wall ? batteryEnergy / wall * 100 : NaN, 1), maxChargePowerKw: rounded(Math.max(...charges.map((row) => row.maxPowerKw || 0)), 1), firstUtc: trips.at(0)?.startedAtUtc || null, lastUtc: trips.at(-1)?.endedAtUtc || null }, daily, trips: trips.slice().reverse(), journeys: journeyRows.slice().reverse(), charges: charges.slice().reverse(), driving: { speed: advancedData.speed, pedal: advancedData.pedal, gg: advancedData.gg, events: advancedData.events, contexts }, battery: { capacityKwh: rounded(median(health.map((row) => row.capacityKwh))), latestRelativeSohPct: health.at(-1)?.relativeSohPct ?? null, qualifiedCharges: health.length, history: health, parking: parking.reverse(), daily: advancedData.batteryDaily, rangeSamples: advancedData.rangeSamples, tyres: advancedData.tyres }, activity: { monthly: [...monthly.values()].map((row) => ({ ...row, distanceKm: rounded(row.distanceKm), netEnergyKwh: rounded(row.netEnergyKwh) })), weekday: weekday.map((row) => ({ ...row, distanceKm: rounded(row.distanceKm) })), hours, heatmap: advancedData.heatmap }, quality: { coverage: Object.entries(state.streams).map(([family, stream]) => { const emptyColumns = stream.stats?.emptyColumns || [], availableColumns = Object.keys(stream.columns).filter((column) => !emptyColumns.includes(column)); return { family, rows: stream.time.length, firstUtc: iso(stream.time[0]), lastUtc: iso(stream.time.at(-1)), totalColumns: Object.keys(stream.columns).length, availableColumns, emptyColumns, unknownColumns: stream.stats?.unknownColumns || [] }; }), events: qualityEvents }, imports: state.imports };
 }
 
 async function gzip(buffer) { const stream = new Blob([buffer]).stream().pipeThrough(new CompressionStream("gzip")); return new Uint8Array(await new Response(stream).arrayBuffer()); }

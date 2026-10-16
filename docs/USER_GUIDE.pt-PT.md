@@ -121,6 +121,19 @@ psi.
 Apresenta o mapa de utilização real, energia e consumo diários, distância e
 jornadas mensais, atividade por dia da semana, horas de início e carregamentos.
 
+### Tendências
+
+Agrega o período selecionado por mês para distância, consumo, autonomia
+indicada, capacidade estimada, SOH relativo, consumo parado, carregamentos e
+pressão dos pneus. Um mês pode conter apenas parte dos respetivos dados, pelo
+que a cobertura deve ser considerada ao comparar meses.
+
+A mesma página estima condução de estilo urbano, estrada e autoestrada em
+pequenos blocos de telemetria. Apresenta distância, tempo, energia utilizada,
+energia regenerada, consumo e confiança. É uma estimativa do software baseada
+em velocidade, paragens, aceleração e travagem. Não usa GPS nem identifica a
+estrada real.
+
 ### Relatório
 
 Cria localmente um PDF para as datas escolhidas. Inclui distância, consumo,
