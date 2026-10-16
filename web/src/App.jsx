@@ -5,6 +5,7 @@ import { APP_VERSION } from "./version.js";
 import { classifyLocalFiles, createImportPlan } from "./file-selection.js";
 import {
   deletePersistentHistory,
+  importReminderDays,
   importReminderEnabled,
   latestImportAt,
   readPersistentHistory,
@@ -12,6 +13,7 @@ import {
   reminderDue,
   requestDurableStorage,
   savePersistentHistory,
+  setImportReminderDays,
   setImportReminderEnabled,
   setRememberHistoryEnabled,
   storageEstimate,
@@ -120,6 +122,7 @@ export default function App() {
     importCount: 0,
     durable: false,
     reminderEnabled: false,
+    reminderDays: 30,
     reminderDue: false,
     error: null,
   });
@@ -155,6 +158,7 @@ export default function App() {
       const supported = supportsPersistentHistory();
       const enabled = supported && rememberHistoryEnabled();
       const reminderEnabled = importReminderEnabled();
+      const reminderDays = importReminderDays();
       let record = null;
       let estimate = { usage: null, quota: null };
       let persistenceError = null;
@@ -182,7 +186,8 @@ export default function App() {
         importCount: Number(record?.importCount || 0),
         durable: false,
         reminderEnabled,
-        reminderDue: reminderDue(record?.lastImportAtUtc, reminderEnabled),
+        reminderDays,
+        reminderDue: reminderDue(record?.lastImportAtUtc, reminderEnabled, reminderDays),
         usage: estimate.usage,
         quota: estimate.quota,
         error: persistenceError,
@@ -258,7 +263,7 @@ export default function App() {
               lastImportAtUtc: record.lastImportAtUtc,
               byteLength: record.byteLength,
               importCount: record.importCount,
-              reminderDue: reminderDue(record.lastImportAtUtc, current.reminderEnabled),
+              reminderDue: reminderDue(record.lastImportAtUtc, current.reminderEnabled, current.reminderDays),
               usage: estimate.usage,
               quota: estimate.quota,
               error: null,
@@ -505,7 +510,16 @@ export default function App() {
     setPersistence((current) => ({
       ...current,
       reminderEnabled: enabled,
-      reminderDue: reminderDue(current.lastImportAtUtc, enabled),
+      reminderDue: reminderDue(current.lastImportAtUtc, enabled, current.reminderDays),
+    }));
+  };
+
+  const changeImportReminderDays = (days) => {
+    const reminderDays = setImportReminderDays(days);
+    setPersistence((current) => ({
+      ...current,
+      reminderDays,
+      reminderDue: reminderDue(current.lastImportAtUtc, current.reminderEnabled, reminderDays),
     }));
   };
 
@@ -588,6 +602,7 @@ export default function App() {
       persistence={persistence}
       onToggleRememberHistory={toggleRememberHistory}
       onToggleImportReminder={toggleImportReminder}
+      onSetImportReminderDays={changeImportReminderDays}
       onForgetSavedHistory={forgetSavedHistory}
       theme={theme}
       onToggleTheme={() => setTheme((current) => current === "light" ? "dark" : "light")}

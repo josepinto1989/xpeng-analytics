@@ -181,8 +181,9 @@ profile, and successful ZIP additions replace the saved copy after
 deduplication.
 
 The Data page shows the saved size, last save, and last import. You can also
-enable a local 30-day reminder to request another XPENG export. The reminder
-does not access the XPENG account or download anything automatically.
+enable a local reminder and choose an interval of 7, 15, 25, or 30 days. The
+calculated next reminder date is shown beside the interval. The reminder does
+not access the XPENG account or download anything automatically.
 
 Use **Delete saved history** to erase the stored copy. Because browsers and
 operating systems may clear local storage, keep an exported `.xpeng` file as a

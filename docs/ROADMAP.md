@@ -70,9 +70,10 @@ maintenance, and incremental releases.
 Allow returning users to keep a working history on the same device without
 having to select the portable file on every visit.
 
-The first implementation is available in private staging as `1.6.0-beta.1`.
-It supports one remembered history per browser profile and now requires
-owner testing in Firefox, Chrome, Edge, desktop, and mobile before promotion.
+The feature-complete implementation is available in private staging as
+`1.6.0-beta.2`. It supports one remembered history per browser profile, has
+passed owner testing, and is waiting for final validation of the configurable
+reminder before promotion to the public repository.
 
 - Add a disabled-by-default `Remember this history on this device` option.
 - Store the processed history in browser-local storage, with no account or
@@ -83,14 +84,15 @@ owner testing in Firefox, Chrome, Edge, desktop, and mobile before promotion.
 - Add new XPENG ZIP exports to the remembered history using the existing
   deduplication rules.
 - Show the date of the most recent imported export and, if the user enables it,
-  provide an on-device reminder to request and add a new XPENG export. This is
-  a local reminder only: the project will not sign in to, scrape, or automate
-  downloads from the user's XPENG account without an official supported API.
+  provide an on-device reminder after 7, 15, 25, or 30 days to request and add
+  a new XPENG export. Show the next reminder date. This is a local reminder
+  only: the project will not sign in to, scrape, or automate downloads from the
+  user's XPENG account without an official supported API.
 - Keep `.xpeng` export and import as the recommended portable backup.
 - Provide an obvious action to inspect storage use and permanently erase all
   locally remembered vehicle data.
-- Decide during the prototype whether one device can hold one history or a
-  small library of separately named vehicles.
+- Keep one remembered vehicle history per browser profile in this phase. A
+  multi-vehicle library can be reconsidered later if users request it.
 
 ### Phase 9 — Long-term ownership and expense workflows
 

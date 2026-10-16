@@ -186,8 +186,9 @@ histórico é aberto automaticamente. Novos ZIPs substituem a cópia guardada
 apenas depois de serem processados e deduplicados com sucesso.
 
 A página Dados mostra o espaço utilizado, a última gravação e a última
-importação. Também podes ativar um lembrete local de 30 dias para pedir outra
-exportação à XPENG. O lembrete não acede à conta XPENG nem descarrega ficheiros
+importação. Também podes ativar um lembrete local e escolher um intervalo de 7,
+15, 25 ou 30 dias. A data calculada para o próximo lembrete aparece ao lado do
+intervalo. O lembrete não acede à conta XPENG nem descarrega ficheiros
 automaticamente.
 
 Usa **Eliminar histórico guardado** para apagar essa cópia. Como o browser ou o

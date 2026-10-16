@@ -4,6 +4,8 @@ const HISTORY_STORE = "history";
 const ACTIVE_HISTORY_KEY = "active";
 const REMEMBER_KEY = "xpeng-analytics.remember-history";
 const REMINDER_KEY = "xpeng-analytics.import-reminder";
+const REMINDER_DAYS_KEY = "xpeng-analytics.import-reminder-days";
+export const IMPORT_REMINDER_DAY_OPTIONS = [7, 15, 25, 30];
 
 const hasWindow = () => typeof window !== "undefined";
 
@@ -87,6 +89,26 @@ export function setImportReminderEnabled(enabled) {
   }
 }
 
+export function importReminderDays() {
+  try {
+    const value = Number(hasWindow() ? window.localStorage.getItem(REMINDER_DAYS_KEY) : 0);
+    return IMPORT_REMINDER_DAY_OPTIONS.includes(value) ? value : 30;
+  } catch {
+    return 30;
+  }
+}
+
+export function setImportReminderDays(days) {
+  const value = Number(days);
+  if (!IMPORT_REMINDER_DAY_OPTIONS.includes(value)) return 30;
+  try {
+    if (hasWindow()) window.localStorage.setItem(REMINDER_DAYS_KEY, String(value));
+  } catch {
+    // A disabled preference store must not prevent vehicle-data processing.
+  }
+  return value;
+}
+
 export async function requestDurableStorage() {
   try {
     if (!navigator.storage?.persist) return false;
@@ -144,6 +166,13 @@ export function reminderDue(lastImportAtUtc, enabled, reminderDays = 30, now = D
   const timestamp = Date.parse(lastImportAtUtc);
   if (!Number.isFinite(timestamp)) return false;
   return now - timestamp >= reminderDays * 86_400_000;
+}
+
+export function nextReminderAt(lastImportAtUtc, reminderDays = 30) {
+  const timestamp = Date.parse(lastImportAtUtc);
+  const days = Number(reminderDays);
+  if (!Number.isFinite(timestamp) || !IMPORT_REMINDER_DAY_OPTIONS.includes(days)) return null;
+  return new Date(timestamp + days * 86_400_000).toISOString();
 }
 
 export function formatStoredBytes(bytes, locale = "en") {

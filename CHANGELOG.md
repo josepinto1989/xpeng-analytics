@@ -2,6 +2,14 @@
 
 All notable public changes are documented here.
 
+## 1.6.0-beta.2 — 2026-10-16
+
+- Replaced the fixed 30-day update reminder with a user-selected interval of
+  7, 15, 25, or 30 days.
+- Added the calculated date of the next local reminder to the Data page.
+- Kept the existing 30-day interval as the default for users upgrading from
+  the first beta.
+
 ## 1.6.0-beta.1 — 2026-10-16
 
 - Added an opt-in persistent local history stored in the current browser's

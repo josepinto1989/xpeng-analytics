@@ -121,7 +121,7 @@ Read the full [privacy notes](PRIVACY.md), [security guidance](SECURITY.md), and
 | [Security](SECURITY.md) | Safe reporting and importer security boundaries |
 | [Architecture](docs/ARCHITECTURE.md) | Browser engine, data flow, and portable-history design |
 | [`.xpeng` v3 format](docs/XPENG_HISTORY_V3_SPEC.md) | Technical format specification for developers |
-| [v1.6.0 beta notes](docs/RELEASE_NOTES_1.6.0-beta.1.md) | Private-staging notes for persistent local history testing |
+| [v1.6.0 beta notes](docs/RELEASE_NOTES_1.6.0-beta.2.md) | Private-staging notes for persistent local history testing |
 | [v1.5.1 release notes](docs/RELEASE_NOTES_1.5.1.md) | Detailed summary of the current release |
 | [Deployment](docs/DEPLOYMENT.md) | GitHub Pages build and deployment notes |
 | [Private staging](docs/STAGING.md) | Safety rules and the pre-release owner test checklist |

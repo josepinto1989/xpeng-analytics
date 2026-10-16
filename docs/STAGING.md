@@ -26,10 +26,12 @@ hands-on validation before a change is promoted to the public project.
    file picker.
 5. Add a newer ZIP and confirm that duplicate records are ignored and the saved
    date updates only after processing finishes.
-6. Enable the local reminder, refresh, and confirm that the preference remains.
-7. Export a portable `.xpeng` backup and verify it still opens normally.
-8. Select **Delete saved history**, confirm the warning, refresh, and verify
+6. Enable the local reminder, select 7, 15, 25, and 30 days, and confirm that
+   each choice updates the next reminder date.
+7. Refresh and confirm that the selected reminder interval remains.
+8. Export a portable `.xpeng` backup and verify it still opens normally.
+9. Select **Delete saved history**, confirm the warning, refresh, and verify
    that the dashboard is no longer restored automatically.
-9. Repeat the key restore and delete checks in Firefox, Chrome, and Edge. Test
+10. Repeat the key restore and delete checks in Firefox, Chrome, and Edge. Test
    at least one mobile browser separately because mobile storage may be evicted
    more aggressively.
