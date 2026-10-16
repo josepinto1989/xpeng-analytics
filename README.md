@@ -33,8 +33,9 @@ into something understandable without asking owners to upload their driving
 history to somebody else's server.
 
 The ZIP file is processed in your browser and kept in the current tab's
-temporary memory. Close or refresh the page and the session is gone, unless
-you choose to export a portable `.xpeng` history yourself.
+temporary memory. You can optionally remember one processed history in that
+browser, or export a portable `.xpeng` backup yourself. Both choices are
+explicit and keep the data on your device.
 
 ## What you can explore
 
@@ -65,6 +66,8 @@ you choose to export a portable `.xpeng` history yourself.
   journey comparisons for company-car or expense reporting.
 - Metric or imperial display units and an independent bar/psi tyre-pressure
   selector.
+- Optional persistent local history that reopens on the same browser and can
+  show an on-device reminder when it is time to add a newer XPENG export.
 
 The interface is available in European Portuguese and English, with light and
 dark themes.
@@ -76,8 +79,8 @@ dark themes.
 3. Select or drag in one or more XPENG ZIP files. You can also restore a
    `.xpeng` history; if selected together, the history is restored first and
    the ZIP exports are then merged into the same local session.
-4. Explore the dashboard, add more exports, create a PDF report, or save a
-   compact `.xpeng` history for next time.
+4. Explore the dashboard, add more exports, create a PDF report, export a
+   compact `.xpeng` backup, or explicitly remember the history in this browser.
 
 For detailed instructions, filters, reports, portable histories, units, and
 troubleshooting, read the **[English user guide](docs/USER_GUIDE.md)** or the
@@ -91,6 +94,9 @@ verified.
 ## Private by design
 
 - There is no application server, account, tracking database, or cloud upload.
+- Persistent history is disabled by default. When enabled, one unencrypted
+  processed history is stored in that browser's private IndexedDB storage and
+  can be deleted from the **Data** page.
 - Vehicle identifiers are not retained by the fast import engine or included in
   the dashboard snapshot.
 - The public repository contains synthetic tests only — never real vehicle
@@ -115,8 +121,10 @@ Read the full [privacy notes](PRIVACY.md), [security guidance](SECURITY.md), and
 | [Security](SECURITY.md) | Safe reporting and importer security boundaries |
 | [Architecture](docs/ARCHITECTURE.md) | Browser engine, data flow, and portable-history design |
 | [`.xpeng` v3 format](docs/XPENG_HISTORY_V3_SPEC.md) | Technical format specification for developers |
+| [v1.6.0 beta notes](docs/RELEASE_NOTES_1.6.0-beta.1.md) | Private-staging notes for persistent local history testing |
 | [v1.5.1 release notes](docs/RELEASE_NOTES_1.5.1.md) | Detailed summary of the current release |
 | [Deployment](docs/DEPLOYMENT.md) | GitHub Pages build and deployment notes |
+| [Private staging](docs/STAGING.md) | Safety rules and the pre-release owner test checklist |
 | [Contributing](CONTRIBUTING.md) | How to propose a safe change |
 | [Changelog](CHANGELOG.md) | User-visible changes by version |
 

@@ -144,7 +144,8 @@ dados; não diagnosticam o veículo.
 ### Dados
 
 Permite adicionar ZIPs, substituir a sessão por um histórico, exportar a sessão
-atual, consultar os ficheiros importados ou limpar a sessão.
+atual, consultar os ficheiros importados ou limpar a sessão. Inclui também os
+controlos opcionais de histórico local persistente.
 
 ## 6. Filtros e apresentação
 
@@ -175,6 +176,24 @@ O ficheiro:
 
 Trata-o com o mesmo cuidado que a exportação original da XPENG.
 
+### Guardar o histórico neste browser
+
+Abre **Dados** e ativa **Guardar este histórico neste dispositivo**. Esta opção
+está desligada por predefinição. Depois de ativada, a aplicação cria o mesmo
+histórico `.xpeng` processado e guarda uma cópia no armazenamento IndexedDB
+privado do browser. Na visita seguinte, usando o mesmo perfil do browser, o
+histórico é aberto automaticamente. Novos ZIPs substituem a cópia guardada
+apenas depois de serem processados e deduplicados com sucesso.
+
+A página Dados mostra o espaço utilizado, a última gravação e a última
+importação. Também podes ativar um lembrete local de 30 dias para pedir outra
+exportação à XPENG. O lembrete não acede à conta XPENG nem descarrega ficheiros
+automaticamente.
+
+Usa **Eliminar histórico guardado** para apagar essa cópia. Como o browser ou o
+sistema operativo podem limpar o armazenamento local, mantém um ficheiro
+`.xpeng` exportado como cópia de segurança portátil.
+
 ## 8. Resolução de problemas
 
 ### A importação parece lenta
@@ -201,8 +220,10 @@ fuso fixo de Lisboa.
 
 ### Atualizei a página e os dados desapareceram
 
-É o comportamento esperado do modelo de privacidade. Importa novamente os ZIPs
-ou restaura um histórico `.xpeng`.
+Sem histórico local persistente, é o comportamento esperado do modelo de
+privacidade. Importa novamente os ZIPs, restaura um histórico `.xpeng` ou ativa
+**Guardar este histórico neste dispositivo** na página Dados para as visitas
+seguintes.
 
 ## 9. Privacidade, apoio e feedback
 

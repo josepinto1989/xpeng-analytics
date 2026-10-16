@@ -43,8 +43,16 @@ the complete expanded CSV size because most source columns are never retained.
 
 The selected archive, parsed columns, and dashboard stay inside the tab. No
 browser persistence is enabled by default, and no request containing vehicle
-data is sent to the static host. Closing or refreshing the tab clears the
-session.
+data is sent to the static host. Without explicit consent, closing or
+refreshing the tab clears the session.
+
+When the user enables persistent local history, the worker exports the same
+versioned `.xpeng` payload after the import queue completes and React stores
+one Blob in IndexedDB. On a later visit, that Blob is passed back to the worker
+through the normal history-validation path before the dashboard opens. ZIP
+imports update the saved history only after consolidation succeeds. Consent
+and the optional reminder preference use small local preference flags; vehicle
+telemetry is not written to `localStorage`.
 
 ## Portable history
 
@@ -76,4 +84,4 @@ public acknowledgement and MIT licence notice are preserved in
 - account authentication or automatic vehicle acquisition;
 - third-party telemetry sources;
 - raw vehicle identifiers, route coordinates, or real vehicle fixtures;
-- automatic browser persistence.
+- browser persistence without explicit consent or a visible delete action.

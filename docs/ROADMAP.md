@@ -70,6 +70,10 @@ maintenance, and incremental releases.
 Allow returning users to keep a working history on the same device without
 having to select the portable file on every visit.
 
+The first implementation is available in private staging as `1.6.0-beta.1`.
+It supports one remembered history per browser profile and now requires
+owner testing in Firefox, Chrome, Edge, desktop, and mobile before promotion.
+
 - Add a disabled-by-default `Remember this history on this device` option.
 - Store the processed history in browser-local storage, with no account or
   application server.
@@ -78,36 +82,33 @@ having to select the portable file on every visit.
 - Restore the most recent local history automatically after explicit consent.
 - Add new XPENG ZIP exports to the remembered history using the existing
   deduplication rules.
+- Show the date of the most recent imported export and, if the user enables it,
+  provide an on-device reminder to request and add a new XPENG export. This is
+  a local reminder only: the project will not sign in to, scrape, or automate
+  downloads from the user's XPENG account without an official supported API.
 - Keep `.xpeng` export and import as the recommended portable backup.
 - Provide an obvious action to inspect storage use and permanently erase all
   locally remembered vehicle data.
 - Decide during the prototype whether one device can hold one history or a
   small library of separately named vehicles.
 
-### Phase 9 — Native local and offline applications
-
-Package the existing interface as lightweight native desktop applications for
-Windows, macOS, and Linux while keeping the browser version available.
-
-- Reuse the current frontend, import worker, metrics, reports, and `.xpeng`
-  format instead of creating a second analytics implementation.
-- Store the selected history directly on the user's computer and reopen it on
-  launch.
-- Publish native installers or packages for Windows, macOS, and Linux from the
-  same shared codebase and analytics engine.
-- Follow each platform's signing, packaging, permissions, and update
-  conventions so installation and local file access remain understandable.
-- Run without an application backend and without requiring an internet
-  connection for vehicle analysis.
-- Keep updates optional and publish reproducible, signed release artefacts.
-
-### Phase 10 — Long-term ownership and expense workflows
+### Phase 9 — Long-term ownership and expense workflows
 
 Build on persistent history with tools that become more useful over several
 months.
 
 - Add monthly trends for consumption, range, estimated capacity, relative SOH,
   parked use, charging, and tyre pressure.
+- Estimate driving context at telemetry-segment level using speed distribution,
+  sustained speed, stops, acceleration, and braking. Present distance, time,
+  energy used, regenerated energy, and average consumption for urban, road,
+  and motorway-style driving.
+- Label every driving-context result as a software estimate rather than a
+  detected road type, include a confidence indicator, and avoid claiming that
+  the vehicle or XPENG supplied the classification.
+- When optional GPS route matching is available, investigate using matched
+  OpenStreetMap road information to refine the estimated categories without
+  making location data mandatory.
 - Allow journeys to be labelled as personal or business and included in
   monthly PDF or CSV summaries.
 - Allow charging sessions to be categorised manually as home, work, or public
@@ -116,7 +117,7 @@ months.
   continuing to label costs as estimates rather than invoices or fiscal
   documents.
 
-### Phase 11 — Optional GPS route matching and journey maps
+### Phase 10 — Optional GPS route matching and journey maps
 
 Research and prototype local import of GPS logger files so recorded positions
 can be matched to XPENG journeys by timestamp. Location import remains
@@ -154,3 +155,37 @@ file.
 - Investigate packaged OpenStreetMap-derived vector data or a provider that
   explicitly permits offline use for the desktop application. The standard
   OpenStreetMap tile service must not be bulk-downloaded for offline packs.
+
+### Phase 11 — Native local and offline applications
+
+Package the existing interface as lightweight native desktop applications for
+Windows, macOS, and Linux while keeping the browser version available.
+
+- Reuse the current frontend, import worker, metrics, reports, and `.xpeng`
+  format instead of creating a second analytics implementation.
+- Store the selected history directly on the user's computer and reopen it on
+  launch.
+- Publish native installers or packages for Windows, macOS, and Linux from the
+  same shared codebase and analytics engine.
+- Follow each platform's signing, packaging, permissions, and update
+  conventions so installation and local file access remain understandable.
+- Run without an application backend and without requiring an internet
+  connection for vehicle analysis.
+- Keep updates optional and publish reproducible, signed release artefacts.
+
+## Pre-release testing
+
+Maintain a separate private staging repository for changes that require
+hands-on validation before they reach the public project.
+
+- Mirror only the application source and sanitised test fixtures; never commit
+  real XPENG ZIPs, `.xpeng` histories, GPX tracks, VINs, or location data.
+- Run the same automated tests, production build, and public-tree audit used by
+  the public repository.
+- Let the owner validate new imports, metrics, GPS matching, maps, and reports
+  before promoting the reviewed commit to the public repository.
+- Keep the public repository as the authoritative release history and avoid
+  allowing staging-only code to diverge into a separate implementation.
+- Treat any hosted staging URL as public unless its access control has been
+  explicitly verified; a private GitHub repository does not automatically make
+  a GitHub Pages site private.

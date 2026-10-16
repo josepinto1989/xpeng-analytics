@@ -3,6 +3,20 @@ import Dashboard from "./Dashboard.jsx";
 import { defaultLocale, translator } from "./i18n.js";
 import { APP_VERSION } from "./version.js";
 import { classifyLocalFiles, createImportPlan } from "./file-selection.js";
+import {
+  deletePersistentHistory,
+  importReminderEnabled,
+  latestImportAt,
+  readPersistentHistory,
+  rememberHistoryEnabled,
+  reminderDue,
+  requestDurableStorage,
+  savePersistentHistory,
+  setImportReminderEnabled,
+  setRememberHistoryEnabled,
+  storageEstimate,
+  supportsPersistentHistory,
+} from "./persistent-history.js";
 
 
 const phaseKeys = {
@@ -15,6 +29,8 @@ const phaseKeys = {
   history_read: "phaseHistoryRead",
   history_export: "phaseHistoryExport",
   history_export_complete: "phaseHistoryExportComplete",
+  persistent_history_save: "phasePersistentHistorySave",
+  persistent_history_saved: "phasePersistentHistorySaved",
   complete: "phaseComplete",
   reset: "phaseReset",
   native_ready: "phaseNativeReady",
@@ -92,6 +108,21 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [error, setError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
+  const [persistence, setPersistence] = useState({
+    supported: supportsPersistentHistory(),
+    loading: true,
+    enabled: false,
+    hasSavedHistory: false,
+    saving: false,
+    savedAtUtc: null,
+    lastImportAtUtc: null,
+    byteLength: 0,
+    importCount: 0,
+    durable: false,
+    reminderEnabled: false,
+    reminderDue: false,
+    error: null,
+  });
   const inputRef = useRef(null);
   const workerRef = useRef(null);
   const workerModeRef = useRef("native");
@@ -102,6 +133,12 @@ export default function App() {
   const activeFileRef = useRef(null);
   const cancelRequestedRef = useRef(false);
   const dragDepthRef = useRef(0);
+  const snapshotRef = useRef(null);
+  const persistenceEnabledRef = useRef(false);
+  const savedHistoryRef = useRef(null);
+  const startupRestoreAttemptedRef = useRef(false);
+  const restoringSavedHistoryRef = useRef(false);
+  const exportPurposeRef = useRef(null);
   const t = useMemo(() => translator(locale), [locale]);
 
   useEffect(() => {
@@ -111,6 +148,49 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const supported = supportsPersistentHistory();
+      const enabled = supported && rememberHistoryEnabled();
+      const reminderEnabled = importReminderEnabled();
+      let record = null;
+      let estimate = { usage: null, quota: null };
+      let persistenceError = null;
+      try {
+        [record, estimate] = await Promise.all([
+          enabled ? readPersistentHistory() : Promise.resolve(null),
+          storageEstimate(),
+        ]);
+      } catch (loadError) {
+        console.error("Could not read the saved local history:", loadError);
+        persistenceError = "persistentHistoryLoadError";
+      }
+      if (!active) return;
+      persistenceEnabledRef.current = enabled;
+      savedHistoryRef.current = record;
+      setPersistence({
+        supported,
+        loading: false,
+        enabled,
+        hasSavedHistory: Boolean(record?.blob),
+        saving: false,
+        savedAtUtc: record?.savedAtUtc || null,
+        lastImportAtUtc: record?.lastImportAtUtc || null,
+        byteLength: Number(record?.byteLength || record?.blob?.size || 0),
+        importCount: Number(record?.importCount || 0),
+        durable: false,
+        reminderEnabled,
+        reminderDue: reminderDue(record?.lastImportAtUtc, reminderEnabled),
+        usage: estimate.usage,
+        quota: estimate.quota,
+        error: persistenceError,
+      });
+    };
+    load();
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     const onMessage = (event) => {
@@ -128,6 +208,7 @@ export default function App() {
           setProgress({ percent: 0, phase: null });
         }
       } else if (message.type === "imported") {
+        snapshotRef.current = message.snapshot;
         setSnapshot(message.snapshot);
         setHistory((current) => [{
           name: activeFileRef.current?.name ?? "—",
@@ -136,20 +217,62 @@ export default function App() {
         }, ...current]);
         requestAnimationFrame(() => setTimeout(processNext, 0));
       } else if (message.type === "history_imported") {
+        snapshotRef.current = message.snapshot;
         setSnapshot(message.snapshot);
         setHistory([{ name: activeFileRef.current?.name ?? "—", status: "historyLoaded", rows: message.snapshot?.overview?.tripCount ?? 0 }]);
         activeFileRef.current = null;
         const followupArchives = historyFollowupQueueRef.current;
         historyFollowupQueueRef.current = [];
+        const restoredSavedHistory = restoringSavedHistoryRef.current;
+        restoringSavedHistoryRef.current = false;
         if (followupArchives.length) {
           queueRef.current = followupArchives;
           processNext();
+        } else if (persistenceEnabledRef.current && !restoredSavedHistory) {
+          queuePersistentSave();
         } else {
           setBusy(false);
           setProgress({ percent: 100, phase: "complete" });
         }
       } else if (message.type === "history_exported") {
         const blob = new Blob([message.payload], { type: "application/octet-stream" });
+        const purpose = message.purpose || exportPurposeRef.current || "download";
+        exportPurposeRef.current = null;
+        if (purpose === "persist") {
+          const currentSnapshot = snapshotRef.current;
+          const metadata = {
+            lastImportAtUtc: latestImportAt(currentSnapshot),
+            importCount: currentSnapshot?.imports?.length || 0,
+            historyVersion: message.metadata?.version || 0,
+          };
+          setPersistence((current) => ({ ...current, saving: true, error: null }));
+          savePersistentHistory(blob, metadata).then(async (record) => {
+            const estimate = await storageEstimate();
+            savedHistoryRef.current = record;
+            setPersistence((current) => ({
+              ...current,
+              saving: false,
+              enabled: true,
+              hasSavedHistory: true,
+              savedAtUtc: record.savedAtUtc,
+              lastImportAtUtc: record.lastImportAtUtc,
+              byteLength: record.byteLength,
+              importCount: record.importCount,
+              reminderDue: reminderDue(record.lastImportAtUtc, current.reminderEnabled),
+              usage: estimate.usage,
+              quota: estimate.quota,
+              error: null,
+            }));
+            setBusy(false);
+            setProgress({ percent: 100, phase: "persistent_history_saved" });
+          }).catch((saveError) => {
+            console.error("Could not save the local history:", saveError);
+            setPersistence((current) => ({ ...current, saving: false, error: "persistentHistorySaveError" }));
+            setBusy(false);
+            setProgress({ percent: 100, phase: "complete" });
+          });
+          return;
+        }
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
@@ -161,6 +284,7 @@ export default function App() {
         setBusy(false);
         setProgress({ percent: 100, phase: "history_export_complete" });
       } else if (message.type === "reset_complete") {
+        snapshotRef.current = null;
         setSnapshot(null);
         setHistory([]);
         setBusy(false);
@@ -207,12 +331,29 @@ export default function App() {
     return () => workerRef.current?.terminate();
   }, []);
 
+  const queuePersistentSave = () => {
+    if (!persistenceEnabledRef.current || !snapshotRef.current || !workerRef.current) {
+      setBusy(false);
+      setProgress({ percent: 100, phase: "complete" });
+      return;
+    }
+    exportPurposeRef.current = "persist";
+    setBusy(true);
+    setError(null);
+    setPersistence((current) => ({ ...current, saving: true, error: null }));
+    setProgress({ percent: 5, phase: "persistent_history_save" });
+    workerRef.current.postMessage({ type: "export_history", purpose: "persist" });
+  };
+
   const processNext = () => {
     const next = queueRef.current.shift();
     if (!next) {
       activeFileRef.current = null;
-      setBusy(false);
-      setProgress({ percent: 100, phase: "complete" });
+      if (persistenceEnabledRef.current && snapshotRef.current) queuePersistentSave();
+      else {
+        setBusy(false);
+        setProgress({ percent: 100, phase: "complete" });
+      }
       return;
     }
     activeFileRef.current = next;
@@ -252,9 +393,9 @@ export default function App() {
     if (inputRef.current) inputRef.current.value = "";
   };
 
-  const importHistoryFile = (selected, followupArchives = []) => {
+  const importHistoryFile = (selected, followupArchives = [], options = {}) => {
     if (!selected || busy || !engineReady) return;
-    if (snapshot && !window.confirm(t("replaceWithHistoryConfirm"))) return;
+    if (snapshotRef.current && !options.skipConfirm && !window.confirm(t("replaceWithHistoryConfirm"))) return;
     historyFollowupQueueRef.current = followupArchives;
     activeFileRef.current = selected;
     cancelRequestedRef.current = false;
@@ -286,6 +427,20 @@ export default function App() {
     });
   };
 
+  const restoreSavedHistory = () => {
+    const record = savedHistoryRef.current;
+    if (!record?.blob || busy || !engineReady) return;
+    restoringSavedHistoryRef.current = true;
+    const file = new File([record.blob], "xpeng-analytics-saved-history.xpeng", { type: "application/octet-stream" });
+    importHistoryFile(file, [], { skipConfirm: true });
+  };
+
+  useEffect(() => {
+    if (persistence.loading || !persistence.enabled || !persistence.hasSavedHistory || !engineReady || busy || snapshotRef.current || startupRestoreAttemptedRef.current) return;
+    startupRestoreAttemptedRef.current = true;
+    restoreSavedHistory();
+  }, [persistence.loading, persistence.enabled, persistence.hasSavedHistory, engineReady, busy]);
+
   const chooseHistory = (files) => {
     const { histories } = classifyLocalFiles(files);
     const selected = histories[0];
@@ -304,6 +459,54 @@ export default function App() {
       setError(plan.kind);
     }
     if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const forgetSavedHistory = async () => {
+    if (busy || !persistence.supported || !window.confirm(t("forgetSavedHistoryConfirm"))) return;
+    try {
+      await deletePersistentHistory();
+      setRememberHistoryEnabled(false);
+      persistenceEnabledRef.current = false;
+      savedHistoryRef.current = null;
+      setPersistence((current) => ({
+        ...current,
+        enabled: false,
+        hasSavedHistory: false,
+        saving: false,
+        savedAtUtc: null,
+        lastImportAtUtc: null,
+        byteLength: 0,
+        importCount: 0,
+        reminderDue: false,
+        error: null,
+      }));
+    } catch (forgetError) {
+      console.error("Could not remove the saved local history:", forgetError);
+      setPersistence((current) => ({ ...current, error: "persistentHistoryDeleteError" }));
+    }
+  };
+
+  const toggleRememberHistory = async (enabled) => {
+    if (busy || !persistence.supported) return;
+    if (!enabled) {
+      await forgetSavedHistory();
+      return;
+    }
+    setRememberHistoryEnabled(true);
+    persistenceEnabledRef.current = true;
+    setPersistence((current) => ({ ...current, enabled: true, error: null }));
+    const durable = await requestDurableStorage();
+    setPersistence((current) => ({ ...current, durable }));
+    if (snapshotRef.current) queuePersistentSave();
+  };
+
+  const toggleImportReminder = (enabled) => {
+    setImportReminderEnabled(enabled);
+    setPersistence((current) => ({
+      ...current,
+      reminderEnabled: enabled,
+      reminderDue: reminderDue(current.lastImportAtUtc, enabled),
+    }));
   };
 
   const handleDragEnter = (event) => {
@@ -333,6 +536,7 @@ export default function App() {
 
   const exportHistory = () => {
     if (!snapshot || busy || !engineReady) return;
+    exportPurposeRef.current = "download";
     cancelRequestedRef.current = false;
     setBusy(true);
     setError(null);
@@ -342,6 +546,7 @@ export default function App() {
 
   const reset = () => {
     if (!window.confirm(t("resetConfirm"))) return;
+    startupRestoreAttemptedRef.current = true;
     setBusy(true);
     setError(null);
     workerRef.current.postMessage({ type: "reset" });
@@ -380,6 +585,10 @@ export default function App() {
       onCancel={cancelProcessing}
       canCancel={workerModeRef.current === "native"}
       history={history}
+      persistence={persistence}
+      onToggleRememberHistory={toggleRememberHistory}
+      onToggleImportReminder={toggleImportReminder}
+      onForgetSavedHistory={forgetSavedHistory}
       theme={theme}
       onToggleTheme={() => setTheme((current) => current === "light" ? "dark" : "light")}
     />;
@@ -418,7 +627,7 @@ export default function App() {
           </article>
           <div className="privacy-card">
             <div className="privacy-icon" aria-hidden="true">⌁</div>
-            <div><strong>{t("privacyTitle")}</strong><p>{t("privacyBody")}</p></div>
+            <div><strong>{t("privacyTitle")}</strong><p>{persistence.enabled && persistence.hasSavedHistory ? t("privacyBodyPersistent") : t("privacyBody")}</p></div>
           </div>
         </div>
       </section>
@@ -463,6 +672,11 @@ export default function App() {
             <span className="drop-browse">{busy ? t("importing") : t("chooseFiles")}</span>
           </label>
           <div className="processing-time-alert"><strong>{t("processingTimeTitle")}</strong><p>{t("processingTimeBody")}</p></div>
+          {persistence.enabled && persistence.hasSavedHistory && !snapshot ? <div className="saved-history-landing">
+            <div><strong>{t("savedHistoryAvailable")}</strong><p>{t("savedHistoryAvailableHelp")}</p></div>
+            <button type="button" disabled={busy || !engineReady} onClick={restoreSavedHistory}>{t("restoreSavedHistory")}</button>
+            <button className="danger-link" type="button" disabled={busy} onClick={forgetSavedHistory}>{t("forgetSavedHistory")}</button>
+          </div> : null}
           {snapshot ? <button className="reset-button" type="button" disabled={busy} onClick={reset}>{t("reset")}</button> : null}
         </div>
 

@@ -140,7 +140,8 @@ they do not diagnose the vehicle.
 ### Data
 
 Adds more XPENG ZIPs, replaces the session from a portable history, exports the
-current session, displays imported-file history, or clears the session.
+current session, displays imported-file history, or clears the session. It also
+contains the optional persistent-history controls.
 
 ## 6. Filters and display settings
 
@@ -170,6 +171,23 @@ The file:
 
 Treat it with the same care as the original XPENG export.
 
+### Remember the history in this browser
+
+Open **Data** and enable **Remember this history on this device**. This option
+is off by default. Once enabled, the application creates the same processed
+`.xpeng` payload and stores one copy in the browser's private IndexedDB
+storage. It is reopened automatically on the next visit from that browser
+profile, and successful ZIP additions replace the saved copy after
+deduplication.
+
+The Data page shows the saved size, last save, and last import. You can also
+enable a local 30-day reminder to request another XPENG export. The reminder
+does not access the XPENG account or download anything automatically.
+
+Use **Delete saved history** to erase the stored copy. Because browsers and
+operating systems may clear local storage, keep an exported `.xpeng` file as a
+portable backup.
+
 ## 8. Troubleshooting
 
 ### Import appears slow
@@ -197,8 +215,9 @@ fixed Lisbon timezone is applied.
 
 ### The page was refreshed and the data disappeared
 
-This is the expected privacy model. Import the original ZIPs again or restore a
-saved `.xpeng` history.
+Without persistent local history this is the expected privacy model. Import the
+original ZIPs again, restore a saved `.xpeng` history, or enable **Remember this
+history on this device** from the Data page for future visits.
 
 ## 9. Privacy, support, and feedback
 

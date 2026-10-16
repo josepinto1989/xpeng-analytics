@@ -6,6 +6,14 @@ The web application processes XPENG Data Act exports in the browser.
 The project does not require an application account, an application backend,
 or remote storage for vehicle data.
 
+Persistent local history is disabled by default. If the user explicitly
+enables **Remember this history on this device**, the application stores one
+processed `.xpeng` history in that browser's IndexedDB storage. It is restored
+only on the same browser profile and is never uploaded by XPENG Analytics.
+The **Data** page shows its size and dates and provides a permanent delete
+action. Browser or operating-system cleanup may also remove it, so a separately
+exported `.xpeng` file remains the recommended backup.
+
 Static hosting still receives ordinary web requests for the application files
 and therefore may receive standard connection metadata such as an IP address
 and user agent. No vehicle export or processed vehicle history is intentionally
@@ -27,6 +35,11 @@ compression reduce size but do not provide encryption or access control.
 The application must never add telemetry, advertising, remote fonts, remote
 map tiles, crash uploads, or analytics without a separate public design review
 and an explicit user-facing consent decision.
+
+The optional 30-day import reminder is also stored locally. It only compares
+the latest import time when the application is opened; it does not sign in to
+XPENG, scrape the data portal, send notifications from a server, or download
+vehicle data automatically.
 
 ## Repository policy
 

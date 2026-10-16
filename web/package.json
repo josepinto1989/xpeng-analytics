@@ -1,14 +1,14 @@
 {
   "name": "xpeng-analytics-web",
   "private": true,
-  "version": "1.5.1",
+  "version": "1.6.0-beta.1",
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "scripts": {
     "dev": "vite",
     "prepare:browser": "node scripts/prepare-browser-assets.mjs",
     "build": "node scripts/prepare-browser-assets.mjs && vite build",
-    "test": "node scripts/prepare-browser-assets.mjs && node scripts/test-i18n.mjs && node scripts/test-file-selection.mjs && node scripts/test-native-engine.mjs && node scripts/test-browser-runtime.mjs",
+    "test": "node scripts/prepare-browser-assets.mjs && node scripts/test-i18n.mjs && node scripts/test-file-selection.mjs && node scripts/test-persistent-history.mjs && node scripts/test-native-engine.mjs && node scripts/test-browser-runtime.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

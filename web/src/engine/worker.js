@@ -68,7 +68,7 @@ async function handle(message) {
     const payload = await exportHistory(state, guardedProgress);
     const date = new Date().toISOString().slice(0, 10);
     progress(100, "history_export_complete", "Done");
-    self.postMessage({ type: "history_exported", filename: `xpeng-analytics-history-${date}.xpeng`, metadata: { format: state.format, version: 3 }, payload }, [payload]);
+    self.postMessage({ type: "history_exported", purpose: message.purpose || "download", filename: `xpeng-analytics-history-${date}.xpeng`, metadata: { format: state.format, version: 3 }, payload }, [payload]);
     return;
   }
   if (message?.type === "import_history") {

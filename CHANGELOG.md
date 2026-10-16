@@ -2,6 +2,20 @@
 
 All notable public changes are documented here.
 
+## 1.6.0-beta.1 — 2026-10-16
+
+- Added an opt-in persistent local history stored in the current browser's
+  IndexedDB storage, with automatic restoration on the next visit.
+- Added automatic refresh of the saved history after successful ZIP imports.
+- Added saved-size, last-save, and last-import information to the Data page.
+- Added an optional local 30-day reminder to request and add a newer XPENG
+  export without accessing or automating the user's XPENG account.
+- Added an explicit action to permanently delete the browser-stored history.
+- Persistent history remains disabled by default, local, unencrypted, and
+  limited to one history per browser profile.
+- Restricted GitHub Pages deployment to the public repository so the private
+  staging repository runs quality checks without publishing a staging site.
+
 ## 1.5.1 — 2026-10-14
 
 - Added a mobile-specific import profile while retaining the same telemetry,
