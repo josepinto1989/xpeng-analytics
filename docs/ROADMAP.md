@@ -132,7 +132,8 @@ optional, but once accepted by the user the matched tracks become part of the
 portable `.xpeng` history so the complete archive can be restored from one
 file.
 
-The current private-staging implementation is available as `1.8.0-beta.3`. It
+The owner-validated private-staging implementation is available as
+`1.8.0-beta.3`. It
 supports a unified later-data importer for XPENG ZIPs, GPX and GPX-in-ZIP,
 BasicAirData and Open GPX Tracker files, fully automatic trip-level timestamp
 matching, duplicate selection, all-day recording segmentation, optional
@@ -173,7 +174,43 @@ Phase 10 iterations.
   explicitly permits offline use for the desktop application. The standard
   OpenStreetMap tile service must not be bulk-downloaded for offline packs.
 
-### Phase 11 — Interactive journey replay
+### Phase 11 — Personal chart studio
+
+Add a dedicated **My charts** section where users can build, name, save, and
+reopen their own visualisations from the data already processed locally. The
+feature must guide normal users through valid choices without exposing raw
+implementation details or allowing an invalid chart to break the dashboard.
+
+- Offer clear data groups such as journey telemetry, trips, charging sessions,
+  daily totals, monthly trends, battery observations, tyre pressure, and
+  parked-use intervals. Only expose fields that exist in the current history.
+- Let the user select the horizontal axis, one or more vertical-axis metrics,
+  an aggregation when required, filters, date period, units, and a chart type.
+- Start with line, area, bar, scatter, and histogram charts. Only show chart
+  types that are meaningful for the selected fields and explain incompatible
+  combinations in plain language.
+- Provide an immediate preview, sensible automatic labels and units, and the
+  option to set a custom title and short description.
+- Allow saved charts to be reordered, edited, duplicated, or deleted. A saved
+  definition should continue to work when newer XPENG exports are added and
+  should clearly identify metrics that are no longer available.
+- Store only the compact chart definitions, not duplicated telemetry or
+  rendered images. Extend the versioned `.xpeng` manifest so custom charts are
+  restored on another device together with the existing history.
+- Validate imported chart definitions against an allow-list of datasets,
+  fields, aggregations, chart types, series counts, and text-length limits.
+  Ignore unsupported definitions safely instead of executing arbitrary code.
+- Respect Metric/Imperial and bar/psi preferences at render time so one saved
+  chart remains portable between unit settings.
+- Keep chart calculation and rendering entirely in the browser, with no
+  accounts, uploads, tracking, or server-side storage.
+- Add optional selection of saved charts for PDF reports only after the core
+  builder, persistence, responsive layout, and accessibility have been
+  validated.
+- Test chart creation and `.xpeng` round trips with synthetic data, missing
+  signals, large histories, mobile layouts, Firefox, Chrome, and Edge.
+
+### Phase 12 — Interactive journey replay
 
 Create an optional local replay mode that reconstructs a selected journey from
 the timestamped telemetry already present in the XPENG export. The experience
@@ -212,7 +249,7 @@ simulation or a safety-accurate digital twin.
   playback speed, gaps, missing signals, event ordering, and GPX marker
   synchronisation before testing with private real exports.
 
-### Phase 12 — Native local and offline applications
+### Phase 13 — Native local and offline applications
 
 Package the existing interface as lightweight native desktop applications for
 Windows, macOS, and Linux while keeping the browser version available.
