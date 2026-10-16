@@ -88,10 +88,10 @@ for telemetry columns.
 ## 5. Privacy and networking
 
 Writing and restoring version 4 requires no network request. Route matching,
-trimming, previews, and PDF trace composition are local. The optional
-OpenStreetMap background is not stored in the history. It is disabled until
-the user explicitly loads it, at which point the browser requests only the
-tiles needed for the viewed area.
+trimming, previews, chart synchronisation, and PDF trace composition are local.
+The OpenStreetMap background is not stored in the history. Opening a journey
+with a matched route causes the browser to request only the tiles needed for
+the viewed area.
 
 Applications implementing this format must not imply that compression is
 encryption and should warn users before they share a history containing GPS.

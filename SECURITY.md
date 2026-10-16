@@ -29,8 +29,8 @@ import provenance that may reveal personal routines. When GPX has been added,
 it also contains precise location history. Future exports are merged by
 timestamp and archive content, not by treating the history as anonymous.
 
-The optional OpenStreetMap background is disabled until requested by the user.
-Loading it discloses the viewed map area through ordinary tile requests; the
-application does not upload the GPX file or bulk-download the standard tile
-service.
+Opening a journey with an associated GPX route loads an OpenStreetMap
+background and discloses the viewed map area through ordinary tile requests.
+The application does not upload the GPX file, prefetch routes, or bulk-download
+the standard tile service.
 

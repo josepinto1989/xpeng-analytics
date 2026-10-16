@@ -490,12 +490,14 @@ body { color: var(--ink); background: var(--panel-soft); transition: background 
 .route-map-wrap { padding: 18px 20px 20px; }
 .route-map-toolbar { margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .route-map-toolbar > div { display: grid; gap: 3px; }.route-map-toolbar strong { font-size: 12px; }.route-map-toolbar small { color: var(--muted); font-size: 10px; }
-.route-map-toolbar button { padding: 8px 11px; border: 1px solid rgba(32,169,131,.3); border-radius: 8px; color: var(--mint-strong); background: rgba(32,169,131,.08); font: inherit; font-size: 10px; font-weight: 700; cursor: pointer; }
+.route-map-sync { padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--panel-soft); font-size: 9px; font-weight: 700; transition: .15s ease; }
+.route-map-sync.is-active { border-color: rgba(138,130,213,.45); color: var(--violet); background: rgba(138,130,213,.1); }
 .route-map { z-index: 0; height: 390px; overflow: hidden; border: 1px solid var(--line); border-radius: 11px; background: var(--panel-soft); }
-.route-map.is-local-only { background-image: linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px); background-size: 28px 28px; }
 .route-map .leaflet-control-attribution { font-size: 9px; }
+.route-map .route-live-marker { filter: drop-shadow(0 2px 5px rgba(14,36,42,.35)); }
 .route-map-meta { margin-top: 11px; display: flex; flex-wrap: wrap; gap: 7px 16px; color: var(--muted); font-size: 9px; }.route-map-meta strong { color: var(--ink); }
 .route-map-privacy { margin: 8px 0 0; padding: 9px 11px; border-left: 3px solid var(--amber); color: var(--muted); background: rgba(227,166,47,.07); font-size: 9px; line-height: 1.5; }
+.route-map-privacy.is-error { border-left-color: var(--coral); color: var(--coral); background: rgba(226,123,102,.08); }
 .gps-management-panel, .persistent-history-panel { grid-column: 1 / -1; }
 .gps-import-controls { padding: 18px 20px; display: grid; grid-template-columns: minmax(240px,1fr) minmax(230px,.7fr); gap: 16px; align-items: stretch; }
 .gps-upload { min-height: 120px; margin: 0; }.gps-upload input { display: none; }

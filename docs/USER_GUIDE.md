@@ -101,10 +101,11 @@ Hovering a journey chart synchronises the same elapsed time across the other
 journey charts. This makes it possible to compare speed, power, SOC, force, and
 temperature at one moment.
 
-When a GPX route is matched, the journey also shows a local route trace. The
-OpenStreetMap background is off by default. Clicking **Load OpenStreetMap**
-sends normal tile requests for the viewed area to the tile provider, but does
-not upload the GPX file. The map retains visible OpenStreetMap attribution.
+When a GPX route is matched, the journey shows it over an OpenStreetMap
+background. Opening that journey sends normal tile requests for the viewed
+area to the tile provider, but does not upload the GPX file. The map retains
+visible OpenStreetMap attribution. Move the pointer across any journey chart to
+highlight the temporally corresponding position on the route.
 
 ### Driving
 

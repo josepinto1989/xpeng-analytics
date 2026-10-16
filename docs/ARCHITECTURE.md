@@ -21,8 +21,9 @@ ZIP and GPX imports idempotent.
 The worker returns a versioned `xpeng-analytics-dashboard/v2` snapshot to React.
 Date filters, record selection, unit conversion, synchronized chart cursors,
 long-term trends, driving-context estimates, local GPS route traces, and PDF
-generation operate on this snapshot and require no application server. The
-optional OpenStreetMap background is requested only after an explicit click.
+generation operate on this snapshot and require no application server. Opening
+a journey with a matched GPX route requests the visible OpenStreetMap tiles;
+the route-to-chart synchronisation remains local.
 The interface exposes
 overview, journeys, driving, charging, battery, tyres, activity, trends,
 report, quality, and data-management views.

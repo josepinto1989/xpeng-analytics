@@ -37,11 +37,11 @@ encryption or access control.
 The application must never add telemetry, advertising, remote fonts, crash
 uploads, or analytics without a separate public design review and an explicit
 user-facing consent decision. OpenStreetMap background tiles are the only
-current optional remote map resource and are disabled until the user clicks
-**Load OpenStreetMap**. The tile provider then receives the ordinary web
-requests needed for the viewed area, including standard connection metadata.
-The GPX file is not uploaded. The local route trace, matching, storage, and PDF
-composition do not require map tiles.
+current remote map resource. When the user opens a journey with an associated
+GPS route, the tile provider receives the ordinary web requests needed for the
+viewed area, including standard connection metadata. The GPX file is not
+uploaded. Route matching, storage, chart synchronisation, and PDF composition
+remain local.
 
 The optional 7-, 15-, 25-, or 30-day import reminder is also stored locally. It only compares
 the latest import time when the application is opened; it does not sign in to

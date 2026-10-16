@@ -134,8 +134,8 @@ file.
 
 The first private-staging implementation is available as `1.8.0-beta.1`. It
 supports GPX and GPX-in-ZIP import, BasicAirData and Open GPX Tracker files,
-automatic and manual journey matching, optional route-end trimming, local
-journey traces, an explicitly enabled OpenStreetMap background, PDF route
+automatic and manual journey matching, optional route-end trimming,
+OpenStreetMap journey maps, chart-to-map position synchronisation, PDF route
 traces, and `.xpeng` v4 persistence. CSV GPS import and a separately licensed
 offline basemap remain research items for later Phase 10 iterations.
 
@@ -194,9 +194,9 @@ simulation or a safety-accurate digital twin.
 - Add play, pause, restart, timeline scrubbing, elapsed and recorded time, and
   1x, 2x, and 3x playback speeds. Compress long telemetry gaps rather than
   leaving the replay apparently frozen, while showing when a gap was skipped.
-- When a matched GPX route exists, synchronise an optional map marker with the
-  replay. Keep the local trace available without online tiles and retain the
-  explicit OpenStreetMap privacy control introduced in Phase 10.
+- When a matched GPX route exists, synchronise the map marker with the replay
+  using the same timestamp-to-position logic introduced for journey charts in
+  Phase 10. Retain the visible OpenStreetMap privacy notice.
 - Allow the replay to continue without GPS; vehicle telemetry remains the
   authoritative source for the animation and GPS is only used for map
   position.

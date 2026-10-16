@@ -74,8 +74,8 @@ explicit and keep the data on your device.
 - Optional persistent local history that reopens on the same browser and can
   show an on-device reminder when it is time to add a newer XPENG export.
 - Optional GPX route import from Android or iPhone, automatic journey matching
-  with confidence, manual correction, and a journey map. OpenStreetMap tiles
-  are loaded only after an explicit click.
+  with confidence, manual correction, and an OpenStreetMap journey map. Moving
+  across any journey chart also highlights the corresponding route position.
 - Optional local route traces in PDF reports. GPS tracks are preserved in the
   portable `.xpeng` history so one file can restore the full session.
 
@@ -117,9 +117,9 @@ verified.
 - Portable histories are not encrypted. Treat them like the original XPENG
   export and store them somewhere you trust.
 - GPX import is optional. When used, precise route coordinates become part of
-  the unencrypted `.xpeng` history. Loading the optional OpenStreetMap
-  background sends ordinary tile requests for the viewed area to the tile
-  provider; the GPX file itself is not uploaded.
+  the unencrypted `.xpeng` history. Opening a mapped journey loads its
+  OpenStreetMap background and sends ordinary tile requests for the viewed
+  area; the GPX file itself is not uploaded.
 
 Battery capacity, SOH, range, charging losses, and costs are calculated
 estimates derived from the available telemetry. They are not official BMS

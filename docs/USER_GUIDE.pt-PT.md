@@ -106,11 +106,11 @@ Ao passar o rato num gráfico, o mesmo instante é sincronizado nos restantes
 gráficos da jornada, permitindo comparar velocidade, potência, SOC, forças e
 temperatura.
 
-Quando existe um GPX associado, a jornada apresenta também o traçado local do
-percurso. O mapa de fundo OpenStreetMap está desligado por predefinição. Ao
-carregar em **Carregar OpenStreetMap**, são feitos pedidos normais dos mosaicos
-da área visualizada ao fornecedor, mas o ficheiro GPX não é enviado. A
-atribuição OpenStreetMap permanece visível.
+Quando existe um GPX associado, a jornada apresenta o percurso sobre um mapa
+OpenStreetMap. Abrir essa jornada faz pedidos normais dos mosaicos da área
+visualizada ao fornecedor, mas o ficheiro GPX não é enviado. A atribuição
+OpenStreetMap permanece visível. Ao passar o rato sobre qualquer gráfico da
+jornada, o mapa assinala a posição temporalmente correspondente.
 
 ### Condução
 

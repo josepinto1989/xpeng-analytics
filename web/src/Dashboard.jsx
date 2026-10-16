@@ -3,6 +3,7 @@ import { Area as RechartsArea, AreaChart as RechartsAreaChart, Bar as RechartsBa
 import "leaflet/dist/leaflet.css";
 import { APP_VERSION } from "./version.js";
 import { formatStoredBytes, IMPORT_REMINDER_DAY_OPTIONS, nextReminderAt } from "./persistent-history.js";
+import { nearestTimestampPoint, telemetryPointFromChart } from "./route-sync.js";
 import { consumptionUnit, consumptionValue, distanceUnit, distanceValue, pressureUnitLabel, pressureValue, speedUnit, speedValue, temperatureUnit, temperatureValue } from "./units.js";
 
 const sections = ["overview", "journeys", "driving", "charging", "battery", "tyres", "activity", "trends", "report", "quality", "data"];
@@ -41,14 +42,22 @@ const duration = (minutes, t) => minutes == null ? "—" : minutes >= 60 ? `${Ma
 const monthText = (value, locale) => value ? new Intl.DateTimeFormat(locale, { month: "short", year: "2-digit" }).format(new Date(`${value}-01T00:00:00Z`)) : "—";
 
 const telemetrySyncProps = (data) => safe(data).some((row) => Object.hasOwn(row, "elapsed")) ? { syncId: "journey-telemetry", syncMethod: "value" } : safe(data).some((row) => Object.hasOwn(row, "elapsedMinutes")) ? { syncId: "charging-telemetry", syncMethod: "value" } : {};
+const JourneyTimelineContext = React.createContext(null);
+function journeyChartHandlers(data, timeline, onMouseMove, onMouseLeave) {
+  if (!timeline || !safe(data).some((row) => Object.hasOwn(row, "elapsed"))) return { onMouseMove, onMouseLeave };
+  return {
+    onMouseMove: (state, event) => { onMouseMove?.(state, event); timeline(telemetryPointFromChart(state, data)); },
+    onMouseLeave: (state, event) => { onMouseLeave?.(state, event); timeline(null); },
+  };
+}
 function Area(props) { return <RechartsArea {...props} isAnimationActive={false} />; }
 function Bar(props) { return <RechartsBar {...props} isAnimationActive={false} />; }
 function Line(props) { return <RechartsLine {...props} isAnimationActive={false} />; }
 function Pie(props) { return <RechartsPie {...props} isAnimationActive={false} />; }
 function Scatter(props) { return <RechartsScatter {...props} isAnimationActive={false} />; }
-function LineChart({ data, ...props }) { return <RechartsLineChart data={data} {...telemetrySyncProps(data)} {...props} />; }
-function AreaChart({ data, ...props }) { return <RechartsAreaChart data={data} {...telemetrySyncProps(data)} {...props} />; }
-function ComposedChart({ data, ...props }) { return <RechartsComposedChart data={data} {...telemetrySyncProps(data)} {...props} />; }
+function LineChart({ data, onMouseMove, onMouseLeave, ...props }) { const timeline=React.useContext(JourneyTimelineContext); return <RechartsLineChart data={data} {...telemetrySyncProps(data)} {...props} {...journeyChartHandlers(data,timeline,onMouseMove,onMouseLeave)} />; }
+function AreaChart({ data, onMouseMove, onMouseLeave, ...props }) { const timeline=React.useContext(JourneyTimelineContext); return <RechartsAreaChart data={data} {...telemetrySyncProps(data)} {...props} {...journeyChartHandlers(data,timeline,onMouseMove,onMouseLeave)} />; }
+function ComposedChart({ data, onMouseMove, onMouseLeave, ...props }) { const timeline=React.useContext(JourneyTimelineContext); return <RechartsComposedChart data={data} {...telemetrySyncProps(data)} {...props} {...journeyChartHandlers(data,timeline,onMouseMove,onMouseLeave)} />; }
 
 function Icon({ name }) { return <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={iconPaths[name]} /></svg>; }
 function inPeriod(date, period, maxDate, customRange) { const value = String(date || "").slice(0,10); if (!value) return false; if (period === "all") return true; if (period === "custom") { const first = customRange?.start && customRange?.end && customRange.start > customRange.end ? customRange.end : customRange?.start; const last = customRange?.start && customRange?.end && customRange.start > customRange.end ? customRange.start : customRange?.end; return (!first || value >= first) && (!last || value <= last); } const boundary = new Date(`${maxDate}T00:00:00Z`); boundary.setUTCDate(boundary.getUTCDate() - Number(period) + 1); return value >= boundary.toISOString().slice(0, 10) && value <= maxDate; }
@@ -92,9 +101,12 @@ function Overview({ data, locale, t, period, maxDate, customRange, openSection, 
     <div className="dashboard-grid two"><Panel title={t("recentJourneys")} action={<button className="text-action" onClick={() => openSection("journeys")}>{t("viewAll")}</button>}><div className="compact-records">{journeys.slice(0,5).map((row) => <button type="button" className="compact-record-button" key={row.journeyId} onClick={() => openRecord("journeys", row.journeyId)} aria-label={`${t("openJourney")} ${dateText(row.startedAtUtc, locale)}`}><span><strong>{dateText(row.startedAtUtc, locale)}</strong><small>{timeText(row.startedAtUtc, locale)} · {duration(row.durationMinutes, t)}</small></span><span><strong>{num(distanceValue(row.distanceKm,units.system), locale)} {displayDistanceUnit}</strong><small>{num(consumptionValue(row.consumptionKwh100,units.system), locale)} {displayConsumptionUnit}</small></span></button>)}</div></Panel><Panel title={t("recentCharges")} action={<button className="text-action" onClick={() => openSection("charging")}>{t("viewAll")}</button>}><div className="compact-records">{charges.slice(0,5).map((row) => <button type="button" className="compact-record-button" key={row.chargeId} onClick={() => openRecord("charging", row.chargeId)} aria-label={`${t("openCharge")} ${dateText(row.startedAtUtc, locale)}`}><span><strong>{dateText(row.startedAtUtc, locale)}</strong><small>{row.chargeType} · {duration(row.durationMinutes, t)}</small></span><span><strong>{num(row.batteryEnergyKwh, locale)} kWh</strong><small>{num(row.socStartPct, locale, 0)} → {num(row.socEndPct, locale, 0)}%</small></span></button>)}</div></Panel></div></>;
 }
 
-function RouteMap({ gps, t, locale }) {
+function RouteMap({ gps, activeTimestampUtc, t, locale }) {
   const containerRef = useRef(null);
-  const [tilesEnabled, setTilesEnabled] = useState(false);
+  const mapRef = useRef(null), leafletRef = useRef(null), activeMarkerRef = useRef(null);
+  const [mapReady,setMapReady]=useState(false), [tileError,setTileError]=useState(false);
+  const routePoints=useMemo(()=>safe(gps?.segments).flatMap((segment)=>safe(segment)).filter((point)=>Number.isFinite(point?.lat)&&Number.isFinite(point?.lon)),[gps]);
+  const activePoint=useMemo(()=>nearestTimestampPoint(routePoints,activeTimestampUtc),[activeTimestampUtc,routePoints]);
   useEffect(() => {
     let disposed = false, map = null;
     const draw = async () => {
@@ -102,7 +114,9 @@ function RouteMap({ gps, t, locale }) {
       if (disposed || !containerRef.current) return;
       const L = module.default || module;
       map = L.map(containerRef.current, { zoomControl: true, attributionControl: true });
-      if (tilesEnabled) L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
+      mapRef.current=map;leafletRef.current=L;
+      const tiles=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, crossOrigin: true, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' });
+      tiles.on("tileerror",()=>setTileError(true));tiles.on("load",()=>setTileError(false));tiles.addTo(map);
       const lines = safe(gps?.segments).map((segment) => safe(segment).map((point) => [point.lat, point.lon])).filter((segment) => segment.length > 1);
       const layers = lines.map((line) => L.polyline(line, { color: "#159a75", weight: 5, opacity: .9 }).addTo(map));
       const points = lines.flat();
@@ -112,19 +126,31 @@ function RouteMap({ gps, t, locale }) {
         const group = L.featureGroup(layers);
         map.fitBounds(group.getBounds(), { padding: [24, 24], maxZoom: 17 });
       } else map.setView([0, 0], 2);
+      setMapReady(true);
     };
     draw();
-    return () => { disposed = true; map?.remove(); };
-  }, [gps, tilesEnabled, t, locale]);
+    return () => { disposed = true; setMapReady(false); activeMarkerRef.current=null; mapRef.current=null; leafletRef.current=null; map?.remove(); };
+  }, [gps, t, locale]);
+  useEffect(()=>{
+    const map=mapRef.current,L=leafletRef.current;
+    if(!mapReady||!map||!L)return;
+    if(!activePoint){activeMarkerRef.current?.remove();activeMarkerRef.current=null;return;}
+    const position=[activePoint.lat,activePoint.lon],label=`${t("mapChartPosition")} · ${new Intl.DateTimeFormat(locale,{hour:"2-digit",minute:"2-digit",second:"2-digit"}).format(new Date(activePoint.timestampUtc))}`;
+    if(!activeMarkerRef.current)activeMarkerRef.current=L.circleMarker(position,{radius:8,color:"#ffffff",weight:3,fillColor:"#8a82d5",fillOpacity:1,className:"route-live-marker"}).addTo(map).bindTooltip(label,{direction:"top",offset:[0,-8]});
+    else activeMarkerRef.current.setLatLng(position).setTooltipContent(label);
+    activeMarkerRef.current.bringToFront();
+  },[activePoint,locale,mapReady,t]);
   return <div className="route-map-wrap">
-    <div className="route-map-toolbar"><div><strong>{t("routeMap")}</strong><small>{t("routeMapLocalTrace")}</small></div><button type="button" onClick={()=>setTilesEnabled((value)=>!value)}>{tilesEnabled?t("hideOsmMap"):t("loadOsmMap")}</button></div>
-    <div ref={containerRef} className={`route-map ${tilesEnabled?"has-tiles":"is-local-only"}`} aria-label={t("routeMap")}/>
+    <div className="route-map-toolbar"><div><strong>{t("routeMap")}</strong><small>{t("routeMapLocalTrace")}</small></div><span className={`route-map-sync ${activePoint?"is-active":""}`}>{activePoint?t("mapChartPosition"):t("mapChartHint")}</span></div>
+    <div ref={containerRef} className="route-map has-tiles" aria-label={t("routeMap")}/>
     <div className="route-map-meta"><span>{t("gpsSource")}: <strong>{gps.sourceName}</strong></span><span>{t("matchConfidence")}: <strong>{num(gps.confidenceScore,locale,0)}%</strong></span><span>{num(gps.points,locale,0)} {t("gpsPointsLower")}</span>{gps.trimMeters?<span>{t("trimmedRouteEnds")}: {num(gps.trimMeters,locale,0)} m</span>:null}</div>
-    <p className="route-map-privacy">{tilesEnabled?t("osmPrivacyActive"):t("osmPrivacyNotice")}</p>
+    <p className={`route-map-privacy ${tileError?"is-error":""}`}>{tileError?t("mapTilesError"):t("osmPrivacyActive")}</p>
   </div>;
 }
 
 function JourneyDetail({ selected, trips, locale, t, units }) {
+  const [activeTelemetry,setActiveTelemetry]=useState(null);
+  useEffect(()=>setActiveTelemetry(null),[selected.journeyId]);
   const segments = safe(selected.tripIds).map((id) => trips.find((row) => row.tripId === id)).filter(Boolean);
   const journeyStartedAt = new Date(selected.startedAtUtc).getTime();
   const series = segments.flatMap((trip, segment) => safe(trip.series).map((point) => {
@@ -134,8 +160,8 @@ function JourneyDetail({ selected, trips, locale, t, units }) {
   }));
   const maxOf = (field) => maximum(segments, field);
   const hasSeries = (fields) => series.some((row) => fields.some((field) => Number.isFinite(Number(row[field]))));
-  return <div className="detail-stack"><Panel title={`${dateText(selected.startedAtUtc, locale)} · ${timeText(selected.startedAtUtc, locale)}`} subtitle={`${duration(selected.durationMinutes, t)} · ${segments.length} ${t("segmentsLower")}`}><div className="metric-grid detail-metrics"><Metric label={t("distance")} value={num(distanceValue(selected.distanceKm,units.system), locale)} unit={` ${distanceUnit(units.system)}`} /><Metric label={t("consumption")} value={num(consumptionValue(selected.consumptionKwh100,units.system), locale)} unit={` ${consumptionUnit(units.system)}`} /><Metric label={t("netEnergy")} value={num(selected.netEnergyKwh, locale)} unit=" kWh" /><Metric label={t("regenerated")} value={num(selected.regeneratedKwh, locale)} unit=" kWh" note={`${num(selected.regenerationSharePct,locale)}% ${t("grossEnergy")}`} /><Metric label={t("maximumSpeed")} value={num(speedValue(selected.maxSpeedKmh,units.system), locale)} unit={` ${speedUnit(units.system)}`} /></div></Panel>
-    {selected.gps?<Panel title={t("journeyRoute")} subtitle={t("journeyRouteHelp")}><RouteMap gps={selected.gps} t={t} locale={locale}/></Panel>:null}
+  return <JourneyTimelineContext.Provider value={setActiveTelemetry}><div className="detail-stack"><Panel title={`${dateText(selected.startedAtUtc, locale)} · ${timeText(selected.startedAtUtc, locale)}`} subtitle={`${duration(selected.durationMinutes, t)} · ${segments.length} ${t("segmentsLower")}`}><div className="metric-grid detail-metrics"><Metric label={t("distance")} value={num(distanceValue(selected.distanceKm,units.system), locale)} unit={` ${distanceUnit(units.system)}`} /><Metric label={t("consumption")} value={num(consumptionValue(selected.consumptionKwh100,units.system), locale)} unit={` ${consumptionUnit(units.system)}`} /><Metric label={t("netEnergy")} value={num(selected.netEnergyKwh, locale)} unit=" kWh" /><Metric label={t("regenerated")} value={num(selected.regeneratedKwh, locale)} unit=" kWh" note={`${num(selected.regenerationSharePct,locale)}% ${t("grossEnergy")}`} /><Metric label={t("maximumSpeed")} value={num(speedValue(selected.maxSpeedKmh,units.system), locale)} unit={` ${speedUnit(units.system)}`} /></div></Panel>
+    {selected.gps?<Panel title={t("journeyRoute")} subtitle={t("journeyRouteHelp")}><RouteMap gps={selected.gps} activeTimestampUtc={activeTelemetry?.timestampUtc} t={t} locale={locale}/></Panel>:null}
     {segments.some((row)=>row.peakDrivePowerKw!=null)?<Panel title={t("technicalHighlights")} subtitle={t("technicalHighlightsHelp")}><div className="metric-grid detail-metrics"><Metric label={t("peakDrivePower")} value={num(maxOf("peakDrivePowerKw"),locale)} unit=" kW"/><Metric label={t("peakRegeneration")} value={num(maxOf("peakRegenPowerKw"),locale)} unit=" kW"/><Metric label={t("maximumAcceleration")} value={num(maxOf("maxAccelerationG"),locale,2)} unit=" g"/><Metric label={t("maximumBraking")} value={num(maxOf("maxBrakingG"),locale,2)} unit=" g"/><Metric label={t("maximumCornering")} value={num(maxOf("maxLateralG"),locale,2)} unit=" g"/><Metric label={t("maximumSteeringAngle")} value={num(maxOf("maxSteeringAngleDeg"),locale,0)} unit="°"/><Metric label={t("rearMotorSpeed")} value={num(maxOf("maxRearMotorRpm"),locale,0)} unit=" rpm"/><Metric label={t("rearMotorTorque")} value={num(maxOf("maxRearTorqueNm"),locale,0)} unit=" Nm"/><Metric label={t("rearRotorTemperature")} value={num(temperatureValue(maxOf("maxRearRotorTempC"),units.system),locale)} unit={` ${temperatureUnit(units.system)}`}/><Metric label={t("tyrePressureRange")} value={`${num(pressureValue(Math.min(...segments.map((row)=>row.tyrePressureMinKpa).filter(Number.isFinite)),units.pressure),locale)}–${num(pressureValue(maxOf("tyrePressureMaxKpa"),units.pressure),locale)}`} unit={` ${pressureUnitLabel(units.pressure)}`}/></div></Panel>:null}
     <div className="dashboard-grid two technical-grid"><Panel title={t("speedProfile")} subtitle={t("speedProfileHelp")}><Chart><LineChart data={series} margin={{ top: 15, right: 12, left: -12 }}><CartesianGrid stroke="var(--grid)" vertical={false} /><XAxis dataKey="elapsed" hide /><YAxis tick={{ fill: "var(--muted)", fontSize: 10 }} axisLine={false} tickLine={false} /><Tip locale={locale} suffix={` ${speedUnit(units.system)}`} /><Line type="monotone" dataKey="speedKmh" name={t("speed")} stroke={C.teal} dot={false} strokeWidth={2} /><Line type="monotone" dataKey="speedPeakKmh" name={t("peak")} stroke={C.cyan} dot={false} /></LineChart></Chart></Panel><Panel title={t("powerProfile")} subtitle={t("powerProfileHelp")}><Chart><AreaChart data={series} margin={{ top: 15, right: 12, left: -12 }}><CartesianGrid stroke="var(--grid)" vertical={false} /><XAxis dataKey="elapsed" hide /><YAxis tick={{ fill: "var(--muted)", fontSize: 10 }} axisLine={false} tickLine={false} /><ReferenceLine y={0} stroke="var(--muted)" /><Tip locale={locale} suffix=" kW"/><Area type="monotone" dataKey="powerKw" name={t("power")} stroke={C.amber} fill="rgba(227,166,47,.18)" /></AreaChart></Chart></Panel><Panel title={t("socAndRange")} subtitle={t("socAndRangeHelp")}><Chart><LineChart data={series} margin={{ top: 15, right: 12, left: -12 }}><CartesianGrid stroke="var(--grid)" vertical={false} /><XAxis dataKey="elapsed" hide /><YAxis yAxisId="a" tick={{ fill: "var(--muted)", fontSize: 10 }} /><YAxis yAxisId="b" orientation="right" tick={{ fill: "var(--muted)", fontSize: 10 }} /><Tip locale={locale} /><Legend wrapperStyle={{ fontSize: 11 }} /><Line yAxisId="a" type="monotone" dataKey="socPct" name="SOC %" stroke={C.mint} dot={false} strokeWidth={2} /><Line yAxisId="b" type="monotone" dataKey="displayedRangeKm" name={`${t("displayedRange")} ${distanceUnit(units.system)}`} stroke={C.violet} dot={false} strokeWidth={2} /></LineChart></Chart></Panel><Panel title={t("temperatureProfile")} subtitle={t("temperatureProfileHelp")}><Chart><LineChart data={series} margin={{ top: 15, right: 12, left: -12 }}><CartesianGrid stroke="var(--grid)" vertical={false} /><XAxis dataKey="elapsed" hide /><YAxis tick={{ fill: "var(--muted)", fontSize: 10 }} /><Tip locale={locale} suffix={` ${temperatureUnit(units.system)}`} /><Line type="monotone" dataKey="batteryTempC" name={t("batteryTemperature")} stroke={C.coral} dot={false} strokeWidth={2} /></LineChart></Chart></Panel></div>
     <div className="dashboard-grid two technical-grid">
@@ -144,7 +170,7 @@ function JourneyDetail({ selected, trips, locale, t, units }) {
       <Panel title={t("rearMotorProfile")} subtitle={t("rearMotorProfileHelp")}>{hasSeries(["rearMotorTorqueNm","rearMotorRpm"])?<Chart><LineChart data={series} margin={{top:15,right:12,left:-12}}><CartesianGrid stroke="var(--grid)" vertical={false}/><XAxis dataKey="elapsed" hide/><YAxis yAxisId="torque" unit=" Nm" tick={{fill:"var(--muted)",fontSize:10}}/><YAxis yAxisId="rpm" orientation="right" unit=" rpm" tick={{fill:"var(--muted)",fontSize:10}}/><Tip locale={locale}/><Legend wrapperStyle={{fontSize:11}}/><Line yAxisId="torque" dataKey="rearMotorTorqueNm" name={t("rearMotorTorque")} stroke={C.amber} dot={false}/><Line yAxisId="rpm" dataKey="rearMotorRpm" name={t("rearMotorSpeed")} stroke={C.teal} dot={false}/></LineChart></Chart>:<ChartEmpty t={t}/>}</Panel>
       <Panel title={t("journeyTyrePressure")} subtitle={t("journeyTyrePressureHelp")}>{hasSeries(["tyreFrontLeftKpa","tyreFrontRightKpa","tyreRearLeftKpa","tyreRearRightKpa"])?<Chart><LineChart data={series} margin={{top:15,right:12,left:4}}><CartesianGrid stroke="var(--grid)" vertical={false}/><XAxis dataKey="elapsed" hide/><YAxis width={48} domain={["auto","auto"]} tickFormatter={(value)=>num(value,locale,units.pressure==="bar"?2:1)} tick={{fill:"var(--muted)",fontSize:10}}/><Tip locale={locale} suffix={` ${pressureUnitLabel(units.pressure)}`}/><Legend wrapperStyle={{fontSize:11}}/><Line dataKey="tyreFrontLeftKpa" name={t("frontLeftShort")} stroke={C.mint} dot={false}/><Line dataKey="tyreFrontRightKpa" name={t("frontRightShort")} stroke={C.cyan} dot={false}/><Line dataKey="tyreRearLeftKpa" name={t("rearLeftShort")} stroke={C.amber} dot={false}/><Line dataKey="tyreRearRightKpa" name={t("rearRightShort")} stroke={C.coral} dot={false}/></LineChart></Chart>:<ChartEmpty t={t}/>}</Panel>
     </div>
-    <Panel title={t("journeyStructure")} subtitle={t("journeyStructureHelp")}><div className="detail-table">{segments.map((row, index) => <div key={row.tripId}><span className="segment-number">{index + 1}</span><strong>{timeText(row.startedAtUtc, locale)}</strong><span>{num(distanceValue(row.distanceKm,units.system), locale)} {distanceUnit(units.system)}</span><span>{duration(row.durationMinutes, t)}</span><span>{num(consumptionValue(row.consumptionKwh100,units.system), locale)} {consumptionUnit(units.system)}</span><span>{num(row.socStartPct, locale, 0)} → {num(row.socEndPct, locale, 0)}%</span></div>)}</div></Panel></div>;
+    <Panel title={t("journeyStructure")} subtitle={t("journeyStructureHelp")}><div className="detail-table">{segments.map((row, index) => <div key={row.tripId}><span className="segment-number">{index + 1}</span><strong>{timeText(row.startedAtUtc, locale)}</strong><span>{num(distanceValue(row.distanceKm,units.system), locale)} {distanceUnit(units.system)}</span><span>{duration(row.durationMinutes, t)}</span><span>{num(consumptionValue(row.consumptionKwh100,units.system), locale)} {consumptionUnit(units.system)}</span><span>{num(row.socStartPct, locale, 0)} → {num(row.socEndPct, locale, 0)}%</span></div>)}</div></Panel></div></JourneyTimelineContext.Provider>;
 }
 
 function Journeys({ data, locale, t, period, maxDate, customRange, selectedId, setSelectedId, units }) {

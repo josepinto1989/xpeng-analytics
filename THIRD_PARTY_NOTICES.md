@@ -37,9 +37,10 @@ included in the installed package and its upstream repository.
 
 ## OpenStreetMap
 
-The optional online basemap uses tiles from
+The online journey basemap uses tiles from
 [OpenStreetMap](https://www.openstreetmap.org/). Map data is copyright
 OpenStreetMap contributors and made available under the Open Data Commons Open
 Database License. The application displays the required attribution whenever
-the basemap is enabled and does not bulk-download or package the standard tile
-service.
+the basemap is visible and does not bulk-download or package the standard tile
+service. Web requests retain an origin referrer as required by the tile usage
+policy.

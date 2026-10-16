@@ -9,8 +9,8 @@
 - [x] Real browser flow covers XPENG ZIP import, GPX ZIP import, journey route,
   manual correction and reset, PDF route trace, `.xpeng` export, and restore.
 - [x] PDF rendering was visually inspected with no clipping or overlap.
-- [x] OpenStreetMap tiles remain off until explicit user action and attribution
-  is configured on the tile layer.
+- [x] OpenStreetMap attribution is configured, the browser sends the required
+  origin referrer, and only tiles for an opened mapped journey are requested.
 - [x] README, both user guides, privacy, security, architecture, roadmap,
   format specification, release notes, notices, and changelog are updated.
 - [ ] Owner testing in Firefox, Chrome, and Edge is complete.

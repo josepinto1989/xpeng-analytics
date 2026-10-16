@@ -2,6 +2,17 @@
 
 All notable public changes are documented here.
 
+## 1.8.0-beta.2 — 2026-10-16
+
+- Fixed blocked OpenStreetMap tiles by allowing the origin referrer required by
+  the official tile usage policy.
+- Removed the background-map toggle and now loads the OpenStreetMap background
+  automatically when a journey has a matched GPX route.
+- Added chart-to-map synchronisation: hovering any journey telemetry chart
+  highlights the temporally corresponding point on the GPS route.
+- Updated the map privacy notice and GPS documentation for the automatic tile
+  requests.
+
 ## 1.8.0-beta.1 — 2026-10-16
 
 - Added local GPX and GPX-in-ZIP import for optional journey routes.

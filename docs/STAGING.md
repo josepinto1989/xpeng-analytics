@@ -44,10 +44,10 @@ hands-on validation before a change is promoted to the public project.
    and confirm the matched and unmatched route counts.
 3. Check that two recordings of the same drive produce one automatic journey
    map and that the higher-quality recording is selected.
-4. Open the matched journey and confirm that the local route trace appears
-   without making a map-tile request.
-5. Select **Load OpenStreetMap**, confirm the background and attribution, then
-   hide it again.
+4. Open the matched journey and confirm that the OpenStreetMap background,
+   route trace, and attribution appear automatically without a 403 error.
+5. Move the pointer across each journey telemetry chart and confirm that the
+   highlighted position moves to the corresponding point on the route.
 6. In **Data**, manually assign the other recording to the journey and confirm
    that the displayed route changes. Select **Automatic match** to restore the
    automatic choice.
