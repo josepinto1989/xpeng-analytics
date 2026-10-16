@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { nearestTimestampPoint, telemetryPointFromChart } from "../src/route-sync.js";
+import { createTimestampLookup, nearestTimestampPoint, telemetryPointFromChart } from "../src/route-sync.js";
 
 const series = [
   { elapsed: 0, timestampUtc: "2026-10-15T08:00:00.000Z", speedKmh: 0 },
@@ -17,6 +17,8 @@ const route = [
   { timestampUtc: "2026-10-15T08:02:03.000Z", lat: 38.72, lon: -9.12 },
 ];
 assert.equal(nearestTimestampPoint(route, series[1].timestampUtc), route[1]);
+const lookup = createTimestampLookup([route[2], route[0], route[1]]);
+assert.equal(nearestTimestampPoint(lookup, series[1].timestampUtc), route[1]);
 assert.equal(nearestTimestampPoint(route, null), null);
 
 const html = await readFile(new URL("../index.html", import.meta.url), "utf8");

@@ -21,6 +21,9 @@ not yet a public release.
   rear-motor, or tyre-pressure chart now selects its active telemetry timestamp.
 - The route map finds the closest GPX timestamp and displays a highlighted
   marker at that position.
+- Marker tracking is limited to one update per animation frame and uses an
+  indexed timestamp lookup, avoiding a complete journey re-render for every
+  pointer movement.
 - Existing cross-chart tooltip synchronisation remains active.
 
 ## Privacy

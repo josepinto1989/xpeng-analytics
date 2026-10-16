@@ -10,6 +10,9 @@ All notable public changes are documented here.
   automatically when a journey has a matched GPX route.
 - Added chart-to-map synchronisation: hovering any journey telemetry chart
   highlights the temporally corresponding point on the GPS route.
+- Optimised chart-to-map tracking by updating only the Leaflet marker once per
+  animation frame and using an indexed timestamp lookup, instead of rendering
+  the complete journey view for every pointer movement.
 - Updated the map privacy notice and GPS documentation for the automatic tile
   requests.
 
