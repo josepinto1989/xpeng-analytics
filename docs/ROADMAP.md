@@ -170,7 +170,46 @@ offline basemap remain research items for later Phase 10 iterations.
   explicitly permits offline use for the desktop application. The standard
   OpenStreetMap tile service must not be bulk-downloaded for offline packs.
 
-### Phase 11 — Native local and offline applications
+### Phase 11 — Interactive journey replay
+
+Create an optional local replay mode that reconstructs a selected journey from
+the timestamped telemetry already present in the XPENG export. The experience
+must be presented as a visual reconstruction, not as an official XPENG vehicle
+simulation or a safety-accurate digital twin.
+
+- Let the user open a journey and select **Replay journey** without changing
+  the underlying analytics or imported data.
+- Start with a lightweight, original generic vehicle visual that does not copy
+  an XPENG model, logo, interior, or proprietary interface. Evaluate a richer
+  3D version only after the responsive 2D or 2.5D prototype performs well on
+  desktop and mobile browsers.
+- Synchronise the vehicle state with the original timestamps: speed,
+  acceleration, braking, accelerator input, steering direction, gear, doors,
+  windows, boot, charging state, and other available signals. Hide or clearly
+  mark controls for signals that are absent from a particular export.
+- Animate doors, windows, and the boot when their observed state changes, and
+  use simple motion, lighting, or gauges to communicate acceleration, braking,
+  regeneration, speed, and vehicle direction without claiming a physically
+  exact simulation.
+- Add play, pause, restart, timeline scrubbing, elapsed and recorded time, and
+  1x, 2x, and 3x playback speeds. Compress long telemetry gaps rather than
+  leaving the replay apparently frozen, while showing when a gap was skipped.
+- When a matched GPX route exists, synchronise an optional map marker with the
+  replay. Keep the local trace available without online tiles and retain the
+  explicit OpenStreetMap privacy control introduced in Phase 10.
+- Allow the replay to continue without GPS; vehicle telemetry remains the
+  authoritative source for the animation and GPS is only used for map
+  position.
+- Provide an accessible reduced-motion mode and a compact fallback for mobile,
+  low-memory devices, browsers without the required graphics capability, and
+  users who do not want 3D animation.
+- Keep decoding, timeline generation, replay, and GPX synchronisation entirely
+  on the user's device. Do not add accounts, telemetry uploads, or a server.
+- Add synthetic replay fixtures and automated tests for timing, seeking,
+  playback speed, gaps, missing signals, event ordering, and GPX marker
+  synchronisation before testing with private real exports.
+
+### Phase 12 — Native local and offline applications
 
 Package the existing interface as lightweight native desktop applications for
 Windows, macOS, and Linux while keeping the browser version available.
