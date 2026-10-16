@@ -34,11 +34,13 @@ longitudinal dynamics, and braking, then emits urban-, road-, or
 motorway-style estimates with a confidence score. The current classifier does
 not use GPS or claim to identify the actual road.
 
-GPX files are parsed in the same worker. Tracks are matched to journeys using
-time overlap, start/end proximity, distance similarity, and track quality.
-When Android and iPhone recordings cover the same journey, one track is chosen
-by score and quality so duplicates do not create two journey maps. The
-presentation exposes confidence and a manual correction control. XPENG
+GPX files are parsed in the same worker. Each recording is sliced against the
+exact XPENG trip timestamps before matching, so an all-day recording can cover
+several car trips while parked periods and unrelated movement are excluded.
+Candidates are compared using temporal coverage, start/end proximity,
+distance, speed agreement, and recording quality. When Android and iPhone
+recordings cover the same trip, one route is chosen deterministically and the
+overlapping alternatives are omitted from the portable history. XPENG
 telemetry remains the source for all vehicle metrics.
 
 The previous Python/WebAssembly and SQLite processor remains available as a
@@ -83,8 +85,9 @@ directly from its Blob range and validates the
 format, version, bounds, checksum, decompressed size, and required streams
 before rebuilding all derived analytics. Version 4 adds individually
 compressed GPS time, latitude, longitude, elevation, speed, and segment blocks,
-plus GPX import provenance and manual matching metadata. These blocks are
-omitted when no GPS data was imported.
+plus GPX import provenance, the matched trip identifier, and discarded-source
+provenance. Only matched trip slices are written; these blocks are omitted when
+no GPS data was matched.
 
 Per-column compression avoids Base64 and SQLite overhead and lets the file stay
 close to the size of the original XPENG ZIP. Histories remain unencrypted and

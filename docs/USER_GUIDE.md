@@ -58,18 +58,21 @@ only open files you trust.
 
 ### Adding optional GPS routes
 
-After the XPENG dashboard opens, go to **Data** and choose **Add GPX or ZIP**.
-You may select several `.gpx` files or one ZIP containing GPX files. GPX 1.1
-exports from BasicAirData GPS Logger on Android and Open GPX Tracker on iPhone
-are the first tested references; compatible GPX files from other applications
-should also work when they contain timestamps and coordinates.
+The initial screen accepts XPENG exports and portable histories. After the
+XPENG dashboard opens, go to **Data > Add more data**. This single importer
+accepts later XPENG Data Act ZIPs, several `.gpx` files, or ZIPs containing GPX
+files, either through the file picker or drag-and-drop. GPX 1.1 exports from
+BasicAirData GPS Logger on Android and Open GPX Tracker on iPhone are the first
+tested references; compatible GPX files from other applications should also
+work when they contain timestamps and coordinates.
 
 Before importing, you can optionally remove the first and last 100, 250, or
-500 metres of every route. No trimming is applied by default. The app matches
-tracks to journeys using time, distance, and recording quality. The Data page
-shows matched and unmatched totals and lets you choose a journey manually when
-the automatic result is ambiguous. If two phones recorded the same journey,
-the more complete track is normally selected.
+500 metres of every matched route. No trimming is applied by default. The app
+clips recordings to exact XPENG trip timestamps and compares time coverage,
+distance, speed, and recording quality. This means one all-day GPX can cover
+several car trips while parked intervals, walks, and other movement are
+discarded. If two phones recorded the same trip, the stronger route is selected
+automatically; no manual file management is required.
 
 GPS processing stays on the device. Coordinates are sensitive and become part
 of the unencrypted `.xpeng` history. Protect that file accordingly.
@@ -179,8 +182,9 @@ they do not diagnose the vehicle.
 
 ### Data
 
-Adds more XPENG ZIPs and GPX routes, reviews or corrects GPS matches, replaces
-the session from a portable history, exports the current session, displays
+Adds more XPENG ZIPs and GPX routes through one importer, reviews the automatic
+GPS matching summary, replaces the session from a portable history, exports
+the current session, displays
 imported-file history, or clears the session. It also contains the optional
 persistent-history controls.
 
@@ -208,7 +212,7 @@ The file:
 - remains on your computer unless you move or upload it;
 - supports adding future XPENG ZIP exports after restoration;
 - contains checksums for corruption detection;
-- preserves optional GPS routes and manual journey matches;
+- preserves the automatically matched optional GPS route slices;
 - is compressed but **not encrypted**.
 
 Treat it with the same care as the original XPENG export.

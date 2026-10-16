@@ -60,19 +60,22 @@ encriptados; abre apenas ficheiros em que confias.
 
 ### Adicionar percursos GPS opcionais
 
-Depois de abrir o painel XPENG, entra em **Dados** e escolhe **Adicionar GPX ou
-ZIP**. Podes selecionar vários ficheiros `.gpx` ou um ZIP com GPX. As primeiras
-referências testadas são GPX 1.1 do BasicAirData GPS Logger no Android e do
-Open GPX Tracker no iPhone; outras aplicações também deverão funcionar quando
-o GPX contém datas, horas e coordenadas.
+O ecrã inicial aceita exports XPENG e históricos portáteis. Depois de abrir o
+painel XPENG, entra em **Dados > Adicionar mais dados**. Este único importador
+aceita novos ZIPs XPENG Data Act, vários ficheiros `.gpx` ou ZIPs com GPX,
+através do seletor ou por arrastar e largar. As primeiras referências testadas
+são GPX 1.1 do BasicAirData GPS Logger no Android e do Open GPX Tracker no
+iPhone; outras aplicações também deverão funcionar quando o GPX contém datas,
+horas e coordenadas.
 
 Antes da importação podes remover opcionalmente os primeiros e últimos 100,
-250 ou 500 metros de cada percurso. Por predefinição não é removido nada. A
-aplicação associa os percursos às jornadas comparando horas, distância e
-qualidade da gravação. A página Dados mostra os associados e os que ficaram
-sem associação e permite escolher manualmente uma jornada quando o resultado
-automático é ambíguo. Se dois telemóveis gravaram a mesma jornada, é
-normalmente escolhido o percurso mais completo.
+250 ou 500 metros de cada percurso associado. Por predefinição não é removido
+nada. A aplicação recorta as gravações pelos timestamps exatos dos trajetos
+XPENG e compara cobertura temporal, distância, velocidade e qualidade. Assim,
+um GPX gravado durante todo o dia pode conter várias viagens, enquanto períodos
+parados, caminhadas e outros movimentos são descartados. Se dois telemóveis
+gravaram o mesmo trajeto, o melhor percurso é escolhido automaticamente, sem
+gestão manual de ficheiros.
 
 O processamento GPS fica no dispositivo. As coordenadas são sensíveis e
 passam a fazer parte do histórico `.xpeng` não encriptado. Protege esse
@@ -186,8 +189,9 @@ dados; não diagnosticam o veículo.
 
 ### Dados
 
-Permite adicionar ZIPs XPENG e percursos GPX, rever ou corrigir associações GPS,
-substituir a sessão por um histórico, exportar a sessão atual, consultar os
+Permite adicionar ZIPs XPENG e percursos GPX no mesmo importador, consultar o
+resumo das associações GPS automáticas, substituir a sessão por um histórico,
+exportar a sessão atual, consultar os
 ficheiros importados ou limpar a sessão. Inclui também os controlos opcionais
 de histórico local persistente.
 
@@ -216,7 +220,7 @@ O ficheiro:
 - permanece no teu computador, exceto se o moveres ou enviares;
 - permite adicionar novos ZIPs depois de ser restaurado;
 - inclui checksums para detetar corrupção;
-- preserva os percursos GPS opcionais e as associações manuais;
+- preserva os recortes GPS opcionais associados automaticamente;
 - está comprimido, mas **não está encriptado**.
 
 Trata-o com o mesmo cuidado que a exportação original da XPENG.

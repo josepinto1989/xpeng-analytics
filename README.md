@@ -73,8 +73,8 @@ explicit and keep the data on your device.
   selector.
 - Optional persistent local history that reopens on the same browser and can
   show an on-device reminder when it is time to add a newer XPENG export.
-- Optional GPX route import from Android or iPhone, automatic journey matching
-  with confidence, manual correction, and an OpenStreetMap journey map. Moving
+- Optional GPX route import from Android or iPhone, automatic trip-level
+  timestamp matching, duplicate selection, and an OpenStreetMap journey map. Moving
   across any journey chart also highlights the corresponding route position.
 - Optional local route traces in PDF reports. GPS tracks are preserved in the
   portable `.xpeng` history so one file can restore the full session.
@@ -91,9 +91,10 @@ dark themes.
    the ZIP exports are then merged into the same local session.
 4. Explore the dashboard, add more exports, create a PDF report, export a
    compact `.xpeng` backup, or explicitly remember the history in this browser.
-5. Optionally open **Data** and add GPX files recorded during the same journeys.
-   XPENG Analytics matches them by time and distance and lets you correct the
-   result manually.
+5. Optionally open **Data** and use the same importer to add later XPENG ZIPs,
+   individual GPX files, or ZIPs containing GPX. XPENG Analytics clips
+   continuous recordings to the exact trip times and chooses duplicate routes
+   automatically.
 
 For detailed instructions, filters, reports, portable histories, units, and
 troubleshooting, read the **[English user guide](docs/USER_GUIDE.md)** or the
@@ -138,7 +139,7 @@ Read the full [privacy notes](PRIVACY.md), [security guidance](SECURITY.md), and
 | [Security](SECURITY.md) | Safe reporting and importer security boundaries |
 | [Architecture](docs/ARCHITECTURE.md) | Browser engine, data flow, and portable-history design |
 | [`.xpeng` v4 format](docs/XPENG_HISTORY_V4_SPEC.md) | Technical format specification for telemetry and optional GPS tracks |
-| [v1.8.0 beta notes](docs/RELEASE_NOTES_1.8.0-beta.1.md) | Private-staging notes for GPX matching and journey maps |
+| [v1.8.0 beta notes](docs/RELEASE_NOTES_1.8.0-beta.3.md) | Private-staging notes for automatic GPX matching and journey maps |
 | [v1.7.0 beta notes](docs/RELEASE_NOTES_1.7.0-beta.1.md) | Private-staging notes for long-term trends and driving context |
 | [v1.6.0 beta notes](docs/RELEASE_NOTES_1.6.0-beta.2.md) | Private-staging notes for persistent local history testing |
 | [v1.5.1 release notes](docs/RELEASE_NOTES_1.5.1.md) | Detailed summary of the current release |

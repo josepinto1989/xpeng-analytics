@@ -108,6 +108,7 @@ function buildTrack(sourceName, sourceSha256, sourceIndex, rawPoints, requestedT
     importedAtUtc: new Date().toISOString(),
     originalStartUtc: iso(originalStart),
     originalEndUtc: iso(originalEnd),
+    requestedTrimMeters: Math.max(0, Number(requestedTrimMeters) || 0),
     trimMeters: trimmed.trimMeters,
     time,
     lat,
@@ -158,28 +159,66 @@ export function parseGpxText(text, { sourceName = "track.gpx", sourceSha256 = "u
     }
     points.sort((a, b) => a.timestamp - b.timestamp);
     const unique = points.filter((point, index) => !index || point.timestamp !== points[index - 1].timestamp);
-    if (unique.length >= 2) tracks.push(buildTrack(sourceName, sourceSha256, sourceIndex++, unique, trimMeters, creator(text)));
+    if (unique.length >= 2) {
+      const track = buildTrack(sourceName, sourceSha256, sourceIndex++, unique, 0, creator(text));
+      track.requestedTrimMeters = Math.max(0, Number(trimMeters) || 0);
+      tracks.push(track);
+    }
   }
   if (!tracks.length) throw new Error("invalid_gpx");
   return tracks;
 }
 
-function matchScore(track, journey) {
-  const trackStart = track.time[0], trackEnd = track.time.at(-1);
-  const journeyStart = Date.parse(journey.startedAtUtc) / 1000, journeyEnd = Date.parse(journey.endedAtUtc) / 1000;
-  const journeyDuration = Math.max(1, journeyEnd - journeyStart), overlap = Math.max(0, Math.min(trackEnd, journeyEnd) - Math.max(trackStart, journeyStart));
-  const startDelta = Math.abs(trackStart - journeyStart), endDelta = Math.abs(trackEnd - journeyEnd);
-  const overlapScore = clamp(overlap / journeyDuration);
-  const startScore = clamp(1 - startDelta / 600), endScore = clamp(1 - endDelta / 600);
-  const distanceScore = clamp(1 - Math.abs(Number(track.stats.distanceKm) - Number(journey.distanceKm)) / Math.max(1, Number(journey.distanceKm)));
-  const qualityScore = clamp(Number(track.stats.qualityScore) / 100);
-  const eligible = overlap >= Math.min(60, journeyDuration * .2) || (startDelta <= 600 && endDelta <= 600);
-  const score = eligible ? .45 * overlapScore + .2 * startScore + .15 * endScore + .15 * distanceScore + .05 * qualityScore : 0;
-  return { score, overlapScore, startDelta, endDelta, distanceScore };
-}
-
 function confidence(score) {
   return score >= .86 ? "high" : score >= .65 ? "medium" : "low";
+}
+
+function lowerBound(values, target) {
+  let low = 0, high = values.length;
+  while (low < high) { const middle = (low + high) >> 1; if (values[middle] < target) low = middle + 1; else high = middle; }
+  return low;
+}
+
+function upperBound(values, target) {
+  let low = 0, high = values.length;
+  while (low < high) { const middle = (low + high) >> 1; if (values[middle] <= target) low = middle + 1; else high = middle; }
+  return low;
+}
+
+function candidateForTrip(track, trip) {
+  const tripStart = Date.parse(trip.startedAtUtc) / 1000, tripEnd = Date.parse(trip.endedAtUtc) / 1000;
+  if (!finite(tripStart) || !finite(tripEnd) || tripEnd <= tripStart || track.time.at(-1) < tripStart || track.time[0] > tripEnd) return null;
+  const first = lowerBound(track.time, tripStart), last = upperBound(track.time, tripEnd), points = [];
+  for (let index = first; index < last; index++) points.push({
+    timestamp: track.time[index], lat: track.lat[index], lon: track.lon[index], elevation: track.elevation[index], speedMps: track.speedMps[index], segment: track.segment[index],
+  });
+  if (points.length < 2) return null;
+  let route;
+  const sourceTrackId = track.sourceTrackId || track.trackId;
+  const requestedTrimMeters = Number(track.requestedTrimMeters ?? track.trimMeters ?? 0);
+  try {
+    route = buildTrack(track.sourceName, sourceTrackId, 0, points, track.matchedTripId ? 0 : requestedTrimMeters, track.creator);
+  } catch {
+    return null;
+  }
+  route.trackId = `${sourceTrackId}__${trip.tripId}`;
+  route.sourceTrackId = sourceTrackId;
+  route.matchedTripId = trip.tripId;
+  route.requestedTrimMeters = requestedTrimMeters;
+  if (track.matchedTripId) route.trimMeters = Number(track.trimMeters || 0);
+  route.ignoredSourceIds = Array.isArray(track.ignoredSourceIds) ? [...track.ignoredSourceIds] : [];
+  route.ignoredDuplicates = route.ignoredSourceIds.length || Number(track.ignoredDuplicates || 0);
+  const duration = Math.max(1, tripEnd - tripStart), routeDuration = Math.max(1, route.time.at(-1) - route.time[0]);
+  const startDelta = Math.max(0, route.time[0] - tripStart), endDelta = Math.max(0, tripEnd - route.time.at(-1));
+  const coverageScore = clamp(routeDuration / duration), startScore = clamp(1 - startDelta / 180), endScore = clamp(1 - endDelta / 180);
+  const tripDistance = Math.max(.01, Number(trip.distanceKm) || 0), routeDistance = Number(route.stats.distanceKm) || 0;
+  const distanceScore = clamp(1 - Math.abs(routeDistance - tripDistance) / Math.max(.5, tripDistance));
+  const tripSpeed = Number(trip.avgSpeedKmh) || tripDistance / (duration / 3600), routeSpeed = routeDistance / (routeDuration / 3600);
+  const speedScore = clamp(1 - Math.abs(routeSpeed - tripSpeed) / Math.max(10, tripSpeed));
+  const qualityScore = clamp(Number(route.stats.qualityScore) / 100);
+  const score = .4 * coverageScore + .12 * startScore + .1 * endScore + .2 * distanceScore + .1 * speedScore + .08 * qualityScore;
+  const eligible = route.time.length >= 2 && coverageScore >= .2 && routeDistance >= Math.min(.03, tripDistance * .2) && score >= .45;
+  return { route, trip, score, eligible, coverageScore, distanceScore, speedScore };
 }
 
 function routePreview(track) {
@@ -199,82 +238,63 @@ function routePreview(track) {
   return segments.filter((segment) => segment.length >= 2);
 }
 
-export function gpsSnapshot(tracks = [], journeys = [], assignments = {}) {
-  const candidates = new Map();
-  for (const track of tracks) {
-    const ranked = journeys.map((journey) => ({ journey, ...matchScore(track, journey) })).filter((row) => row.score > 0).sort((a, b) => b.score - a.score);
-    candidates.set(track.trackId, ranked);
-  }
-  const chosenByJourney = new Map();
-  const usedTracks = new Set();
-  for (const [journeyId, trackId] of Object.entries(assignments || {})) {
-    const track = tracks.find((row) => row.trackId === trackId), journey = journeys.find((row) => row.journeyId === journeyId);
-    if (track && journey && !usedTracks.has(trackId)) {
-      chosenByJourney.set(journeyId, { track, match: matchScore(track, journey), manual: true });
-      usedTracks.add(trackId);
+export function gpsSnapshot(tracks = [], journeys = [], trips = []) {
+  const chosenByTrip = new Map(), selectedTracks = [];
+  let duplicateCount = 0;
+  for (const trip of trips) {
+    const bestBySource = new Map();
+    for (const track of tracks) {
+      const candidate = candidateForTrip(track, trip);
+      if (!candidate) continue;
+      const sourceId = candidate.route.sourceTrackId;
+      const previous = bestBySource.get(sourceId);
+      if (!previous || candidate.score > previous.score) bestBySource.set(sourceId, candidate);
     }
+    const ranked = [...bestBySource.values()].sort((left, right) => right.score - left.score || Number(right.route.stats.qualityScore) - Number(left.route.stats.qualityScore) || right.route.time.length - left.route.time.length || left.route.trackId.localeCompare(right.route.trackId));
+    const chosen = ranked.find((candidate) => candidate.eligible);
+    if (!chosen) continue;
+    const ignoredSourceIds = new Set(chosen.route.ignoredSourceIds || []);
+    for (const alternative of ranked) {
+      if (alternative === chosen) continue;
+      const overlapsSameTrip = alternative.score >= .35 || (alternative.coverageScore >= .25 && alternative.distanceScore >= .15);
+      if (!overlapsSameTrip) continue;
+      ignoredSourceIds.add(alternative.route.sourceTrackId);
+      for (const sourceId of alternative.route.ignoredSourceIds || []) ignoredSourceIds.add(sourceId);
+    }
+    ignoredSourceIds.delete(chosen.route.sourceTrackId);
+    chosen.route.ignoredSourceIds = [...ignoredSourceIds].sort();
+    chosen.route.ignoredDuplicates = chosen.route.ignoredSourceIds.length;
+    duplicateCount += chosen.route.ignoredDuplicates;
+    chosenByTrip.set(trip.tripId, chosen);
+    selectedTracks.push(chosen.route);
   }
-  const automatic = [];
-  for (const track of tracks) {
-    const best = candidates.get(track.trackId)?.[0];
-    if (best && best.score >= .45) automatic.push({ track, match: best, selectionScore: best.score * .8 + Number(track.stats.qualityScore) / 100 * .2 });
-  }
-  automatic.sort((a, b) => b.selectionScore - a.selectionScore);
-  for (const candidate of automatic) {
-    if (usedTracks.has(candidate.track.trackId) || chosenByJourney.has(candidate.match.journey.journeyId)) continue;
-    chosenByJourney.set(candidate.match.journey.journeyId, { track: candidate.track, match: candidate.match, manual: false });
-    usedTracks.add(candidate.track.trackId);
-  }
-
+  const selectedSourceIds = new Set(selectedTracks.map((track) => track.sourceTrackId));
+  const ignoredTrackCount = new Set(tracks.map((track) => track.sourceTrackId || track.trackId).filter((trackId) => !selectedSourceIds.has(trackId))).size;
   const journeyRows = journeys.map((journey) => {
-    const chosen = chosenByJourney.get(journey.journeyId);
-    if (!chosen) return journey;
+    const chosen = (journey.tripIds || []).map((tripId) => chosenByTrip.get(tripId)).filter(Boolean);
+    if (!chosen.length) return journey;
+    const sourceNames = [...new Set(chosen.map((row) => row.route.sourceName))], creators = [...new Set(chosen.map((row) => row.route.creator))];
+    const weight = chosen.reduce((total, row) => total + Math.max(1, row.route.time.at(-1) - row.route.time[0]), 0);
+    const score = chosen.reduce((total, row) => total + row.score * Math.max(1, row.route.time.at(-1) - row.route.time[0]), 0) / weight;
     return {
       ...journey,
       gps: {
-        trackId: chosen.track.trackId,
-        sourceName: chosen.track.sourceName,
-        creator: chosen.track.creator,
-        confidence: confidence(chosen.match.score),
-        confidenceScore: rounded(chosen.match.score * 100, 0),
-        manual: chosen.manual,
-        distanceKm: chosen.track.stats.distanceKm,
-        points: chosen.track.stats.points,
-        trimMeters: chosen.track.trimMeters,
-        segments: routePreview(chosen.track),
+        trackId: chosen.map((row) => row.route.trackId).join("+"),
+        sourceName: sourceNames.length === 1 ? sourceNames[0] : `${sourceNames[0]} +${sourceNames.length - 1}`,
+        creator: creators.join(", "),
+        confidence: confidence(score), confidenceScore: rounded(score * 100, 0),
+        distanceKm: rounded(chosen.reduce((total, row) => total + Number(row.route.stats.distanceKm || 0), 0), 3),
+        points: chosen.reduce((total, row) => total + row.route.time.length, 0),
+        trimMeters: Math.max(...chosen.map((row) => Number(row.route.trimMeters || 0))),
+        segments: chosen.flatMap((row) => routePreview(row.route)),
       },
     };
   });
-  const trackRows = tracks.map((track) => {
-    const selectedEntry = [...chosenByJourney].find(([, chosen]) => chosen.track.trackId === track.trackId);
-    const selectedJourney = selectedEntry?.[0] || null;
-    const best = candidates.get(track.trackId)?.[0];
-    return {
-      trackId: track.trackId,
-      sourceName: track.sourceName,
-      creator: track.creator,
-      startedAtUtc: iso(track.time[0]),
-      endedAtUtc: iso(track.time.at(-1)),
-      trimMeters: track.trimMeters,
-      ...track.stats,
-      matchedJourneyId: selectedJourney,
-      manual: Boolean(selectedEntry?.[1]?.manual),
-      suggestedJourneyId: best?.journey?.journeyId || null,
-      confidence: best ? confidence(best.score) : "low",
-      confidenceScore: rounded((best?.score || 0) * 100, 0),
-      alternatives: (candidates.get(track.trackId) || []).slice(0, 5).map((row) => ({ journeyId: row.journey.journeyId, score: rounded(row.score * 100, 0) })),
-    };
-  });
-  return { journeys: journeyRows, gps: { tracks: trackRows, matchedCount: chosenByJourney.size, unmatchedCount: trackRows.filter((row) => !row.matchedJourneyId).length } };
-}
-
-export function setGpsAssignment(state, trackId, journeyId) {
-  const assignments = { ...(state.gpsAssignments || {}) };
-  for (const [assignedJourneyId, assignedTrackId] of Object.entries(assignments)) {
-    if (assignedTrackId === trackId || (journeyId && assignedJourneyId === journeyId)) delete assignments[assignedJourneyId];
-  }
-  if (trackId && journeyId) assignments[journeyId] = trackId;
-  return { ...state, gpsAssignments: assignments };
+  const trackRows = selectedTracks.map((track) => ({
+    trackId: track.trackId, sourceName: track.sourceName, creator: track.creator, startedAtUtc: iso(track.time[0]), endedAtUtc: iso(track.time.at(-1)),
+    trimMeters: track.trimMeters, ...track.stats, matchedTripId: track.matchedTripId, confidence: confidence(chosenByTrip.get(track.matchedTripId)?.score || 0), confidenceScore: rounded((chosenByTrip.get(track.matchedTripId)?.score || 0) * 100, 0),
+  }));
+  return { journeys: journeyRows, selectedTracks, gps: { tracks: trackRows, matchedCount: journeyRows.filter((row) => row.gps).length, matchedTripCount: chosenByTrip.size, duplicateCount, ignoredTrackCount } };
 }
 
 export const GPX_LIMITS = { maxBytes: MAX_GPX_BYTES, maxPoints: MAX_TRACK_POINTS };

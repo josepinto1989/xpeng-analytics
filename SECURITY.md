@@ -26,7 +26,9 @@ you trust.
 A portable history remains sensitive even though version 4 does not retain the
 original vehicle identifier. It contains timestamped vehicle telemetry and
 import provenance that may reveal personal routines. When GPX has been added,
-it also contains precise location history. Future exports are merged by
+it also contains the precise location history of automatically matched trip
+slices. Unmatched recordings and rejected duplicate tracks are not written to
+the portable history. Future exports are merged by
 timestamp and archive content, not by treating the history as anonymous.
 
 Opening a journey with an associated GPX route loads an OpenStreetMap

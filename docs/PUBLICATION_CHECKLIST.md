@@ -1,13 +1,13 @@
 # Publication checklist
 
-## v1.8.0-beta.1 private staging — 2026-10-16
+## v1.8.0-beta.3 private staging — 2026-10-16
 
-- [x] Synthetic GPX parsing, matching, trimming, manual correction, and v4
+- [x] Synthetic GPX parsing, trip-level matching, duplicate rejection, trimming, and v4
   history round-trip tests pass.
 - [x] The supplied Android and iPhone GPX files were compared without being
   copied into the repository.
-- [x] Real browser flow covers XPENG ZIP import, GPX ZIP import, journey route,
-  manual correction and reset, PDF route trace, `.xpeng` export, and restore.
+- [x] Real browser flow covers XPENG ZIP import, unified GPX ZIP import,
+  automatic journey routes and reset, PDF route trace, `.xpeng` export, and restore.
 - [x] PDF rendering was visually inspected with no clipping or overlap.
 - [x] OpenStreetMap attribution is configured, the browser sends the required
   origin referrer, and only tiles for an opened mapped journey are requested.

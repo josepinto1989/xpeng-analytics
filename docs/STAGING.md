@@ -40,22 +40,23 @@ hands-on validation before a change is promoted to the public project.
 
 1. Import the supplied XPENG ZIP and confirm the existing journey totals before
    adding location data.
-2. Open **Data**, select one GPX file or a ZIP containing several GPX files,
-   and confirm the matched and unmatched route counts.
+2. Open **Data**, use the same **Add more data** importer for a later XPENG ZIP,
+   an individual GPX, and a ZIP containing several GPX files. Confirm file-type
+   detection works through both the picker and drag-and-drop.
 3. Check that two recordings of the same drive produce one automatic journey
    map and that the higher-quality recording is selected.
 4. Open the matched journey and confirm that the OpenStreetMap background,
    route trace, and attribution appear automatically without a 403 error.
 5. Move the pointer across each journey telemetry chart and confirm that the
    highlighted position moves to the corresponding point on the route.
-6. In **Data**, manually assign the other recording to the journey and confirm
-   that the displayed route changes. Select **Automatic match** to restore the
-   automatic choice.
+6. Import a continuous GPX containing driving, parked time, and unrelated
+   movement. Confirm only the points inside XPENG trip timestamps appear and
+   that overlapping Android/iPhone recordings produce one route automatically.
 7. Start from a fresh session and repeat the GPX import with 100, 250, or 500
    metres of end trimming; confirm the choice is visible on the route.
 8. Generate a PDF first without and then with **Include GPS routes**. Only the
    second report should contain route pages.
 9. Export a `.xpeng` history, reset the app, restore that file, and confirm the
-   GPX tracks, assignments, route traces, and privacy warning are retained.
+   selected route slices, duplicate provenance, traces, and privacy warning are retained.
 10. Repeat the core import, map, and history-restore checks in Firefox, Chrome,
     and Edge. No real XPENG or GPX file may be committed to staging.

@@ -3,7 +3,7 @@
 ## 1. Purpose and compatibility
 
 Version 4 extends the [version 3 columnar format](XPENG_HISTORY_V3_SPEC.md)
-with optional GPS tracks, import provenance, and journey-assignment metadata.
+with optional matched GPS route slices and import provenance.
 The telemetry stream layout, block descriptors, GZIP compression, SHA-256
 checksums, and validation rules remain unchanged.
 
@@ -46,17 +46,15 @@ Version 4 adds an optional `gps` object at the manifest root:
         "completedAtUtc": "2026-10-16T12:00:00.000Z"
       }
     ],
-    "assignments": {
-      "journey_...": "gps_..."
-    },
     "tracks": []
   }
 }
 ```
 
-`imports` supports source-level deduplication. `assignments` stores only manual
-journey corrections; automatic matches are recalculated after import so
-improved matching logic can apply to existing histories.
+`imports` preserves source-level provenance. `tracks` contains only the route
+slices automatically matched to XPENG trips. Complete unmatched recordings,
+parked periods, unrelated movement, and rejected duplicates are not written to
+the portable history.
 
 ## 4. GPS track records
 
@@ -64,13 +62,18 @@ Each `gps.tracks` item contains:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `trackId` | string | Stable identifier derived from the source hash and track index |
+| `trackId` | string | Stable identifier combining the original source-track and matched trip identifiers |
 | `sourceName` | string | Original GPX filename or path inside the selected ZIP |
 | `creator` | string | GPX creator attribute when present |
 | `importedAtUtc` | ISO-8601 string | Local import time |
 | `originalStartUtc` | ISO-8601 string | Start before optional trimming |
 | `originalEndUtc` | ISO-8601 string | End before optional trimming |
+| `requestedTrimMeters` | number | Requested privacy trim for the matched slice |
 | `trimMeters` | number | Metres removed from both route ends |
+| `sourceTrackId` | string | Stable identifier of the original parsed GPX track |
+| `matchedTripId` | string | XPENG trip identifier selected by automatic matching |
+| `ignoredSourceIds` | string[] | Overlapping source-track identifiers rejected for this trip |
+| `ignoredDuplicates` | number | Number of rejected overlapping recordings |
 | `stats` | object | Point count, distance, duration, gaps, coverage, and quality |
 | `time` | block descriptor | `Uint32Array` Unix timestamps in seconds |
 | `lat` | block descriptor | `Float64Array` WGS84 latitude |

@@ -132,12 +132,14 @@ optional, but once accepted by the user the matched tracks become part of the
 portable `.xpeng` history so the complete archive can be restored from one
 file.
 
-The first private-staging implementation is available as `1.8.0-beta.1`. It
-supports GPX and GPX-in-ZIP import, BasicAirData and Open GPX Tracker files,
-automatic and manual journey matching, optional route-end trimming,
-OpenStreetMap journey maps, chart-to-map position synchronisation, PDF route
-traces, and `.xpeng` v4 persistence. CSV GPS import and a separately licensed
-offline basemap remain research items for later Phase 10 iterations.
+The current private-staging implementation is available as `1.8.0-beta.3`. It
+supports a unified later-data importer for XPENG ZIPs, GPX and GPX-in-ZIP,
+BasicAirData and Open GPX Tracker files, fully automatic trip-level timestamp
+matching, duplicate selection, all-day recording segmentation, optional
+route-end trimming, OpenStreetMap journey maps, chart-to-map position
+synchronisation, PDF route traces, and `.xpeng` v4 persistence. CSV GPS import
+and a separately licensed offline basemap remain research items for later
+Phase 10 iterations.
 
 - Start with open interchange formats such as GPX and CSV rather than locking
   the project to one GPS logger application.
@@ -147,16 +149,17 @@ offline basemap remain research items for later Phase 10 iterations.
   other applications that follow the supported GPX or CSV formats. Prioritise
   GPX from BasicAirData because it contains UTC timestamps, coordinates,
   altitude, speed, and fix information needed for journey matching.
-- Match GPS tracks to journey start and end times with a visible confidence
-  score and a manual correction path for ambiguous matches.
+- Match GPS tracks to individual XPENG trip start and end times, retain a
+  visible confidence score, and resolve overlapping recordings automatically
+  without asking the user to manage files or assignments.
 - Show the matched route in journey details and keep the original XPENG
   telemetry as the source for vehicle metrics.
 - Extend the versioned `.xpeng` format with compressed GPS track blocks,
   timestamps, matching metadata, and integrity checks. Histories containing
   location data remain local, portable, compressed, and unencrypted.
 - Make route trimming an optional import setting. The user can choose to omit
-  the first and last part of every GPS track before it is matched and written
-  to the `.xpeng` history; no trimming is applied by default.
+  the first and last part of every matched trip slice before it is written to
+  the `.xpeng` history; no trimming is applied by default.
 - Use OpenStreetMap as the initial basemap, preserve the required attribution,
   and document that requesting online map tiles reveals the viewed map area to
   the tile provider even though the application does not upload the imported

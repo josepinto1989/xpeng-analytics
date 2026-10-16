@@ -1,4 +1,4 @@
-import { buildSnapshot, emptyState, exportHistory, importArchive, importGps, importHistory, setGpsAssignment } from "./native-engine.js";
+import { buildSnapshot, detectAdditionalFileKind, emptyState, exportHistory, importArchive, importGps, importHistory } from "./native-engine.js";
 
 let state = emptyState();
 let queue = Promise.resolve();
@@ -91,14 +91,28 @@ async function handle(message) {
     self.postMessage({ type: "gps_imported", result: { skipped: result.skipped, trackCount: result.trackCount, pointCount: result.pointCount }, snapshot });
     return;
   }
-  if (message?.type === "set_gps_assignment") {
+  if (message?.type === "import_additional") {
     cancelRequested = false;
     lastProgressAt = 0;
     lastProgressPercent = -1;
     lastProgressPhase = "";
-    state = setGpsAssignment(state, message.trackId, message.journeyId || null);
+    const source = message.file ?? message.archive, kind = await detectAdditionalFileKind(source, message.filename);
+    let result;
+    if (kind === "gps") {
+      progress(4, "gps_parse", message.filename || "GPX");
+      result = await importGps(state, source, message.filename, message.options || {}, guardedProgress);
+      state = result.state;
+      progress(72, "gps_match", "Matching journeys");
+    } else {
+      progress(2, "native_scan", message.filename || "XPENG ZIP");
+      result = await importArchive(state, source, message.filename, guardedProgress, message.processingProfile || {});
+      state = result.state;
+      progress(72, "native_analytics", "Calculating locally");
+    }
     const snapshot = buildSnapshot(state, guardedProgress);
-    self.postMessage({ type: "gps_assignment_updated", snapshot });
+    progress(100, "complete", "Done");
+    self.postMessage({ type: "additional_imported", kind, result: kind === "gps" ? { skipped: result.skipped, trackCount: result.trackCount, pointCount: result.pointCount } : { skipped: result.skipped, archiveSha256: result.archiveSha256, totalRows: result.totalRows }, snapshot });
+    return;
   }
 }
 

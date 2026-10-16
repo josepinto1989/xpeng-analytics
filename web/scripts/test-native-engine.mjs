@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { buildSnapshot, emptyState, exportHistory, importArchive, importHistory, isNativeHistory } from "../src/engine/native-engine.js";
+import { buildSnapshot, emptyState, exportHistory, importArchive, importGps, importHistory, isNativeHistory } from "../src/engine/native-engine.js";
 
 function storedZip(files) {
   const locals = [], centrals = [];
@@ -57,6 +57,14 @@ assert.ok(snapshot.trips[0].series.some((row) => row.longitudinalG != null && ro
 assert.ok(snapshot.trips[0].series.some((row) => row.rearMotorTorqueNm != null && row.rearMotorRpm != null), "expected rear motor series");
 assert.ok(snapshot.trips[0].series.some((row) => row.tyreFrontLeftKpa != null && row.tyreRearRightKpa != null), "expected journey tyre series");
 assert.ok(snapshot.quality.coverage.every((row) => Array.isArray(row.availableColumns) && Number.isInteger(row.totalColumns)), "expected signal availability metadata");
+
+const futureGpxStart = 1_797_010_000;
+const futureGpx = `<?xml version="1.0"?><gpx version="1.1" creator="Future test"><trk><trkseg><trkpt lat="38.70" lon="-9.10"><time>${new Date(futureGpxStart * 1000).toISOString()}</time></trkpt><trkpt lat="38.71" lon="-9.11"><time>${new Date((futureGpxStart + 60) * 1000).toISOString()}</time></trkpt></trkseg></trk></gpx>`;
+const futureGpsImport = await importGps(imported.state, new Blob([futureGpx]), "future.gpx");
+const futureGpsSnapshot = buildSnapshot(futureGpsImport.state);
+assert.equal(futureGpsSnapshot.gps.matchedTripCount, 0);
+assert.equal(futureGpsImport.state.gpsTracks.length, 1, "an unmatched route must remain available in the active session for a later XPENG ZIP");
+assert.equal(futureGpsImport.state.gpsSelectedTracks.length, 0, "unmatched routes must not be selected for portable history export");
 
 const history = await exportHistory(imported.state);
 assert.ok(isNativeHistory(new Uint8Array(history)), "expected native history signature");

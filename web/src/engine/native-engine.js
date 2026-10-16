@@ -1,6 +1,6 @@
 // Streaming, columnar browser architecture inspired by LogbooX.
 // See THIRD_PARTY_NOTICES.md for attribution and the MIT licence notice.
-import { GPX_LIMITS, gpsSnapshot, parseGpxText, setGpsAssignment as updateGpsAssignment } from "./gpx.js";
+import { GPX_LIMITS, gpsSnapshot, parseGpxText } from "./gpx.js";
 
 const FAMILY_MARKERS = {
   operation: "driving_operation",
@@ -323,7 +323,7 @@ function mergeStream(oldStream, fresh) {
   return { family: fresh.family, time, columns, model: fresh.model || oldStream.model, stats: { ...fresh.stats, uniqueRows: n, mergedRows: n, emptyColumns, unknownColumns } };
 }
 
-export function emptyState() { return { format: HISTORY_FORMAT, version: HISTORY_VERSION, streams: {}, imports: [], model: "", gpsTracks: [], gpsImports: [], gpsAssignments: {} }; }
+export function emptyState() { return { format: HISTORY_FORMAT, version: HISTORY_VERSION, streams: {}, imports: [], model: "", gpsTracks: [], gpsSelectedTracks: [], gpsImports: [] }; }
 
 export async function importArchive(state, source, filename, report, processingProfile = {}) {
   const profile = typeof processingProfile === "number" ? { memoryBudgetBytes: processingProfile, mode: "desktop" } : processingProfile;
@@ -350,7 +350,6 @@ async function streamText(stream) {
 
 export async function importGps(state, source, filename, options = {}, report = () => {}) {
   const digest = await sourceDigest(source);
-  if ((state.gpsImports || []).some((item) => item.sha256 === digest)) return { state, skipped: true, trackCount: 0, pointCount: 0 };
   const lower = String(filename || "").toLowerCase();
   const tracks = [];
   const parse = (name, text) => {
@@ -375,16 +374,24 @@ export async function importGps(state, source, filename, options = {}, report = 
     }
   } else throw new Error("invalid_gpx");
   const imported = { name: filename, sha256: digest, trackCount: tracks.length, pointCount: tracks.reduce((total, track) => total + track.time.length, 0), trimMeters: Number(options.trimMeters || 0), completedAtUtc: new Date().toISOString() };
+  const existingTrackIds = new Set(tracks.map((track) => track.trackId));
   return {
-    state: { ...state, version: HISTORY_VERSION, gpsTracks: [...(state.gpsTracks || []), ...tracks], gpsImports: [imported, ...(state.gpsImports || [])] },
+    state: { ...state, version: HISTORY_VERSION, gpsTracks: [...(state.gpsTracks || []).filter((track) => !existingTrackIds.has(track.sourceTrackId || track.trackId)), ...tracks], gpsSelectedTracks: [], gpsImports: [imported, ...(state.gpsImports || []).filter((item) => item.sha256 !== digest)] },
     skipped: false,
     trackCount: tracks.length,
     pointCount: imported.pointCount,
   };
 }
 
-export function setGpsAssignment(state, trackId, journeyId) {
-  return updateGpsAssignment(state, trackId, journeyId);
+export async function detectAdditionalFileKind(source, filename) {
+  const lower = String(filename || "").toLowerCase();
+  if (lower.endsWith(".gpx")) return "gps";
+  if (!lower.endsWith(".zip")) throw new Error("invalid_archive");
+  const entries = await listEntries(source);
+  if (entries.some((entry) => entry.name.toLowerCase().endsWith(".gpx"))) return "gps";
+  const families = new Set(entries.map((entry) => familyForName(entry.name)).filter(Boolean));
+  if (["operation", "energy", "status"].every((family) => families.has(family))) return "xpeng";
+  throw new Error("invalid_archive");
 }
 
 function lowerBound(time, target) { let lo = 0, hi = time.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (time[mid] < target) lo = mid + 1; else hi = mid; } return lo; }
@@ -573,7 +580,8 @@ export function buildSnapshot(state, report = () => {}) {
   const journeys = []; let current = [];
   for (const trip of trips) { const previous = current.at(-1); if (!previous || new Date(trip.startedAtUtc) / 1000 - new Date(previous.endedAtUtc) / 1000 <= JOURNEY_BREAK) current.push(trip); else { journeys.push(current); current = [trip]; } } if (current.length) journeys.push(current);
   const journeyRows = journeys.map((group) => { const first = group[0], last = group.at(-1), distance = sum(group, "distanceKm"), net = sum(group, "netEnergyKwh"), regenerated = sum(group, "regeneratedKwh"), used = sum(group, "energyUsedKwh"), duration = (new Date(last.endedAtUtc) - new Date(first.startedAtUtc)) / 60000; return { journeyId: id("journey", new Date(first.startedAtUtc) / 1000, new Date(last.endedAtUtc) / 1000), date: first.date, startedAtUtc: first.startedAtUtc, endedAtUtc: last.endedAtUtc, durationMinutes: rounded(duration, 1), drivingMinutes: rounded(sum(group, "durationMinutes"), 1), stoppedMinutes: rounded(duration - sum(group, "durationMinutes"), 1), distanceKm: rounded(distance), netEnergyKwh: rounded(net, 3), regeneratedKwh: rounded(regenerated, 3), energyUsedKwh: rounded(used, 3), regenerationSharePct: rounded(used + regenerated ? regenerated / (used + regenerated) * 100 : NaN, 1), consumptionKwh100: rounded(distance ? net / distance * 100 : NaN), maxSpeedKmh: rounded(Math.max(...group.map((row) => row.maxSpeedKmh || 0)), 1), tripIds: group.map((row) => row.tripId) }; });
-  const gpsData = gpsSnapshot(state.gpsTracks || [], journeyRows, state.gpsAssignments || {}), enrichedJourneyRows = gpsData.journeys;
+  const gpsData = gpsSnapshot(state.gpsTracks || [], journeyRows, trips), enrichedJourneyRows = gpsData.journeys;
+  state.gpsSelectedTracks = gpsData.selectedTracks;
   report(82, "native_analytics", "Daily, battery and driving metrics");
   const advancedData = advanced(operation, energy, status, local), dailyMap = new Map();
   const day = (date) => { if (!dailyMap.has(date)) dailyMap.set(date, { date, trips: 0, journeys: 0, distanceKm: 0, drivingHours: 0, energyUsedKwh: 0, netEnergyKwh: 0, regeneratedKwh: 0, charges: 0, wallEnergyKwh: 0, batteryEnergyKwh: 0 }); return dailyMap.get(date); };
@@ -599,11 +607,11 @@ async function gunzip(buffer) { const stream = new Blob([buffer]).stream().pipeT
 async function hash(bytes) { return [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((v) => v.toString(16).padStart(2, "0")).join(""); }
 
 export async function exportHistory(state, report = () => {}) {
-  const chunks = [], streams = {}, gpsTracks = []; let offset = 0, completed = 0;
-  const total = Object.values(state.streams).reduce((n, stream) => n + 1 + Object.keys(stream.columns).length, 0) + (state.gpsTracks || []).length * 6;
+  const chunks = [], streams = {}, gpsTracks = [], selectedGpsTracks = state.gpsSelectedTracks || state.gpsTracks || []; let offset = 0, completed = 0;
+  const total = Object.values(state.streams).reduce((n, stream) => n + 1 + Object.keys(stream.columns).length, 0) + selectedGpsTracks.length * 6;
   const add = async (name, array) => { const raw = new Uint8Array(array.buffer, array.byteOffset, array.byteLength), compressed = await gzip(raw); const record = { name, offset, bytes: compressed.byteLength, rawBytes: raw.byteLength, sha256: await hash(compressed) }; chunks.push(compressed); offset += compressed.byteLength; report(10 + (++completed / total) * 82, "history_export", name); return record; };
   for (const [family, stream] of Object.entries(state.streams)) { const record = { stats: stream.stats, model: stream.model, time: await add(`${family}/time`, stream.time), columns: {} }; for (const [name, column] of Object.entries(stream.columns)) record.columns[name] = await add(`${family}/${name}`, column); streams[family] = record; }
-  for (const track of state.gpsTracks || []) {
+  for (const track of selectedGpsTracks) {
     const base = `gps/${track.trackId}`;
     gpsTracks.push({
       trackId: track.trackId,
@@ -612,7 +620,12 @@ export async function exportHistory(state, report = () => {}) {
       importedAtUtc: track.importedAtUtc,
       originalStartUtc: track.originalStartUtc,
       originalEndUtc: track.originalEndUtc,
+      requestedTrimMeters: track.requestedTrimMeters,
       trimMeters: track.trimMeters,
+      sourceTrackId: track.sourceTrackId,
+      matchedTripId: track.matchedTripId,
+      ignoredDuplicates: track.ignoredDuplicates,
+      ignoredSourceIds: track.ignoredSourceIds,
       stats: track.stats,
       time: await add(`${base}/time`, track.time),
       lat: await add(`${base}/lat`, track.lat),
@@ -622,7 +635,7 @@ export async function exportHistory(state, report = () => {}) {
       segment: await add(`${base}/segment`, track.segment),
     });
   }
-  const manifest = new TextEncoder().encode(JSON.stringify({ format: HISTORY_FORMAT, version: HISTORY_VERSION, exportedAtUtc: new Date().toISOString(), model: state.model, imports: state.imports, streams, gps: { imports: state.gpsImports || [], assignments: state.gpsAssignments || {}, tracks: gpsTracks } }));
+  const manifest = new TextEncoder().encode(JSON.stringify({ format: HISTORY_FORMAT, version: HISTORY_VERSION, exportedAtUtc: new Date().toISOString(), model: state.model, imports: state.imports, streams, gps: { imports: state.gpsImports || [], tracks: gpsTracks } }));
   const length = new Uint8Array(4); new DataView(length.buffer).setUint32(0, manifest.byteLength, false);
   return new Blob([HISTORY_MAGIC, length, manifest, ...chunks]).arrayBuffer();
 }
@@ -654,7 +667,7 @@ export async function importHistory(source, report = () => {}) {
   for (const record of gpsRecords) {
     const track = {
       trackId: String(record.trackId || ""), sourceName: String(record.sourceName || "GPX"), creator: String(record.creator || "GPX"), importedAtUtc: record.importedAtUtc || null,
-      originalStartUtc: record.originalStartUtc || null, originalEndUtc: record.originalEndUtc || null, trimMeters: Number(record.trimMeters || 0), stats: record.stats || {},
+      originalStartUtc: record.originalStartUtc || null, originalEndUtc: record.originalEndUtc || null, requestedTrimMeters: Number(record.requestedTrimMeters ?? record.trimMeters ?? 0), trimMeters: Number(record.trimMeters || 0), sourceTrackId: record.sourceTrackId || null, matchedTripId: record.matchedTripId || null, ignoredDuplicates: Number(record.ignoredDuplicates || 0), ignoredSourceIds: Array.isArray(record.ignoredSourceIds) ? record.ignoredSourceIds.map(String) : [], stats: record.stats || {},
       time: await read(record.time, Uint32Array), lat: await read(record.lat, Float64Array), lon: await read(record.lon, Float64Array), elevation: await read(record.elevation, Float32Array), speedMps: await read(record.speedMps, Float32Array), segment: await read(record.segment, Uint16Array),
     };
     const length = track.time.length;
@@ -664,7 +677,7 @@ export async function importHistory(source, report = () => {}) {
     }
     gpsTracks.push(track);
   }
-  return { format: HISTORY_FORMAT, version: HISTORY_VERSION, model: manifest.model || "", imports: manifest.imports || [], streams, gpsTracks, gpsImports: manifest.gps?.imports || [], gpsAssignments: manifest.gps?.assignments || {} };
+  return { format: HISTORY_FORMAT, version: HISTORY_VERSION, model: manifest.model || "", imports: manifest.imports || [], streams, gpsTracks, gpsSelectedTracks: [], gpsImports: manifest.gps?.imports || [] };
 }
 
 export function isNativeHistory(bytes) { return bytes.length >= HISTORY_MAGIC.length && HISTORY_MAGIC_PREFIX.every((value, index) => bytes[index] === value) && [3, 4].includes(bytes[7]); }

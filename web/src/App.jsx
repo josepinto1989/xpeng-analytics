@@ -137,7 +137,7 @@ export default function App() {
   const pendingMessageRef = useRef(null);
   const queueRef = useRef([]);
   const historyFollowupQueueRef = useRef([]);
-  const gpsQueueRef = useRef([]);
+  const additionalQueueRef = useRef([]);
   const activeFileRef = useRef(null);
   const cancelRequestedRef = useRef(false);
   const dragDepthRef = useRef(0);
@@ -244,24 +244,15 @@ export default function App() {
           setBusy(false);
           setProgress({ percent: 100, phase: "complete" });
         }
-      } else if (message.type === "gps_imported") {
+      } else if (message.type === "additional_imported") {
         snapshotRef.current = message.snapshot;
         setSnapshot(message.snapshot);
         setHistory((current) => [{
           name: activeFileRef.current?.name ?? "—",
-          status: message.result.skipped ? "gpsAlreadyImported" : "gpsAdded",
-          rows: message.result.pointCount ?? 0,
+          status: message.kind === "gps" ? "gpsAdded" : message.result.skipped ? "alreadyImported" : "added",
+          rows: message.kind === "gps" ? message.result.pointCount ?? 0 : message.result.totalRows ?? 0,
         }, ...current]);
-        requestAnimationFrame(() => setTimeout(processGpsNext, 0));
-      } else if (message.type === "gps_assignment_updated") {
-        snapshotRef.current = message.snapshot;
-        setSnapshot(message.snapshot);
-        activeFileRef.current = null;
-        if (persistenceEnabledRef.current) queuePersistentSave();
-        else {
-          setBusy(false);
-          setProgress({ percent: 100, phase: "complete" });
-        }
+        requestAnimationFrame(() => setTimeout(processAdditionalNext, 0));
       } else if (message.type === "history_exported") {
         const blob = new Blob([message.payload], { type: "application/octet-stream" });
         const purpose = message.purpose || exportPurposeRef.current || "download";
@@ -312,7 +303,7 @@ export default function App() {
         setBusy(false);
         setProgress({ percent: 100, phase: "history_export_complete" });
       } else if (message.type === "reset_complete") {
-        gpsQueueRef.current = [];
+        additionalQueueRef.current = [];
         snapshotRef.current = null;
         setSnapshot(null);
         setHistory([]);
@@ -322,7 +313,7 @@ export default function App() {
         if (message.code === "cancelled") {
           queueRef.current = [];
           historyFollowupQueueRef.current = [];
-          gpsQueueRef.current = [];
+          additionalQueueRef.current = [];
           activeFileRef.current = null;
           setError(null);
           setBusy(false);
@@ -337,7 +328,7 @@ export default function App() {
         }
         queueRef.current = [];
         historyFollowupQueueRef.current = [];
-        gpsQueueRef.current = [];
+        additionalQueueRef.current = [];
         activeFileRef.current = null;
         setBusy(false);
       }
@@ -416,8 +407,8 @@ export default function App() {
     });
   };
 
-  const processGpsNext = () => {
-    const next = gpsQueueRef.current.shift();
+  const processAdditionalNext = () => {
+    const next = additionalQueueRef.current.shift();
     if (!next) {
       activeFileRef.current = null;
       if (persistenceEnabledRef.current && snapshotRef.current) queuePersistentSave();
@@ -431,8 +422,8 @@ export default function App() {
     cancelRequestedRef.current = false;
     setBusy(true);
     setError(null);
-    setProgress({ percent: 4, phase: "gps_parse", detail: next.file.name });
-    workerRef.current.postMessage({ type: "import_gps", filename: next.file.name, file: next.file, options: next.options || {} });
+    setProgress({ percent: 4, phase: "native_scan", detail: next.file.name });
+    workerRef.current.postMessage({ type: "import_additional", filename: next.file.name, file: next.file, options: next.options || {}, processingProfile: processingProfile() });
   };
 
   const chooseFiles = (files) => {
@@ -443,20 +434,11 @@ export default function App() {
     if (inputRef.current) inputRef.current.value = "";
   };
 
-  const chooseGpsFiles = (files, options = {}) => {
+  const chooseAdditionalFiles = (files, options = {}) => {
     const selected = [...(files || [])].filter((file) => /\.(gpx|zip)$/i.test(file.name));
     if (!selected.length || busy || !engineReady || workerModeRef.current !== "native") return;
-    gpsQueueRef.current = selected.map((file) => ({ file, options }));
-    processGpsNext();
-  };
-
-  const assignGpsTrack = (trackId, journeyId) => {
-    if (!trackId || busy || !engineReady || workerModeRef.current !== "native") return;
-    cancelRequestedRef.current = false;
-    setBusy(true);
-    setError(null);
-    setProgress({ percent: 45, phase: "gps_match" });
-    workerRef.current.postMessage({ type: "set_gps_assignment", trackId, journeyId: journeyId || null });
+    additionalQueueRef.current = selected.map((file) => ({ file, options }));
+    processAdditionalNext();
   };
 
   const importHistoryFile = (selected, followupArchives = [], options = {}) => {
@@ -632,7 +614,7 @@ export default function App() {
     cancelRequestedRef.current = true;
     queueRef.current = [];
     historyFollowupQueueRef.current = [];
-    gpsQueueRef.current = [];
+    additionalQueueRef.current = [];
     workerRef.current.postMessage({ type: "cancel" });
   };
 
@@ -654,10 +636,8 @@ export default function App() {
       busy={busy}
       progress={progress}
       error={error}
-      onChoose={chooseFiles}
+      onChooseAdditional={chooseAdditionalFiles}
       onChooseHistory={chooseHistory}
-      onChooseGps={chooseGpsFiles}
-      onAssignGpsTrack={assignGpsTrack}
       onExport={exportHistory}
       onReset={reset}
       onCancel={cancelProcessing}
@@ -751,6 +731,7 @@ export default function App() {
             <span className="drop-browse">{busy ? t("importing") : t("chooseFiles")}</span>
           </label>
           <div className="processing-time-alert"><strong>{t("processingTimeTitle")}</strong><p>{t("processingTimeBody")}</p></div>
+          <div className="gpx-next-step"><strong>{t("gpxAfterFirstImportTitle")}</strong><p>{t("gpxAfterFirstImportHelp")}</p></div>
           {persistence.enabled && persistence.hasSavedHistory && !snapshot ? <div className="saved-history-landing">
             <div><strong>{t("savedHistoryAvailable")}</strong><p>{t("savedHistoryAvailableHelp")}</p></div>
             <button type="button" disabled={busy || !engineReady} onClick={restoreSavedHistory}>{t("restoreSavedHistory")}</button>

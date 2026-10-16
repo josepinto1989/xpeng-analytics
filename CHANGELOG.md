@@ -2,6 +2,22 @@
 
 All notable public changes are documented here.
 
+## 1.8.0-beta.3 — 2026-10-16
+
+- Unified later XPENG ZIP, GPX, and GPX-in-ZIP additions in one Data-page
+  importer with file-type detection and drag-and-drop.
+- Replaced manual route selection with fully automatic trip-level timestamp
+  matching.
+- Continuous all-day GPX recordings are clipped to actual XPENG driving
+  intervals, excluding parked periods and unrelated movement.
+- When multiple recordings cover the same trip, the strongest route is kept
+  and overlapping alternatives are discarded automatically.
+- Unmatched routes remain available during the current import session so a
+  later XPENG ZIP can match them; only matched route slices are written to the
+  portable `.xpeng` history.
+- Added a start-page explanation that GPS routes can be added from Data after
+  the first XPENG import.
+
 ## 1.8.0-beta.2 — 2026-10-16
 
 - Fixed blocked OpenStreetMap tiles by allowing the origin referrer required by
