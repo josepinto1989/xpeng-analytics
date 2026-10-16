@@ -58,6 +58,26 @@ primeiro e os ZIPs são adicionados à mesma sessão local.
 Só podes selecionar um histórico de cada vez. Os históricos não são
 encriptados; abre apenas ficheiros em que confias.
 
+### Adicionar percursos GPS opcionais
+
+Depois de abrir o painel XPENG, entra em **Dados** e escolhe **Adicionar GPX ou
+ZIP**. Podes selecionar vários ficheiros `.gpx` ou um ZIP com GPX. As primeiras
+referências testadas são GPX 1.1 do BasicAirData GPS Logger no Android e do
+Open GPX Tracker no iPhone; outras aplicações também deverão funcionar quando
+o GPX contém datas, horas e coordenadas.
+
+Antes da importação podes remover opcionalmente os primeiros e últimos 100,
+250 ou 500 metros de cada percurso. Por predefinição não é removido nada. A
+aplicação associa os percursos às jornadas comparando horas, distância e
+qualidade da gravação. A página Dados mostra os associados e os que ficaram
+sem associação e permite escolher manualmente uma jornada quando o resultado
+automático é ambíguo. Se dois telemóveis gravaram a mesma jornada, é
+normalmente escolhido o percurso mais completo.
+
+O processamento GPS fica no dispositivo. As coordenadas são sensíveis e
+passam a fazer parte do histórico `.xpeng` não encriptado. Protege esse
+ficheiro adequadamente.
+
 ## 4. Durante o processamento
 
 A barra de progresso mostra a fase e o ficheiro atual. Mantém o separador aberto
@@ -85,6 +105,12 @@ esses sinais existem na exportação.
 Ao passar o rato num gráfico, o mesmo instante é sincronizado nos restantes
 gráficos da jornada, permitindo comparar velocidade, potência, SOC, forças e
 temperatura.
+
+Quando existe um GPX associado, a jornada apresenta também o traçado local do
+percurso. O mapa de fundo OpenStreetMap está desligado por predefinição. Ao
+carregar em **Carregar OpenStreetMap**, são feitos pedidos normais dos mosaicos
+da área visualizada ao fornecedor, mas o ficheiro GPX não é enviado. A
+atribuição OpenStreetMap permanece visível.
 
 ### Condução
 
@@ -145,6 +171,10 @@ Podes indicar:
 - um preço médio da eletricidade para calcular custos estimados; e
 - uma referência como condutor, empresa ou centro de custo.
 
+Se existirem jornadas com GPX no período, podes incluir os respetivos traçados
+no PDF. Estes diagramas são compostos localmente e não descarregam um mapa de
+fundo online.
+
 O PDF é um resumo analítico, não uma fatura, recibo, documento fiscal ou
 relatório oficial da XPENG.
 
@@ -156,9 +186,10 @@ dados; não diagnosticam o veículo.
 
 ### Dados
 
-Permite adicionar ZIPs, substituir a sessão por um histórico, exportar a sessão
-atual, consultar os ficheiros importados ou limpar a sessão. Inclui também os
-controlos opcionais de histórico local persistente.
+Permite adicionar ZIPs XPENG e percursos GPX, rever ou corrigir associações GPS,
+substituir a sessão por um histórico, exportar a sessão atual, consultar os
+ficheiros importados ou limpar a sessão. Inclui também os controlos opcionais
+de histórico local persistente.
 
 ## 6. Filtros e apresentação
 
@@ -185,6 +216,7 @@ O ficheiro:
 - permanece no teu computador, exceto se o moveres ou enviares;
 - permite adicionar novos ZIPs depois de ser restaurado;
 - inclui checksums para detetar corrupção;
+- preserva os percursos GPS opcionais e as associações manuais;
 - está comprimido, mas **não está encriptado**.
 
 Trata-o com o mesmo cuidado que a exportação original da XPENG.

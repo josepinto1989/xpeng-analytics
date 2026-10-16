@@ -12,26 +12,37 @@ JavaScript Web Worker and has four stages:
 4. derive trips, journeys, charging sessions, battery, driving, activity, and
    data-quality metrics.
 
-Only the signals needed for public analytics are retained. VINs and route
-coordinates are not part of the in-memory state or presentation snapshot. An
-exact SHA-256 archive hash makes repeat imports idempotent.
+Only the signals needed for public analytics are retained. VINs are not part
+of the in-memory state or presentation snapshot. Optional GPX imports add a
+separate typed route store containing timestamps and coordinates after the
+user explicitly selects those files. Exact SHA-256 source hashes make repeat
+ZIP and GPX imports idempotent.
 
 The worker returns a versioned `xpeng-analytics-dashboard/v2` snapshot to React.
 Date filters, record selection, unit conversion, synchronized chart cursors,
-long-term trends, driving-context estimates, and PDF generation operate on
-this snapshot and require no server or network request. The interface exposes
+long-term trends, driving-context estimates, local GPS route traces, and PDF
+generation operate on this snapshot and require no application server. The
+optional OpenStreetMap background is requested only after an explicit click.
+The interface exposes
 overview, journeys, driving, charging, battery, tyres, activity, trends,
 report, quality, and data-management views.
 
 Driving context is derived in short telemetry blocks during the same pass that
 builds trips. The classifier considers sustained speed bands, stops,
 longitudinal dynamics, and braking, then emits urban-, road-, or
-motorway-style estimates with a confidence score. It does not use GPS or claim
-to identify the actual road.
+motorway-style estimates with a confidence score. The current classifier does
+not use GPS or claim to identify the actual road.
+
+GPX files are parsed in the same worker. Tracks are matched to journeys using
+time overlap, start/end proximity, distance similarity, and track quality.
+When Android and iPhone recordings cover the same journey, one track is chosen
+by score and quality so duplicates do not create two journey maps. The
+presentation exposes confidence and a manual correction control. XPENG
+telemetry remains the source for all vehicle metrics.
 
 The previous Python/WebAssembly and SQLite processor remains available as a
 compatibility reader for version 1 and 2 histories. It is not loaded for a new
-XPENG ZIP or a version 3 history.
+XPENG ZIP or a native version 3 or 4 history.
 
 ## Memory and browser boundary
 
@@ -63,19 +74,22 @@ telemetry is not written to `localStorage`.
 
 ## Portable history
 
-New exports use `xpeng-analytics-columnar-history` version 3 with the `.xpeng`
+New exports use `xpeng-analytics-columnar-history` version 4 with the `.xpeng`
 extension. The file contains a small JSON manifest followed by individually
 gzip-compressed timeline and signal columns. Each block has its own SHA-256
 checksum, original size, and byte range. Restoring a history reads each block
 directly from its Blob range and validates the
 format, version, bounds, checksum, decompressed size, and required streams
-before rebuilding all derived analytics.
+before rebuilding all derived analytics. Version 4 adds individually
+compressed GPS time, latitude, longitude, elevation, speed, and segment blocks,
+plus GPX import provenance and manual matching metadata. These blocks are
+omitted when no GPS data was imported.
 
 Per-column compression avoids Base64 and SQLite overhead and lets the file stay
 close to the size of the original XPENG ZIP. Histories remain unencrypted and
 must be treated as sensitive personal files. Version 1 JSON.GZ and version 2
 SQLite/XZ histories remain importable through the compatibility processor; new
-exports always use version 3.
+exports always use version 4. The native reader accepts version 3 and 4.
 
 ## Attribution
 
@@ -90,5 +104,10 @@ public acknowledgement and MIT licence notice are preserved in
 - hosted databases and object storage;
 - account authentication or automatic vehicle acquisition;
 - third-party telemetry sources;
-- raw vehicle identifiers, route coordinates, or real vehicle fixtures;
+- raw vehicle identifiers or real vehicle fixtures;
 - browser persistence without explicit consent or a visible delete action.
+
+Optional GPX routes are an explicit exception to the general exclusion of
+third-party data. They remain local, are stored unencrypted in `.xpeng`, and
+are never committed as test fixtures. Standard OpenStreetMap tiles are not
+prefetched, bulk-downloaded, or packaged for offline use.

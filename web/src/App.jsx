@@ -41,6 +41,8 @@ const phaseKeys = {
   native_merge: "phaseNativeMerge",
   native_analytics: "phaseNativeAnalytics",
   native_snapshot: "phaseNativeSnapshot",
+  gps_parse: "phaseGpsParse",
+  gps_match: "phaseGpsMatch",
 };
 
 const errorKeys = {
@@ -56,6 +58,8 @@ const errorKeys = {
   cancelled: "errorCancelled",
   invalid_selection: "errorInvalidSelection",
   multiple_histories: "errorMultipleHistories",
+  invalid_gpx: "errorInvalidGpx",
+  gps_trim_too_large: "errorGpsTrimTooLarge",
 };
 
 function formatNumber(value, locale, options = {}) {
@@ -94,10 +98,10 @@ function processingProfile() {
   return { mode: mobile ? "mobile" : "desktop", memoryBudgetBytes };
 }
 
-const nativeHistoryMagic = [88, 80, 69, 78, 71, 65, 0, 3];
+const nativeHistoryPrefix = [88, 80, 69, 78, 71, 65, 0];
 const isNativeHistory = (buffer) => {
-  const bytes = new Uint8Array(buffer, 0, Math.min(buffer.byteLength, nativeHistoryMagic.length));
-  return bytes.length === nativeHistoryMagic.length && nativeHistoryMagic.every((value, index) => bytes[index] === value);
+  const bytes = new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 8));
+  return bytes.length === 8 && nativeHistoryPrefix.every((value, index) => bytes[index] === value) && [3, 4].includes(bytes[7]);
 };
 
 export default function App() {
@@ -133,6 +137,7 @@ export default function App() {
   const pendingMessageRef = useRef(null);
   const queueRef = useRef([]);
   const historyFollowupQueueRef = useRef([]);
+  const gpsQueueRef = useRef([]);
   const activeFileRef = useRef(null);
   const cancelRequestedRef = useRef(false);
   const dragDepthRef = useRef(0);
@@ -239,6 +244,24 @@ export default function App() {
           setBusy(false);
           setProgress({ percent: 100, phase: "complete" });
         }
+      } else if (message.type === "gps_imported") {
+        snapshotRef.current = message.snapshot;
+        setSnapshot(message.snapshot);
+        setHistory((current) => [{
+          name: activeFileRef.current?.name ?? "—",
+          status: message.result.skipped ? "gpsAlreadyImported" : "gpsAdded",
+          rows: message.result.pointCount ?? 0,
+        }, ...current]);
+        requestAnimationFrame(() => setTimeout(processGpsNext, 0));
+      } else if (message.type === "gps_assignment_updated") {
+        snapshotRef.current = message.snapshot;
+        setSnapshot(message.snapshot);
+        activeFileRef.current = null;
+        if (persistenceEnabledRef.current) queuePersistentSave();
+        else {
+          setBusy(false);
+          setProgress({ percent: 100, phase: "complete" });
+        }
       } else if (message.type === "history_exported") {
         const blob = new Blob([message.payload], { type: "application/octet-stream" });
         const purpose = message.purpose || exportPurposeRef.current || "download";
@@ -289,6 +312,7 @@ export default function App() {
         setBusy(false);
         setProgress({ percent: 100, phase: "history_export_complete" });
       } else if (message.type === "reset_complete") {
+        gpsQueueRef.current = [];
         snapshotRef.current = null;
         setSnapshot(null);
         setHistory([]);
@@ -298,6 +322,7 @@ export default function App() {
         if (message.code === "cancelled") {
           queueRef.current = [];
           historyFollowupQueueRef.current = [];
+          gpsQueueRef.current = [];
           activeFileRef.current = null;
           setError(null);
           setBusy(false);
@@ -312,6 +337,7 @@ export default function App() {
         }
         queueRef.current = [];
         historyFollowupQueueRef.current = [];
+        gpsQueueRef.current = [];
         activeFileRef.current = null;
         setBusy(false);
       }
@@ -390,12 +416,47 @@ export default function App() {
     });
   };
 
+  const processGpsNext = () => {
+    const next = gpsQueueRef.current.shift();
+    if (!next) {
+      activeFileRef.current = null;
+      if (persistenceEnabledRef.current && snapshotRef.current) queuePersistentSave();
+      else {
+        setBusy(false);
+        setProgress({ percent: 100, phase: "complete" });
+      }
+      return;
+    }
+    activeFileRef.current = next.file;
+    cancelRequestedRef.current = false;
+    setBusy(true);
+    setError(null);
+    setProgress({ percent: 4, phase: "gps_parse", detail: next.file.name });
+    workerRef.current.postMessage({ type: "import_gps", filename: next.file.name, file: next.file, options: next.options || {} });
+  };
+
   const chooseFiles = (files) => {
     const selected = [...files].filter((file) => file.name.toLowerCase().endsWith(".zip"));
     if (!selected.length || busy || !engineReady) return;
     queueRef.current = selected;
     processNext();
     if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const chooseGpsFiles = (files, options = {}) => {
+    const selected = [...(files || [])].filter((file) => /\.(gpx|zip)$/i.test(file.name));
+    if (!selected.length || busy || !engineReady || workerModeRef.current !== "native") return;
+    gpsQueueRef.current = selected.map((file) => ({ file, options }));
+    processGpsNext();
+  };
+
+  const assignGpsTrack = (trackId, journeyId) => {
+    if (!trackId || busy || !engineReady || workerModeRef.current !== "native") return;
+    cancelRequestedRef.current = false;
+    setBusy(true);
+    setError(null);
+    setProgress({ percent: 45, phase: "gps_match" });
+    workerRef.current.postMessage({ type: "set_gps_assignment", trackId, journeyId: journeyId || null });
   };
 
   const importHistoryFile = (selected, followupArchives = [], options = {}) => {
@@ -407,7 +468,7 @@ export default function App() {
     setBusy(true);
     setError(null);
     setProgress({ percent: 5, phase: "history_read" });
-    selected.slice(0, nativeHistoryMagic.length).arrayBuffer().then(async (header) => {
+    selected.slice(0, nativeHistoryPrefix.length + 1).arrayBuffer().then(async (header) => {
       if (cancelRequestedRef.current) {
         activeFileRef.current = null;
         setBusy(false);
@@ -571,6 +632,7 @@ export default function App() {
     cancelRequestedRef.current = true;
     queueRef.current = [];
     historyFollowupQueueRef.current = [];
+    gpsQueueRef.current = [];
     workerRef.current.postMessage({ type: "cancel" });
   };
 
@@ -594,6 +656,8 @@ export default function App() {
       error={error}
       onChoose={chooseFiles}
       onChooseHistory={chooseHistory}
+      onChooseGps={chooseGpsFiles}
+      onAssignGpsTrack={assignGpsTrack}
       onExport={exportHistory}
       onReset={reset}
       onCancel={cancelProcessing}

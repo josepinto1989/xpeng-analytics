@@ -27,3 +27,19 @@ the MIT License:
 > LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
+
+## Leaflet
+
+Journey maps use [Leaflet](https://leafletjs.com/) 1.9.4, distributed under
+the BSD 2-Clause License. Copyright (c) 2010-2023, Vladimir Agafonkin;
+Copyright (c) 2010-2011, CloudMade. The dependency's complete licence text is
+included in the installed package and its upstream repository.
+
+## OpenStreetMap
+
+The optional online basemap uses tiles from
+[OpenStreetMap](https://www.openstreetmap.org/). Map data is copyright
+OpenStreetMap contributors and made available under the Open Data Commons Open
+Database License. The application displays the required attribution whenever
+the basemap is enabled and does not bulk-download or package the standard tile
+service.

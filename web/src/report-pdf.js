@@ -68,7 +68,7 @@ function wrapText(text, font, size, maxWidth) {
   return lines;
 }
 
-export async function downloadReportPdf({ data, locale, t, startDate, endDate, energyPrice, reference, units = { system: "metric", pressure: "bar" } }) {
+export async function downloadReportPdf({ data, locale, t, startDate, endDate, energyPrice, reference, includeMaps = false, units = { system: "metric", pressure: "bar" } }) {
   const first = startDate && endDate && startDate > endDate ? endDate : startDate;
   const last = startDate && endDate && startDate > endDate ? startDate : endDate;
   const inside = (row) => {
@@ -274,6 +274,46 @@ export async function downloadReportPdf({ data, locale, t, startDate, endDate, e
     ]),
     [73, 55, 82, 94, 88, 119],
   );
+
+  if (includeMaps) {
+    const mappedJourneys = journeys.filter((journey) => safe(journey.gps?.segments).some((segment) => safe(segment).length > 1));
+    for (let journeyIndex = 0; journeyIndex < mappedJourneys.length; journeyIndex++) {
+      const journey = mappedJourneys[journeyIndex];
+      if (journeyIndex % 2 === 0) {
+        addPage();
+        page.drawText(clean(t("reportRouteMaps")), { x: MARGIN, y, size: 16, font: bold, color: COLORS.ink });
+        y -= 18;
+        drawWrapped(t("reportRouteMapsDisclaimer"), { size: 8, lineHeight: 11 });
+        y -= 10;
+      }
+      ensureSpace(300);
+      const box = { x: MARGIN, y: y - 226, width: CONTENT_WIDTH, height: 226 };
+      page.drawRectangle({ ...box, color: COLORS.panel, borderColor: COLORS.line, borderWidth: .7 });
+      const heading = `${formatDate(journey.startedAtUtc, locale)} - ${formatNumber(distanceValue(journey.distanceKm, units.system), locale)} ${distanceLabel}`;
+      page.drawText(fitText(heading, bold, 10.5, CONTENT_WIDTH - 24), { x: box.x + 12, y: box.y + box.height - 20, size: 10.5, font: bold, color: COLORS.ink });
+      page.drawText(fitText(`${t("gpsSource")}: ${journey.gps.sourceName}`, regular, 7.5, CONTENT_WIDTH - 24), { x: box.x + 12, y: box.y + box.height - 34, size: 7.5, font: regular, color: COLORS.muted });
+      const sourceSegments = safe(journey.gps.segments).map((segment) => safe(segment).filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon))).filter((segment) => segment.length > 1);
+      const allPoints = sourceSegments.flat();
+      const minLat = Math.min(...allPoints.map((point) => point.lat)), maxLat = Math.max(...allPoints.map((point) => point.lat));
+      const minLon = Math.min(...allPoints.map((point) => point.lon)), maxLon = Math.max(...allPoints.map((point) => point.lon));
+      const drawBox = { x: box.x + 14, y: box.y + 16, width: box.width - 28, height: box.height - 62 };
+      const lonSpan = Math.max(1e-7, maxLon - minLon), latSpan = Math.max(1e-7, maxLat - minLat);
+      const scale = Math.min(drawBox.width / lonSpan, drawBox.height / latSpan);
+      const routeWidth = lonSpan * scale, routeHeight = latSpan * scale;
+      const originX = drawBox.x + (drawBox.width - routeWidth) / 2, originY = drawBox.y + (drawBox.height - routeHeight) / 2;
+      const project = (point) => ({ x: originX + (point.lon - minLon) * scale, y: originY + (point.lat - minLat) * scale });
+      for (const segment of sourceSegments) {
+        const step = Math.max(1, Math.ceil(segment.length / 500));
+        const sampled = segment.filter((_, index) => index % step === 0);
+        if (sampled.at(-1) !== segment.at(-1)) sampled.push(segment.at(-1));
+        for (let index = 1; index < sampled.length; index++) page.drawLine({ start: project(sampled[index - 1]), end: project(sampled[index]), thickness: 1.5, color: COLORS.mint });
+      }
+      const firstPoint = project(allPoints[0]), lastPoint = project(allPoints.at(-1));
+      page.drawCircle({ ...firstPoint, size: 3.2, color: COLORS.mint });
+      page.drawCircle({ ...lastPoint, size: 3.2, color: rgb(.89,.48,.40) });
+      y = box.y - 18;
+    }
+  }
 
   const pages = pdf.getPages();
   pages.forEach((current, index) => {

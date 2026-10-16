@@ -26,17 +26,24 @@ patterns, charging behaviour, and other personal information. Users should
 store exported histories as sensitive files and should not attach them to bug
 reports or commit them to Git.
 
-Version 3 portable histories contain normalised telemetry, model information
+Version 4 portable histories contain normalised telemetry, model information
 when available, and import provenance such as source filenames and archive
-hashes. They do not contain the original VIN and are not encrypted; possession
-of the file grants access to its processed data. The `.xpeng` extension and
-compression reduce size but do not provide encryption or access control.
+hashes. If the user imports GPX data, the same history also contains precise
+timestamps and route coordinates. Histories do not contain the original VIN
+and are not encrypted; possession of the file grants access to its processed
+data. The `.xpeng` extension and compression reduce size but do not provide
+encryption or access control.
 
-The application must never add telemetry, advertising, remote fonts, remote
-map tiles, crash uploads, or analytics without a separate public design review
-and an explicit user-facing consent decision.
+The application must never add telemetry, advertising, remote fonts, crash
+uploads, or analytics without a separate public design review and an explicit
+user-facing consent decision. OpenStreetMap background tiles are the only
+current optional remote map resource and are disabled until the user clicks
+**Load OpenStreetMap**. The tile provider then receives the ordinary web
+requests needed for the viewed area, including standard connection metadata.
+The GPX file is not uploaded. The local route trace, matching, storage, and PDF
+composition do not require map tiles.
 
-The optional 30-day import reminder is also stored locally. It only compares
+The optional 7-, 15-, 25-, or 30-day import reminder is also stored locally. It only compares
 the latest import time when the application is opened; it does not sign in to
 XPENG, scrape the data portal, send notifications from a server, or download
 vehicle data automatically.

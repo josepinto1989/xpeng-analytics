@@ -2,6 +2,20 @@
 
 All notable public changes are documented here.
 
+## 1.8.0-beta.1 — 2026-10-16
+
+- Added local GPX and GPX-in-ZIP import for optional journey routes.
+- Added automatic time/distance/quality matching, confidence, duplicate-track
+  selection, and manual correction.
+- Added optional 100, 250, or 500 metre trimming at both route ends.
+- Added local journey traces and an explicit opt-in OpenStreetMap background
+  with attribution and privacy messaging.
+- Added optional local GPS route diagrams to PDF reports.
+- Added `.xpeng` version 4 with compressed, checksummed GPS blocks and manual
+  matching metadata while retaining version 3 import compatibility.
+- Added real-file browser validation and automated GPX/history regression
+  tests.
+
 ## 1.7.0-beta.1 — 2026-10-16
 
 - Added a dedicated Trends page with monthly distance, consumption, indicated

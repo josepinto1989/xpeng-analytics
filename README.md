@@ -73,6 +73,11 @@ explicit and keep the data on your device.
   selector.
 - Optional persistent local history that reopens on the same browser and can
   show an on-device reminder when it is time to add a newer XPENG export.
+- Optional GPX route import from Android or iPhone, automatic journey matching
+  with confidence, manual correction, and a journey map. OpenStreetMap tiles
+  are loaded only after an explicit click.
+- Optional local route traces in PDF reports. GPS tracks are preserved in the
+  portable `.xpeng` history so one file can restore the full session.
 
 The interface is available in European Portuguese and English, with light and
 dark themes.
@@ -86,6 +91,9 @@ dark themes.
    the ZIP exports are then merged into the same local session.
 4. Explore the dashboard, add more exports, create a PDF report, export a
    compact `.xpeng` backup, or explicitly remember the history in this browser.
+5. Optionally open **Data** and add GPX files recorded during the same journeys.
+   XPENG Analytics matches them by time and distance and lets you correct the
+   result manually.
 
 For detailed instructions, filters, reports, portable histories, units, and
 troubleshooting, read the **[English user guide](docs/USER_GUIDE.md)** or the
@@ -108,6 +116,10 @@ verified.
   exports, histories, identifiers, or location data.
 - Portable histories are not encrypted. Treat them like the original XPENG
   export and store them somewhere you trust.
+- GPX import is optional. When used, precise route coordinates become part of
+  the unencrypted `.xpeng` history. Loading the optional OpenStreetMap
+  background sends ordinary tile requests for the viewed area to the tile
+  provider; the GPX file itself is not uploaded.
 
 Battery capacity, SOH, range, charging losses, and costs are calculated
 estimates derived from the available telemetry. They are not official BMS
@@ -125,7 +137,8 @@ Read the full [privacy notes](PRIVACY.md), [security guidance](SECURITY.md), and
 | [Privacy](PRIVACY.md) | What stays local and how to handle sensitive files |
 | [Security](SECURITY.md) | Safe reporting and importer security boundaries |
 | [Architecture](docs/ARCHITECTURE.md) | Browser engine, data flow, and portable-history design |
-| [`.xpeng` v3 format](docs/XPENG_HISTORY_V3_SPEC.md) | Technical format specification for developers |
+| [`.xpeng` v4 format](docs/XPENG_HISTORY_V4_SPEC.md) | Technical format specification for telemetry and optional GPS tracks |
+| [v1.8.0 beta notes](docs/RELEASE_NOTES_1.8.0-beta.1.md) | Private-staging notes for GPX matching and journey maps |
 | [v1.7.0 beta notes](docs/RELEASE_NOTES_1.7.0-beta.1.md) | Private-staging notes for long-term trends and driving context |
 | [v1.6.0 beta notes](docs/RELEASE_NOTES_1.6.0-beta.2.md) | Private-staging notes for persistent local history testing |
 | [v1.5.1 release notes](docs/RELEASE_NOTES_1.5.1.md) | Detailed summary of the current release |
@@ -148,7 +161,8 @@ pnpm dev
 The normal import path is a dedicated JavaScript Web Worker that streams the
 ZIP, keeps the required signals in typed columns, and computes the dashboard in
 memory. The earlier Python/WebAssembly processor remains bundled only so that
-existing version 1 and 2 history files can still be opened.
+existing version 1 and 2 history files can still be opened. The native reader
+also accepts version 3 histories; new exports use version 4.
 
 ## Open-source acknowledgement
 

@@ -35,3 +35,27 @@ hands-on validation before a change is promoted to the public project.
 10. Repeat the key restore and delete checks in Firefox, Chrome, and Edge. Test
    at least one mobile browser separately because mobile storage may be evicted
    more aggressively.
+
+## Phase 10 beta checklist
+
+1. Import the supplied XPENG ZIP and confirm the existing journey totals before
+   adding location data.
+2. Open **Data**, select one GPX file or a ZIP containing several GPX files,
+   and confirm the matched and unmatched route counts.
+3. Check that two recordings of the same drive produce one automatic journey
+   map and that the higher-quality recording is selected.
+4. Open the matched journey and confirm that the local route trace appears
+   without making a map-tile request.
+5. Select **Load OpenStreetMap**, confirm the background and attribution, then
+   hide it again.
+6. In **Data**, manually assign the other recording to the journey and confirm
+   that the displayed route changes. Select **Automatic match** to restore the
+   automatic choice.
+7. Start from a fresh session and repeat the GPX import with 100, 250, or 500
+   metres of end trimming; confirm the choice is visible on the route.
+8. Generate a PDF first without and then with **Include GPS routes**. Only the
+   second report should contain route pages.
+9. Export a `.xpeng` history, reset the app, restore that file, and confirm the
+   GPX tracks, assignments, route traces, and privacy warning are retained.
+10. Repeat the core import, map, and history-restore checks in Firefox, Chrome,
+    and Edge. No real XPENG or GPX file may be committed to staging.

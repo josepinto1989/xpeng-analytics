@@ -132,6 +132,13 @@ optional, but once accepted by the user the matched tracks become part of the
 portable `.xpeng` history so the complete archive can be restored from one
 file.
 
+The first private-staging implementation is available as `1.8.0-beta.1`. It
+supports GPX and GPX-in-ZIP import, BasicAirData and Open GPX Tracker files,
+automatic and manual journey matching, optional route-end trimming, local
+journey traces, an explicitly enabled OpenStreetMap background, PDF route
+traces, and `.xpeng` v4 persistence. CSV GPS import and a separately licensed
+offline basemap remain research items for later Phase 10 iterations.
+
 - Start with open interchange formats such as GPX and CSV rather than locking
   the project to one GPS logger application.
 - Use [BasicAirData GPS Logger for Android](https://play.google.com/store/apps/details?id=eu.basicairdata.graziano.gpslogger)

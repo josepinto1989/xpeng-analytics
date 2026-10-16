@@ -1,4 +1,4 @@
-import { buildSnapshot, emptyState, exportHistory, importArchive, importHistory } from "./native-engine.js";
+import { buildSnapshot, emptyState, exportHistory, importArchive, importGps, importHistory, setGpsAssignment } from "./native-engine.js";
 
 let state = emptyState();
 let queue = Promise.resolve();
@@ -21,7 +21,7 @@ const guardedProgress = (percent, phase, detail = "") => {
 
 function errorCode(error) {
   const message = String(error?.message ?? error);
-  if (["invalid_archive", "missing_families", "invalid_data", "out_of_memory", "history_version", "history_integrity", "engine_error", "cancelled"].includes(message)) return message;
+  if (["invalid_archive", "missing_families", "invalid_data", "invalid_gpx", "gps_trim_too_large", "out_of_memory", "history_version", "history_integrity", "engine_error", "cancelled"].includes(message)) return message;
   if (message.includes("memory") || message.includes("allocation")) return "out_of_memory";
   return "unknown_error";
 }
@@ -68,7 +68,7 @@ async function handle(message) {
     const payload = await exportHistory(state, guardedProgress);
     const date = new Date().toISOString().slice(0, 10);
     progress(100, "history_export_complete", "Done");
-    self.postMessage({ type: "history_exported", purpose: message.purpose || "download", filename: `xpeng-analytics-history-${date}.xpeng`, metadata: { format: state.format, version: 3 }, payload }, [payload]);
+    self.postMessage({ type: "history_exported", purpose: message.purpose || "download", filename: `xpeng-analytics-history-${date}.xpeng`, metadata: { format: state.format, version: state.version }, payload }, [payload]);
     return;
   }
   if (message?.type === "import_history") {
@@ -77,7 +77,28 @@ async function handle(message) {
     const snapshot = buildSnapshot(restored, guardedProgress);
     state = restored;
     progress(100, "complete", "Done");
-    self.postMessage({ type: "history_imported", engine: "native", metadata: { format: state.format, version: 3 }, snapshot });
+    self.postMessage({ type: "history_imported", engine: "native", metadata: { format: state.format, version: state.version }, snapshot });
+    return;
+  }
+  if (message?.type === "import_gps") {
+    cancelRequested = false;
+    progress(4, "gps_parse", message.filename || "GPX");
+    const result = await importGps(state, message.file ?? message.archive, message.filename, message.options || {}, guardedProgress);
+    state = result.state;
+    progress(72, "gps_match", "Matching journeys");
+    const snapshot = buildSnapshot(state, guardedProgress);
+    progress(100, "complete", "Done");
+    self.postMessage({ type: "gps_imported", result: { skipped: result.skipped, trackCount: result.trackCount, pointCount: result.pointCount }, snapshot });
+    return;
+  }
+  if (message?.type === "set_gps_assignment") {
+    cancelRequested = false;
+    lastProgressAt = 0;
+    lastProgressPercent = -1;
+    lastProgressPhase = "";
+    state = setGpsAssignment(state, message.trackId, message.journeyId || null);
+    const snapshot = buildSnapshot(state, guardedProgress);
+    self.postMessage({ type: "gps_assignment_updated", snapshot });
   }
 }
 

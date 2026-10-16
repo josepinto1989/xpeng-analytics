@@ -56,6 +56,24 @@ the ZIP files are then added to that local session.
 Only one history can be selected at a time. Histories are not encrypted, so
 only open files you trust.
 
+### Adding optional GPS routes
+
+After the XPENG dashboard opens, go to **Data** and choose **Add GPX or ZIP**.
+You may select several `.gpx` files or one ZIP containing GPX files. GPX 1.1
+exports from BasicAirData GPS Logger on Android and Open GPX Tracker on iPhone
+are the first tested references; compatible GPX files from other applications
+should also work when they contain timestamps and coordinates.
+
+Before importing, you can optionally remove the first and last 100, 250, or
+500 metres of every route. No trimming is applied by default. The app matches
+tracks to journeys using time, distance, and recording quality. The Data page
+shows matched and unmatched totals and lets you choose a journey manually when
+the automatic result is ambiguous. If two phones recorded the same journey,
+the more complete track is normally selected.
+
+GPS processing stays on the device. Coordinates are sensitive and become part
+of the unencrypted `.xpeng` history. Protect that file accordingly.
+
 ## 4. During processing
 
 The progress bar shows the current phase and file. Keep the browser tab open
@@ -82,6 +100,11 @@ pedal inputs, motor behaviour, and tyre signals when present in the export.
 Hovering a journey chart synchronises the same elapsed time across the other
 journey charts. This makes it possible to compare speed, power, SOC, force, and
 temperature at one moment.
+
+When a GPX route is matched, the journey also shows a local route trace. The
+OpenStreetMap background is off by default. Clicking **Load OpenStreetMap**
+sends normal tile requests for the viewed area to the tile provider, but does
+not upload the GPX file. The map retains visible OpenStreetMap attribution.
 
 ### Driving
 
@@ -140,6 +163,10 @@ You may enter:
 - an average electricity price to calculate estimated charging costs; and
 - a reference such as a driver, company, or cost centre.
 
+If journeys in the selected period have matched GPX data, you may also include
+their route traces in the PDF. These diagrams are composed locally and do not
+download an online basemap.
+
 The PDF is an analytical summary, not an invoice, receipt, tax document, or
 official XPENG report.
 
@@ -151,9 +178,10 @@ they do not diagnose the vehicle.
 
 ### Data
 
-Adds more XPENG ZIPs, replaces the session from a portable history, exports the
-current session, displays imported-file history, or clears the session. It also
-contains the optional persistent-history controls.
+Adds more XPENG ZIPs and GPX routes, reviews or corrects GPS matches, replaces
+the session from a portable history, exports the current session, displays
+imported-file history, or clears the session. It also contains the optional
+persistent-history controls.
 
 ## 6. Filters and display settings
 
@@ -179,6 +207,7 @@ The file:
 - remains on your computer unless you move or upload it;
 - supports adding future XPENG ZIP exports after restoration;
 - contains checksums for corruption detection;
+- preserves optional GPS routes and manual journey matches;
 - is compressed but **not encrypted**.
 
 Treat it with the same care as the original XPENG export.
