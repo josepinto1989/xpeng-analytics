@@ -15,6 +15,9 @@ for (const locale of requiredLocales) {
   for (const key of keys) {
     if (!String(translations[locale][key]).trim()) throw new Error(`Empty translation: ${locale}.${key}`);
   }
+  if (translations[locale].driveBackupMissing === translations[locale].driveNoBackup) {
+    throw new Error(`${locale} must distinguish an empty backup state from a missing-backup error`);
+  }
 }
 
 console.log(`Translation parity passed (${requiredLocales.join(", ")}; ${referenceKeys.length} keys).`);

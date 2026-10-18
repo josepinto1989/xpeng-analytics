@@ -100,6 +100,9 @@ Lists journeys from newest to oldest. Select one to inspect its segments,
 consumption, speed, power, SOC, displayed range, temperature, driving forces,
 pedal inputs, motor behaviour, and tyre signals when present in the export.
 
+The selected journey uses stacked full-width charts. Its journey list remains
+available while the detail area is open, making it quicker to compare records.
+
 Hovering a journey chart synchronises the same elapsed time across the other
 journey charts. This makes it possible to compare speed, power, SOC, force, and
 temperature at one moment.
@@ -122,6 +125,9 @@ safety assessment.
 Shows battery and grid energy, efficiency, duration, power, estimated losses,
 charging habits, and separate AC/DC totals. Select a session to inspect its
 technical telemetry.
+
+Charging telemetry also uses stacked full-width charts while the session list
+remains available for quick comparison between charges.
 
 The four technical charging charts share one time cursor. Hover any chart to
 see power, peak power, SOC, voltage, current, and battery temperature for the
@@ -281,6 +287,26 @@ Use **Delete saved history** to erase the stored copy. Because browsers and
 operating systems may clear local storage, keep an exported `.xpeng` file as a
 portable backup.
 
+### Optional Google Drive backup
+
+Open **Data → Google Drive backup** and choose **Connect Google Drive**. The
+Google window handles account selection; XPENG Analytics never asks for or sees
+your password. Choose **Save to Drive** to create one
+`xpeng-analytics-history.xpeng` file in a visible **XPENG Analytics** folder in
+your Drive. Later, **Open from Drive** can restore that history, including on a
+different computer.
+
+You can enable **Update automatically while connected**. Successful XPENG/GPX
+imports and saved My Charts then update the backup during that browser session.
+Google may require a new authorisation after the tab closes or the token
+expires. Disconnecting ends the current connection but does not delete the
+file from Drive.
+
+Drive backup is optional. Processing still happens locally, but the resulting
+`.xpeng` file is uploaded to and stored by Google when you enable it. The file
+is compressed, not encrypted, and can contain timestamped telemetry and GPS
+coordinates. Protect it like the original XPENG export.
+
 ## 8. Troubleshooting
 
 ### Import appears slow
@@ -311,6 +337,13 @@ fixed Lisbon timezone is applied.
 Without persistent local history this is the expected privacy model. Import the
 original ZIPs again, restore a saved `.xpeng` history, or enable **Remember this
 history on this device** from the Data page for future visits.
+
+### Google Drive asks me to connect again
+
+This is expected. The static app keeps the short-lived Google access token only
+in the current tab's memory. Connect again, then save or open the backup. If the
+button is unavailable in a local build, the developer must configure the public
+Google OAuth client ID described in `GOOGLE_DRIVE_SETUP.md`.
 
 ## 9. Privacy, support, and feedback
 

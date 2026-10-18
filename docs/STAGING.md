@@ -17,7 +17,7 @@ hands-on validation before a change is promoted to the public project.
 - Promote the same reviewed commit or an explicitly reviewed follow-up commit;
   do not reimplement the feature separately in the public repository.
 
-## v2.0.0 final candidate checklist
+## v2.1.0 final candidate checklist
 
 1. Open the candidate with no stored state and confirm the landing guide can be
    completed, skipped, and restarted.
@@ -27,20 +27,23 @@ hands-on validation before a change is promoted to the public project.
 3. Confirm Overview, Journeys, Driving, Charging, Battery, Tyres, Activity,
    Trends, Report, My Charts, Replay, Quality, and Data open through the grouped
    navigation and mobile selector.
-4. Open Settings and confirm language, theme, Metric/Imperial, bar/psi, and
+4. Confirm the landing page exposes file import, remembered history, and Google
+   Drive restore without an unused empty-dashboard panel. Open About and Privacy
+   from the footer and verify both pages return to the application.
+5. Open Settings and confirm language, theme, Metric/Imperial, bar/psi, and
    guide controls persist as expected.
-5. Create and save a personal chart, export `.xpeng`, reset, restore the file,
+6. Create and save a personal chart, export `.xpeng`, reset, restore the file,
    and confirm the chart definition and optional matched GPS routes return.
-6. Replay a journey with and without GPS. Confirm play/pause/seeking,
+7. Replay a journey with and without GPS. Confirm play/pause/seeking,
    1x/2x/3x/5x/10x, analytical chart cursors, map position, brake indication,
    steering, and available door, window, and boot states.
-7. Enable remembered history, refresh, add a later export, verify deduplication,
+8. Enable remembered history, refresh, add a later export, verify deduplication,
    then permanently delete the stored history.
-8. Generate a PDF with the selected unit system, estimated costs, authorship,
+9. Generate a PDF with the selected unit system, estimated costs, authorship,
    application URL, and optional route diagrams.
-9. Repeat the main navigation, Settings, import, journey, replay, and report
+10. Repeat the main navigation, Settings, import, journey, replay, and report
    smoke tests in current Firefox, Chrome, and Edge. Check one mobile browser.
-10. Confirm the displayed version is `2.0.0` and that no real ZIP, `.xpeng`, GPX,
+11. Confirm the displayed version is `2.1.0` and that no real ZIP, `.xpeng`, GPX,
     VIN, credential, generated report, or private screenshot is tracked.
 
 ## Phase 8 beta checklist
@@ -84,5 +87,8 @@ hands-on validation before a change is promoted to the public project.
    second report should contain route pages.
 9. Export a `.xpeng` history, reset the app, restore that file, and confirm the
    selected route slices, duplicate provenance, traces, and privacy warning are retained.
+11. Connect an OAuth test account, save the Drive backup, add data with session
+    auto-update enabled, disconnect, and restore the same backup from a fresh
+    browser profile.
 10. Repeat the core import, map, and history-restore checks in Firefox, Chrome,
     and Edge. No real XPENG or GPX file may be committed to staging.

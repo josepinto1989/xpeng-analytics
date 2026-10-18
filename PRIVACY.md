@@ -4,7 +4,7 @@
 
 The web application processes XPENG Data Act exports in the browser.
 The project does not require an application account, an application backend,
-or remote storage for vehicle data.
+or mandatory remote storage for vehicle data.
 
 Persistent local history is disabled by default. If the user explicitly
 enables **Remember this history on this device**, the application stores one
@@ -13,6 +13,16 @@ only on the same browser profile and is never uploaded by XPENG Analytics.
 The **Data** page shows its size and dates and provides a permanent delete
 action. Browser or operating-system cleanup may also remove it, so a separately
 exported `.xpeng` file remains the recommended backup.
+
+Google Drive backup is a separate, optional action. When the user connects
+Google Drive and chooses to save or enables session auto-update, the browser
+sends the generated `.xpeng` file directly to Google's Drive API and stores it
+in a visible **XPENG Analytics** folder in that user's account. XPENG Analytics
+does not receive the file through an application server. The app requests only
+the `drive.file` scope, which is limited to files it creates or files explicitly
+opened with it. Google access tokens remain in tab memory and are not stored;
+the user may need to authorise again after closing the tab or when the token
+expires. Disconnecting does not delete the Drive copy.
 
 Static hosting still receives ordinary web requests for the application files
 and therefore may receive standard connection metadata such as an IP address
@@ -38,8 +48,8 @@ access control.
 
 The application must never add telemetry, advertising, remote fonts, crash
 uploads, or analytics without a separate public design review and an explicit
-user-facing consent decision. OpenStreetMap background tiles are the only
-current remote map resource. When the user opens a journey with an associated
+user-facing consent decision. Google Identity Services and Google Drive are
+contacted only for the optional backup feature. When the user opens a journey with an associated
 GPS route, the tile provider receives the ordinary web requests needed for the
 viewed area, including standard connection metadata. The GPX file is not
 uploaded. Route matching, storage, chart synchronisation, and PDF composition

@@ -34,8 +34,9 @@ history to somebody else's server.
 
 The ZIP file is processed in your browser and kept in the current tab's
 temporary memory. You can optionally remember one processed history in that
-browser, or export a portable `.xpeng` backup yourself. Both choices are
-explicit and keep the data on your device.
+browser, export a portable `.xpeng` backup yourself, or explicitly save that
+backup in your own Google Drive. Processing remains local; Drive is an optional
+storage destination controlled by the user.
 
 ## What you can explore
 
@@ -50,6 +51,8 @@ explicit and keep the data on your device.
 - Synchronized charging telemetry: hovering any technical charging chart shows
   power, peak power, SOC, voltage, current, and battery temperature for the
   same moment.
+- Full-width stacked journey and charging detail charts, with synchronized time
+  inspection and a record list that remains available while comparing sessions.
 - An estimated driving profile derived from accelerator, speed, and g-force
   patterns, clearly labelled as an unofficial software estimate.
 - Charging schedules and limits when a repeated pattern is visible.
@@ -73,6 +76,10 @@ explicit and keep the data on your device.
   selector.
 - Optional persistent local history that reopens on the same browser and can
   show an on-device reminder when it is time to add a newer XPENG export.
+- Optional Google Drive backup using Google's official sign-in and the limited
+  `drive.file` permission. It creates one visible XPENG Analytics folder,
+  supports restore on another computer, and can update the backup while the
+  current tab remains connected.
 - Optional GPX route import from Android or iPhone, automatic trip-level
   timestamp matching, duplicate selection, and an OpenStreetMap journey map. Moving
   across any journey chart also highlights the corresponding route position.
@@ -99,7 +106,8 @@ dark themes.
    `.xpeng` history; if selected together, the history is restored first and
    the ZIP exports are then merged into the same local session.
 4. Explore the dashboard, add more exports, create a PDF report, export a
-   compact `.xpeng` backup, or explicitly remember the history in this browser.
+   compact `.xpeng` backup, explicitly remember the history in this browser,
+   or save it to your own Google Drive.
 5. Optionally open **Data** and use the same importer to add later XPENG ZIPs,
    individual GPX files, or ZIPs containing GPX. XPENG Analytics clips
    continuous recordings to the exact trip times and chooses duplicate routes
@@ -116,7 +124,9 @@ verified.
 
 ## Private by design
 
-- There is no application server, account, tracking database, or cloud upload.
+- There is no XPENG Analytics application server, account, or tracking
+  database. Google Drive upload is optional, explicit, and goes directly from
+  the browser to the user's Google account.
 - Persistent history is disabled by default. When enabled, one unencrypted
   processed history is stored in that browser's private IndexedDB storage and
   can be deleted from the **Data** page.
@@ -126,6 +136,9 @@ verified.
   exports, histories, identifiers, or location data.
 - Portable histories are not encrypted. Treat them like the original XPENG
   export and store them somewhere you trust.
+- Google access tokens remain in memory and are not stored by the application.
+  The optional Drive backup is still an unencrypted `.xpeng` file and is
+  governed by the user's Google account and Drive settings.
 - GPX import is optional. When used, precise route coordinates become part of
   the unencrypted `.xpeng` history. Opening a mapped journey loads its
   OpenStreetMap background and sends ordinary tile requests for the viewed
@@ -144,11 +157,13 @@ Read the full [privacy notes](PRIVACY.md), [security guidance](SECURITY.md), and
 | --- | --- |
 | [User guide](docs/USER_GUIDE.md) | Complete English instructions for using the application |
 | [User guide — European Portuguese](docs/USER_GUIDE.pt-PT.md) | Complete instructions in European Portuguese |
+| [About the project](web/public/about.html) | Why XPENG Analytics exists and what it is designed to do |
 | [Privacy](PRIVACY.md) | What stays local and how to handle sensitive files |
 | [Security](SECURITY.md) | Safe reporting and importer security boundaries |
 | [Architecture](docs/ARCHITECTURE.md) | Browser engine, data flow, and portable-history design |
 | [`.xpeng` v5 format](docs/XPENG_HISTORY_V5_SPEC.md) | Technical format specification for telemetry, optional GPS tracks, and saved personal charts |
-| [v2.0.0 release notes](docs/RELEASE_NOTES_2.0.0.md) | Complete summary of the 2.0 release |
+| [v2.1.0 release notes](docs/RELEASE_NOTES_2.1.0.md) | Complete summary of the 2.1 release |
+| [Google Drive setup](docs/GOOGLE_DRIVE_SETUP.md) | OAuth configuration and release validation |
 | [v1.8.0 beta notes](docs/RELEASE_NOTES_1.8.0-beta.3.md) | Private-staging notes for automatic GPX matching and journey maps |
 | [v1.7.0 beta notes](docs/RELEASE_NOTES_1.7.0-beta.1.md) | Private-staging notes for long-term trends and driving context |
 | [v1.6.0 beta notes](docs/RELEASE_NOTES_1.6.0-beta.2.md) | Private-staging notes for persistent local history testing |

@@ -39,3 +39,11 @@ background and discloses the viewed map area through ordinary tile requests.
 The application does not upload the GPX file, prefetch routes, or bulk-download
 the standard tile service.
 
+The optional Google Drive feature uses Google Identity Services in the browser
+and requests only `drive.file`. Access tokens are held in memory, never written
+to local storage, and never included in histories or logs. The browser client
+ID is public configuration; no OAuth client secret belongs in this static
+application. A Drive backup is the same unencrypted sensitive `.xpeng` payload,
+so users must protect their Google account and should disconnect on shared
+computers. Only official Google Identity and Drive API endpoints may be used.
+

@@ -2,7 +2,23 @@
 
 All notable public changes are documented here.
 
-## 2.0.0 — 2026-10-19
+## 2.1.0 — 2026-10-18
+
+- Added optional Google Drive backup and restore using Google Identity Services
+  and the limited `drive.file` permission, with no application backend or
+  stored access token.
+- Added a visible XPENG Analytics Drive folder, resumable `.xpeng` uploads,
+  restore on another computer, explicit connect/disconnect controls, and
+  optional automatic updates while the current tab remains authorised.
+- Reworked the landing page so file import, remembered local history, and
+  Google Drive restore are immediately visible without an unused empty-state
+  dashboard panel.
+- Reorganized journey and charging details into stacked full-width charts with
+  synchronized time inspection and a sticky record list for faster comparison.
+- Added a public About page describing the project's purpose, capabilities,
+  independent status, and local-first data model.
+- Version 2.0 was kept as an internal release candidate; these changes and the
+  complete 2.0 feature set are being released together as 2.1.
 
 - Added opt-in persistent local history in IndexedDB, automatic restoration on
   the same browser profile, visible storage details, permanent deletion, and

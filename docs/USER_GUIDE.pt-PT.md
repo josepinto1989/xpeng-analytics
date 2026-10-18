@@ -105,6 +105,9 @@ consultar segmentos, consumo, velocidade, potência, SOC, autonomia indicada,
 temperatura, forças de condução, pedais, comportamento do motor e pneus, quando
 esses sinais existem na exportação.
 
+A jornada selecionada utiliza gráficos empilhados a toda a largura. A lista de
+jornadas continua disponível na área de detalhe para facilitar comparações.
+
 Ao passar o rato num gráfico, o mesmo instante é sincronizado nos restantes
 gráficos da jornada, permitindo comparar velocidade, potência, SOC, forças e
 temperatura.
@@ -127,6 +130,9 @@ nem uma avaliação de segurança.
 Mostra energia da bateria e da rede, eficiência, duração, potência, perdas
 estimadas, hábitos e totais AC/DC separados. Seleciona uma sessão para consultar
 a telemetria técnica.
+
+A telemetria de carregamento também utiliza gráficos empilhados a toda a
+largura, mantendo a lista de sessões disponível para comparação rápida.
 
 Os quatro gráficos técnicos partilham o mesmo cursor temporal. Passa o rato em
 qualquer gráfico para consultar potência, pico, SOC, tensão, corrente e
@@ -293,6 +299,26 @@ Usa **Eliminar histórico guardado** para apagar essa cópia. Como o browser ou 
 sistema operativo podem limpar o armazenamento local, mantém um ficheiro
 `.xpeng` exportado como cópia de segurança portátil.
 
+### Cópia opcional no Google Drive
+
+Abre **Dados → Cópia no Google Drive** e escolhe **Ligar ao Google Drive**. A
+janela da Google trata da escolha da conta; o XPENG Analytics nunca pede nem vê
+a tua palavra-passe. Escolhe **Guardar no Drive** para criar um único ficheiro
+`xpeng-analytics-history.xpeng` numa pasta visível **XPENG Analytics** do teu
+Drive. Mais tarde, **Abrir do Drive** restaura esse histórico, inclusive noutro
+computador.
+
+Podes ativar **Atualizar automaticamente enquanto estiver ligado**. As
+importações XPENG/GPX e os My Charts guardados passam a atualizar a cópia
+durante essa sessão do browser. A Google pode pedir nova autorização depois de
+fechares o separador ou quando o token expirar. Desligar termina a ligação atual
+mas não elimina o ficheiro do Drive.
+
+A cópia no Drive é opcional. O processamento continua a ser local, mas o
+ficheiro `.xpeng` resultante é enviado e armazenado pela Google quando ativas
+esta opção. O ficheiro está comprimido, não encriptado, e pode conter telemetria
+com timestamps e coordenadas GPS. Protege-o como a exportação XPENG original.
+
 ## 8. Resolução de problemas
 
 ### A importação parece lenta
@@ -323,6 +349,14 @@ Sem histórico local persistente, é o comportamento esperado do modelo de
 privacidade. Importa novamente os ZIPs, restaura um histórico `.xpeng` ou ativa
 **Guardar este histórico neste dispositivo** na página Dados para as visitas
 seguintes.
+
+### O Google Drive pede para ligar novamente
+
+É esperado. A aplicação estática mantém o token de acesso Google, de curta
+duração, apenas na memória do separador atual. Liga novamente e depois guarda
+ou abre a cópia. Se o botão estiver indisponível numa versão local, o developer
+tem de configurar o Client ID OAuth público descrito em
+`GOOGLE_DRIVE_SETUP.md`.
 
 ## 9. Privacidade, apoio e feedback
 

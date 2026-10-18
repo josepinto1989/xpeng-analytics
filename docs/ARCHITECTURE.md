@@ -106,6 +106,15 @@ imports update the saved history only after consolidation succeeds. Consent
 and the optional reminder preference use small local preference flags; vehicle
 telemetry is not written to `localStorage`.
 
+Google Drive backup is an optional boundary layered on the same export path.
+After an explicit Google authorisation, React asks the worker for the current
+version 5 `.xpeng` Blob and uploads it directly to the Drive API using a
+resumable session. The static app requests only `drive.file`, creates one
+visible folder and one replaceable backup, and keeps the OAuth access token in
+memory. Restore downloads the Blob and passes it through the normal validated
+history importer. No Google password, email address, refresh token, or vehicle
+payload passes through an XPENG Analytics server.
+
 ## Portable history
 
 New exports use `xpeng-analytics-columnar-history` version 5 with the `.xpeng`
@@ -138,8 +147,8 @@ public acknowledgement and MIT licence notice are preserved in
 ## Deliberate exclusions
 
 - application servers and server-side processing;
-- hosted databases and object storage;
-- account authentication or automatic vehicle acquisition;
+- mandatory hosted databases or project-controlled object storage;
+- XPENG Analytics accounts or automatic vehicle acquisition;
 - third-party telemetry sources;
 - raw vehicle identifiers or real vehicle fixtures;
 - browser persistence without explicit consent or a visible delete action.
@@ -148,3 +157,7 @@ Optional GPX routes are an explicit exception to the general exclusion of
 third-party data. They remain local, are stored unencrypted in `.xpeng`, and
 are never committed as test fixtures. Standard OpenStreetMap tiles are not
 prefetched, bulk-downloaded, or packaged for offline use.
+
+Optional Google Drive backup is the other explicit exception: after user
+consent, the `.xpeng` payload is stored in the user's own Drive account. It is
+not required for analysis and does not change the local processing model.

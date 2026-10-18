@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Area as RechartsArea, AreaChart as RechartsAreaChart, Bar as RechartsBar, BarChart, CartesianGrid, Cell, ComposedChart as RechartsComposedChart, Legend, Line as RechartsLine, LineChart as RechartsLineChart, Pie as RechartsPie, PieChart, ReferenceLine, ResponsiveContainer, Scatter as RechartsScatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from "recharts";
+import { Area as RechartsArea, AreaChart as RechartsAreaChart, Bar as RechartsBar, BarChart, CartesianGrid, Cell, ComposedChart as RechartsComposedChart, Legend, Line as RechartsLine, LineChart as RechartsLineChart, Pie as RechartsPie, PieChart, ReferenceLine, ResponsiveContainer, Scatter as RechartsScatter, ScatterChart, Tooltip, XAxis as RechartsXAxis, YAxis, ZAxis } from "recharts";
 import "leaflet/dist/leaflet.css";
 import { APP_VERSION } from "./version.js";
 import { calculateDrivingPersonality } from "./driving-personality.js";
@@ -114,6 +114,22 @@ function Bar(props) { return <RechartsBar {...props} isAnimationActive={false} /
 function Line(props) { return <RechartsLine {...props} isAnimationActive={false} />; }
 function Pie(props) { return <RechartsPie {...props} isAnimationActive={false} />; }
 function Scatter(props) { return <RechartsScatter {...props} isAnimationActive={false} />; }
+function XAxis({ dataKey, hide, tick, ...props }) {
+  const isTelemetry = dataKey === "elapsed" || dataKey === "elapsedMinutes";
+  return <RechartsXAxis
+    {...props}
+    dataKey={dataKey}
+    hide={isTelemetry ? false : hide}
+    tick={isTelemetry ? { fill: "var(--muted)", fontSize: 9 } : tick}
+    tickFormatter={isTelemetry ? (value) => `${Math.round(Number(value) || 0)}m` : props.tickFormatter}
+    type={isTelemetry ? "number" : props.type}
+    domain={isTelemetry ? ["dataMin", "dataMax"] : props.domain}
+    tickCount={isTelemetry ? 6 : props.tickCount}
+    minTickGap={isTelemetry ? 35 : props.minTickGap}
+    axisLine={isTelemetry ? false : props.axisLine}
+    tickLine={isTelemetry ? false : props.tickLine}
+  />;
+}
 function LineChart({ data, onMouseMove, onMouseLeave, ...props }) { const timeline=React.useContext(JourneyTimelineContext); return <RechartsLineChart data={data} {...telemetrySyncProps(data)} {...props} {...journeyChartHandlers(data,timeline,onMouseMove,onMouseLeave)} />; }
 function AreaChart({ data, onMouseMove, onMouseLeave, ...props }) { const timeline=React.useContext(JourneyTimelineContext); return <RechartsAreaChart data={data} {...telemetrySyncProps(data)} {...props} {...journeyChartHandlers(data,timeline,onMouseMove,onMouseLeave)} />; }
 function ComposedChart({ data, onMouseMove, onMouseLeave, ...props }) { const timeline=React.useContext(JourneyTimelineContext); return <RechartsComposedChart data={data} {...telemetrySyncProps(data)} {...props} {...journeyChartHandlers(data,timeline,onMouseMove,onMouseLeave)} />; }
@@ -121,7 +137,7 @@ function ComposedChart({ data, onMouseMove, onMouseLeave, ...props }) { const ti
 function Icon({ name }) { return <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={iconPaths[name]} /></svg>; }
 function inPeriod(date, period, maxDate, customRange) { const value = String(date || "").slice(0,10); if (!value) return false; if (period === "all") return true; if (period === "custom") { const first = customRange?.start && customRange?.end && customRange.start > customRange.end ? customRange.end : customRange?.start; const last = customRange?.start && customRange?.end && customRange.start > customRange.end ? customRange.start : customRange?.end; return (!first || value >= first) && (!last || value <= last); } const boundary = new Date(`${maxDate}T00:00:00Z`); boundary.setUTCDate(boundary.getUTCDate() - Number(period) + 1); return value >= boundary.toISOString().slice(0, 10) && value <= maxDate; }
 function PeriodBar({ period, setPeriod, customRange, setCustomRange, minDate, maxDate, t }) { const update=(field)=>(event)=>{const value=event.currentTarget.value;setCustomRange((current)=>({...current,[field]:value}));}; return <div className="period-bar"><span>{t("period")}</span>{[["7",t("sevenDays")],["15",t("fifteenDays")],["30",t("thirtyDays")],["all",t("allData")],["custom",t("customPeriod")]].map(([value,label])=><button key={value} className={period===value?"is-active":""} onClick={()=>setPeriod(value)}>{label}</button>)}{period==="custom"?<div className="custom-period"><label>{t("startDate")}<input type="date" min={minDate} max={maxDate} value={customRange.start} onInput={update("start")} onChange={update("start")}/></label><span>—</span><label>{t("endDate")}<input type="date" min={minDate} max={maxDate} value={customRange.end} onInput={update("end")} onChange={update("end")}/></label></div>:null}</div>; }
-function Tip({ locale, suffix = "" }) { return <Tooltip contentStyle={{ borderRadius: 10, border: "1px solid var(--line)", background: "var(--panel)", color: "var(--ink)", fontSize: 12, boxShadow: "var(--shadow)" }} formatter={(value, name) => [`${num(value, locale, 2)}${suffix}`, name]} />; }
+function Tip({ locale, suffix = "" }) { return <Tooltip cursor={{ stroke: "var(--muted)", strokeWidth: 1, strokeDasharray: "4 4" }} contentStyle={{ borderRadius: 10, border: "1px solid var(--line)", background: "var(--panel)", color: "var(--ink)", fontSize: 12, boxShadow: "var(--shadow)" }} formatter={(value, name) => [`${num(value, locale, 2)}${suffix}`, name]} />; }
 function ChargingTooltip({ active, label, series, locale, t, units }) {
   if (!active || label == null) return null;
   const point = safe(series).reduce((closest, row) => Math.abs(Number(row.elapsedMinutes) - Number(label)) < Math.abs(Number(closest?.elapsedMinutes ?? Infinity) - Number(label)) ? row : closest, null);
@@ -133,7 +149,7 @@ function ChargingTooltip({ active, label, series, locale, t, units }) {
   ].filter(([, value]) => Number.isFinite(Number(value)));
   return <div className="telemetry-tooltip"><strong>{t("elapsedTime")}: {num(point.elapsedMinutes, locale, 1)} {t("minuteShort")}</strong>{rows.map(([name,value,unit])=><span key={name}><i/>{name}<b>{num(value,locale,2)} {unit}</b></span>)}</div>;
 }
-function ChargingTip({ series, locale, t, units }) { return <Tooltip content={<ChargingTooltip series={series} locale={locale} t={t} units={units}/>} />; }
+function ChargingTip({ series, locale, t, units }) { return <Tooltip cursor={{ stroke: "var(--muted)", strokeWidth: 1, strokeDasharray: "4 4" }} content={<ChargingTooltip series={series} locale={locale} t={t} units={units}/>} />; }
 function Chart({ children, height = 285 }) { return <div className="chart-wrap" style={{ height }}><ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{width:800,height}}>{children}</ResponsiveContainer></div>; }
 function Metric({ label, value, unit, note, tone = "", onActivate = null, ariaLabel = null }) {
   const activateFromKeyboard = (event) => {
@@ -186,7 +202,7 @@ function DrivingPersonalityMetric({ personality, profileKey, t }) {
   const value = profileKey ? t(`drivingProfile_${profileKey}`) : "—";
   return <><Metric tone={profileKey === "aggressive" ? "coral" : profileKey === "dynamic" ? "amber" : "mint"} label={t("estimatedDrivingProfile")} value={value} note={<>{t("softwareEstimate")}<small className="secret-tease">{t("drivingPersonalityTease")}</small></>} onActivate={unlock} ariaLabel={`${t("estimatedDrivingProfile")}: ${value}`}/>{open ? <DrivingPersonalityDialog personality={personality} t={t} onClose={() => setOpen(false)}/> : null}</>;
 }
-function ProgressiveChartGrid({ children, resetKey }) {
+function ProgressiveChartGrid({ children, resetKey, className = "" }) {
   const items = React.Children.toArray(children), containerRef = useRef(null);
   const [inRange, setInRange] = useState(false), [visibleCount, setVisibleCount] = useState(0);
   useEffect(() => {
@@ -203,7 +219,7 @@ function ProgressiveChartGrid({ children, resetKey }) {
     if (typeof window.requestIdleCallback === "function") { const id = window.requestIdleCallback(showNext, { timeout: 250 }); return () => window.cancelIdleCallback(id); }
     const id = window.setTimeout(showNext, 16); return () => window.clearTimeout(id);
   }, [inRange, items.length, visibleCount]);
-  return <div ref={containerRef} className="dashboard-grid two technical-grid progressive-chart-grid">{items.map((item, index) => index < visibleCount ? item : <div className="progressive-chart-placeholder" aria-hidden="true" key={`placeholder-${index}`} />)}</div>;
+  return <div ref={containerRef} className={`dashboard-grid two technical-grid progressive-chart-grid ${className}`.trim()}>{items.map((item, index) => index < visibleCount ? item : <div className="progressive-chart-placeholder" aria-hidden="true" key={`placeholder-${index}`} />)}</div>;
 }
 function Empty({ t }) { return <div className="section-empty"><strong>{t("noResults")}</strong><p>{t("changePeriod")}</p></div>; }
 function ChartEmpty({ t, message }) { return <div className="chart-empty-state"><strong>{t("noChartData")}</strong><p>{message || t("noChartDataHelp")}</p></div>; }
@@ -575,7 +591,7 @@ function Quality({ data, locale, t }) {
   </>;
 }
 
-function DataSection({ data, locale, t, busy, onChooseAdditional, onChooseHistory, onExport, onReset, persistence, onToggleRememberHistory, onToggleImportReminder, onSetImportReminderDays, onForgetSavedHistory }) {
+function DataSection({ data, locale, t, busy, onChooseAdditional, onChooseHistory, onExport, onReset, persistence, onToggleRememberHistory, onToggleImportReminder, onSetImportReminderDays, onForgetSavedHistory, drive, onConnectDrive, onSaveDrive, onOpenDrive, onDisconnectDrive, onToggleDriveAutoSync }) {
   const [trimMeters,setTrimMeters]=useState(0);
   const [dragging,setDragging]=useState(false);
   return <div className="dashboard-grid two data-layout">
@@ -615,6 +631,27 @@ function DataSection({ data, locale, t, busy, onChooseAdditional, onChooseHistor
         </div>
       </Panel>
     </div>
+    <div className="google-drive-panel">
+      <Panel title={t("driveBackupTitle")} subtitle={t("driveBackupHelp")}>
+        <div className="drive-backup-settings">
+          {!drive.configured ? <div className="persistent-history-error">{t("driveNotConfigured")}</div> : <>
+            <div className="drive-privacy-note"><strong>{t("driveOptionalTitle")}</strong><p>{t("drivePrivacyHelp")}</p></div>
+            <div className="drive-status-grid">
+              <span><small>{t("driveConnection")}</small><strong>{drive.connected ? t("driveConnected") : t("driveDisconnected")}</strong></span>
+              <span><small>{t("driveBackupStatus")}</small><strong>{drive.hasBackup ? t("driveBackupReady") : t("driveBackupMissing")}</strong></span>
+              <span><small>{t("savedHistorySize")}</small><strong>{formatStoredBytes(drive.byteLength, locale)}</strong></span>
+              <span><small>{t("savedHistoryDate")}</small><strong>{dateText(drive.modifiedTime, locale)}</strong></span>
+            </div>
+            {!drive.connected ? <button className="primary-action" type="button" disabled={busy || drive.busy} onClick={onConnectDrive}>{drive.busy ? t("driveWorking") : t("driveConnect")}</button> : <>
+              <div className="drive-actions"><button className="primary-action" type="button" disabled={busy || drive.busy} onClick={onSaveDrive}>{drive.busy ? t("driveWorking") : drive.hasBackup ? t("driveUpdate") : t("driveSave")}</button><button className="secondary-button" type="button" disabled={busy || drive.busy || !drive.hasBackup} onClick={onOpenDrive}>{t("driveOpen")}</button></div>
+              <label className="setting-toggle is-secondary"><span><strong>{t("driveAutoSync")}</strong><small>{t("driveAutoSyncHelp")}</small></span><input type="checkbox" checked={drive.autoSync} disabled={busy || drive.busy} onChange={(event)=>onToggleDriveAutoSync(event.currentTarget.checked)}/></label>
+              <button className="danger-link" type="button" disabled={busy || drive.busy} onClick={onDisconnectDrive}>{t("driveDisconnect")}</button>
+            </>}
+            {drive.error ? <div className="persistent-history-error" role="alert">{t(drive.error)}</div> : null}
+          </>}
+        </div>
+      </Panel>
+    </div>
   </div>;
 }
 
@@ -629,7 +666,7 @@ const TrendsSection = memo(Trends);
 const ReportSection = memo(Report);
 const QualitySection = memo(Quality);
 
-export default function Dashboard({ data, locale, setLocale, t, busy, progress, error, onChooseAdditional, onChooseHistory, onExport, onSaveCustomCharts, onReset, onCancel, canCancel, persistence, onToggleRememberHistory, onToggleImportReminder, onSetImportReminderDays, onForgetSavedHistory, theme, onToggleTheme, onStartTutorial }) {
+export default function Dashboard({ data, locale, setLocale, t, busy, progress, error, onChooseAdditional, onChooseHistory, onExport, onSaveCustomCharts, onReset, onCancel, canCancel, persistence, onToggleRememberHistory, onToggleImportReminder, onSetImportReminderDays, onForgetSavedHistory, drive, onConnectDrive, onSaveDrive, onOpenDrive, onDisconnectDrive, onToggleDriveAutoSync, theme, onToggleTheme, onStartTutorial }) {
   const [section,setSection]=useState("overview"), [period,setPeriod]=useState("all"), [selectedJourneyId,setSelectedJourneyId]=useState(null), [selectedChargeId,setSelectedChargeId]=useState(null), [measurementSystem,setMeasurementSystem]=useState("metric"), [pressureUnit,setPressureUnit]=useState("bar"), [settingsOpen,setSettingsOpen]=useState(false), [compactNavigation,setCompactNavigation]=useState(()=>typeof window!=="undefined"&&window.matchMedia("(max-width: 850px)").matches);
   const settingsRef=useRef(null);
   const [minDate,maxDate]=useMemo(()=>{
@@ -666,7 +703,7 @@ export default function Dashboard({ data, locale, setLocale, t, busy, progress, 
   else if(section==="mycharts")content=<React.Suspense fallback={<div className="section-empty"><strong>{t("loadingEngine")}</strong></div>}><MyCharts data={data} locale={locale} t={t} units={units} onSave={onSaveCustomCharts}/></React.Suspense>;
   else if(section==="report")content=<ReportSection data={data} locale={locale} t={t} minDate={minDate} maxDate={maxDate} units={units}/>;
   else if(section==="quality")content=<QualitySection data={data} locale={locale} t={t}/>;
-  else content=<DataSection data={data} locale={locale} t={t} busy={busy} onChooseAdditional={onChooseAdditional} onChooseHistory={onChooseHistory} onExport={onExport} onReset={onReset} persistence={persistence} onToggleRememberHistory={onToggleRememberHistory} onToggleImportReminder={onToggleImportReminder} onSetImportReminderDays={onSetImportReminderDays} onForgetSavedHistory={onForgetSavedHistory}/>;
+  else content=<DataSection data={data} locale={locale} t={t} busy={busy} onChooseAdditional={onChooseAdditional} onChooseHistory={onChooseHistory} onExport={onExport} onReset={onReset} persistence={persistence} onToggleRememberHistory={onToggleRememberHistory} onToggleImportReminder={onToggleImportReminder} onSetImportReminderDays={onSetImportReminderDays} onForgetSavedHistory={onForgetSavedHistory} drive={drive} onConnectDrive={onConnectDrive} onSaveDrive={onSaveDrive} onOpenDrive={onOpenDrive} onDisconnectDrive={onDisconnectDrive} onToggleDriveAutoSync={onToggleDriveAutoSync}/>;
   const filteredSections=["overview","journeys","driving","charging","battery","tyres","activity","trends"];
   const utilityActions=<div className={`dashboard-utility-actions ${compactNavigation?"is-mobile":"is-sidebar"}`}><button className={`topbar-data-action ${section==="data"?"is-active":""}`} type="button" onClick={()=>openSection("data")}><Icon name="data"/><span>{t("addMoreData")}</span></button><div className="settings-popover" ref={settingsRef}><button className={`settings-trigger ${settingsOpen?"is-active":""}`} type="button" aria-expanded={settingsOpen} aria-controls="dashboard-settings" onClick={()=>setSettingsOpen((current)=>!current)}>{t("settings")}</button>{settingsOpen?<div className="settings-panel" id="dashboard-settings" role="dialog" aria-label={t("settings")}><header><span><strong>{t("settings")}</strong><small>{t("settingsHelp")}</small></span><button type="button" onClick={()=>setSettingsOpen(false)}>{t("close")}</button></header><button className="settings-theme-button" type="button" onClick={onToggleTheme} aria-label={theme==="light"?t("darkTheme"):t("lightTheme")}><span><strong>{t("theme")}</strong><small>{theme==="light"?t("light"):t("dark")}</small></span><i className={theme==="dark"?"is-dark":""}/></button><label><span>{t("language")}</span><select value={locale} onChange={(event)=>setLocale(event.target.value)}><option value="pt-PT">Português</option><option value="en">English</option></select></label><label><span>{t("measurementUnits")}</span><select value={measurementSystem} onChange={(event)=>setMeasurementSystem(event.currentTarget.value)}><option value="metric">{t("metricUnits")}</option><option value="imperial">{t("imperialUnits")}</option></select></label><label><span>{t("tyrePressureUnit")}</span><select value={pressureUnit} onChange={(event)=>setPressureUnit(event.currentTarget.value)}><option value="bar">bar</option><option value="psi">psi</option></select></label><button className="settings-tutorial-button" type="button" onClick={()=>{setSettingsOpen(false);onStartTutorial?.();}}><span><strong>{t("tutorialOpen")}</strong><small>{t("tutorialRestartHelp")}</small></span><b aria-hidden="true">→</b></button></div>:null}</div></div>;
   return <div className="dashboard-shell">
@@ -680,7 +717,7 @@ export default function Dashboard({ data, locale, setLocale, t, busy, progress, 
       <label className="mobile-nav"><span>{t("navigation")}</span><select value={section} onChange={(event)=>openSection(event.currentTarget.value)}><option value="overview">{t("nav_overview")}</option>{navGroups.filter((group)=>group.key).map((group)=><optgroup key={group.key} label={t(`navGroup_${group.key}`)}>{group.items.map((item)=><option key={item} value={item}>{t(`nav_${item}`)}</option>)}</optgroup>)}</select></label>
       {filteredSections.includes(section)?<PeriodBar period={period} setPeriod={setPeriod} customRange={customRange} setCustomRange={setCustomRange} minDate={minDate} maxDate={maxDate} t={t}/>:null}
       {busy?<div className="dashboard-progress"><div className="dashboard-progress-heading"><strong>{Math.round(progress.percent||0)}%</strong><span>{t(phaseKeys[progress.phase]||"loadingEngine")}{progress.detail?` · ${progress.detail}`:""}</span>{canCancel?<button className="cancel-processing" type="button" onClick={onCancel}>{t("cancelProcessing")}</button>:null}</div><div><i style={{width:`${Math.max(3,progress.percent||0)}%`}}/></div></div>:null}
-      {error?<div className="dashboard-error">{t(`error_${error}`)}</div>:null}<div className="dashboard-content">{content}</div><footer className="site-footer dashboard-footer"><span>{t("unofficial")}</span><span>{t("ownerLabel")}: Miguel Pinto</span><span>v{APP_VERSION}</span><a href="https://logboox.app" target="_blank" rel="noreferrer">LogbooX</a><a href="https://github.com/josepinto1989/xpeng-analytics/issues" target="_blank" rel="noreferrer">{t("reportIssue")}</a><a href="https://ko-fi.com/mpinto" target="_blank" rel="noreferrer">Ko-fi</a></footer>
+      {error?<div className="dashboard-error">{t(`error_${error}`)}</div>:null}<div className="dashboard-content">{content}</div><footer className="site-footer dashboard-footer"><span>{t("unofficial")}</span><span>{t("ownerLabel")}: Miguel Pinto</span><span>v{APP_VERSION}</span><a href={`${import.meta.env.BASE_URL}about.html`} target="_blank" rel="noreferrer">{t("aboutProject")}</a><a href={`${import.meta.env.BASE_URL}privacy.html`} target="_blank" rel="noreferrer">{t("privacyPolicy")}</a><a href="https://github.com/josepinto1989/xpeng-analytics/issues" target="_blank" rel="noreferrer">{t("reportIssue")}</a><a href="https://ko-fi.com/mpinto" target="_blank" rel="noreferrer">Ko-fi</a></footer>
     </main>
   </div>;
 }

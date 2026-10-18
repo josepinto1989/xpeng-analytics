@@ -4,6 +4,7 @@ import { APP_VERSION } from "./version.js";
 import { classifyLocalFiles, createImportPlan } from "./file-selection.js";
 import TutorialOverlay from "./TutorialOverlay.jsx";
 import { completeTutorialMode, nextTutorialMode, readTutorialState, shouldShowDashboardTutorialForHistory, tutorialStates, writeTutorialState } from "./onboarding.js";
+import { createGoogleDriveClient, googleDriveConfiguration, readGoogleDriveSettings } from "./google-drive.js";
 import {
   deletePersistentHistory,
   importReminderDays,
@@ -35,6 +36,9 @@ const phaseKeys = {
   history_export_complete: "phaseHistoryExportComplete",
   persistent_history_save: "phasePersistentHistorySave",
   persistent_history_saved: "phasePersistentHistorySaved",
+  drive_backup_save: "phaseDriveBackupSave",
+  drive_backup_saved: "phaseDriveBackupSaved",
+  drive_backup_open: "phaseDriveBackupOpen",
   complete: "phaseComplete",
   reset: "phaseReset",
   native_ready: "phaseNativeReady",
@@ -135,6 +139,19 @@ export default function App() {
     reminderDue: false,
     error: null,
   });
+  const [drive, setDrive] = useState(() => {
+    const settings = readGoogleDriveSettings();
+    return {
+      configured: googleDriveConfiguration().configured,
+      connected: false,
+      busy: false,
+      autoSync: settings.autoSync,
+      hasBackup: Boolean(settings.fileId),
+      modifiedTime: settings.modifiedTime,
+      byteLength: settings.size,
+      error: null,
+    };
+  });
   const inputRef = useRef(null);
   const workerRef = useRef(null);
   const workerModeRef = useRef("native");
@@ -152,6 +169,12 @@ export default function App() {
   const startupRestoreAttemptedRef = useRef(false);
   const restoringSavedHistoryRef = useRef(false);
   const exportPurposeRef = useRef(null);
+  const driveClientRef = useRef(null);
+  if (!driveClientRef.current) driveClientRef.current = createGoogleDriveClient();
+  const driveConnectedRef = useRef(false);
+  const driveAutoSyncRef = useRef(drive.autoSync);
+  const driveAfterPersistenceRef = useRef(false);
+  const restoringDriveRef = useRef(false);
   const tutorialAutoStartedRef = useRef({ landing: false, dashboard: false });
   const t = useMemo(() => translator(locale), [locale]);
   const tutorialSteps = useMemo(() => tutorialMode === "dashboard" ? [
@@ -277,12 +300,17 @@ export default function App() {
         const followupArchives = historyFollowupQueueRef.current;
         historyFollowupQueueRef.current = [];
         const restoredSavedHistory = restoringSavedHistoryRef.current;
+        const restoredDriveHistory = restoringDriveRef.current;
         restoringSavedHistoryRef.current = false;
+        restoringDriveRef.current = false;
         if (followupArchives.length) {
           queueRef.current = followupArchives;
           processNext();
         } else if (persistenceEnabledRef.current && !restoredSavedHistory) {
+          driveAfterPersistenceRef.current = driveConnectedRef.current && driveAutoSyncRef.current && !restoredDriveHistory;
           queuePersistentSave();
+        } else if (driveConnectedRef.current && driveAutoSyncRef.current && !restoredDriveHistory) {
+          queueDriveSave(true);
         } else {
           setBusy(false);
           setProgress({ percent: 100, phase: "complete" });
@@ -300,7 +328,10 @@ export default function App() {
         const updated = { ...snapshotRef.current, customCharts: message.charts || [] };
         snapshotRef.current = updated;
         setSnapshot(updated);
-        if (persistenceEnabledRef.current) queuePersistentSave();
+        if (persistenceEnabledRef.current) {
+          driveAfterPersistenceRef.current = driveConnectedRef.current && driveAutoSyncRef.current;
+          queuePersistentSave();
+        } else if (driveConnectedRef.current && driveAutoSyncRef.current) queueDriveSave(true);
       } else if (message.type === "history_exported") {
         const blob = new Blob([message.payload], { type: "application/octet-stream" });
         const purpose = message.purpose || exportPurposeRef.current || "download";
@@ -330,11 +361,41 @@ export default function App() {
               quota: estimate.quota,
               error: null,
             }));
-            setBusy(false);
-            setProgress({ percent: 100, phase: "persistent_history_saved" });
+            if (driveAfterPersistenceRef.current) {
+              driveAfterPersistenceRef.current = false;
+              queueDriveSave(true);
+            } else {
+              setBusy(false);
+              setProgress({ percent: 100, phase: "persistent_history_saved" });
+            }
           }).catch((saveError) => {
             console.error("Could not save the local history:", saveError);
+            driveAfterPersistenceRef.current = false;
             setPersistence((current) => ({ ...current, saving: false, error: "persistentHistorySaveError" }));
+            setBusy(false);
+            setProgress({ percent: 100, phase: "complete" });
+          });
+          return;
+        }
+        if (purpose === "drive") {
+          setDrive((current) => ({ ...current, busy: true, error: null }));
+          driveClientRef.current.uploadHistory(blob).then((result) => {
+            driveConnectedRef.current = true;
+            setDrive((current) => ({
+              ...current,
+              connected: true,
+              busy: false,
+              hasBackup: true,
+              modifiedTime: result.modifiedTime || result.file?.modifiedTime || new Date().toISOString(),
+              byteLength: Number(result.size || result.file?.size || blob.size),
+              error: null,
+            }));
+            setBusy(false);
+            setProgress({ percent: 100, phase: "drive_backup_saved" });
+          }).catch((driveError) => {
+            console.error("Could not save the Google Drive backup:", driveError);
+            if (["driveReconnect", "driveAuthorisation"].includes(driveError.code)) driveConnectedRef.current = false;
+            setDrive((current) => ({ ...current, connected: driveConnectedRef.current, busy: false, error: driveError.code || "driveUpload" }));
             setBusy(false);
             setProgress({ percent: 100, phase: "complete" });
           });
@@ -352,6 +413,7 @@ export default function App() {
         setProgress({ percent: 100, phase: "history_export_complete" });
       } else if (message.type === "reset_complete") {
         additionalQueueRef.current = [];
+        driveAfterPersistenceRef.current = false;
         setDashboardTutorialEligible(null);
         snapshotRef.current = null;
         setSnapshot(null);
@@ -416,15 +478,38 @@ export default function App() {
     workerRef.current.postMessage({ type: "export_history", purpose: "persist" });
   };
 
+  const queueDriveSave = (automatic = false) => {
+    if (!snapshotRef.current || !workerRef.current || !driveClientRef.current.isAuthorised()) {
+      if (automatic) setDrive((current) => ({ ...current, connected: false, error: "driveReconnect" }));
+      setBusy(false);
+      setProgress({ percent: 100, phase: "complete" });
+      return;
+    }
+    exportPurposeRef.current = "drive";
+    setBusy(true);
+    setError(null);
+    setDrive((current) => ({ ...current, busy: true, error: null }));
+    setProgress({ percent: 5, phase: "drive_backup_save" });
+    workerRef.current.postMessage({ type: "export_history", purpose: "drive" });
+  };
+
+  const completeDataChange = () => {
+    const autoDrive = driveConnectedRef.current && driveAutoSyncRef.current;
+    if (persistenceEnabledRef.current && snapshotRef.current) {
+      driveAfterPersistenceRef.current = autoDrive;
+      queuePersistentSave();
+    } else if (autoDrive) queueDriveSave(true);
+    else {
+      setBusy(false);
+      setProgress({ percent: 100, phase: "complete" });
+    }
+  };
+
   const processNext = () => {
     const next = queueRef.current.shift();
     if (!next) {
       activeFileRef.current = null;
-      if (persistenceEnabledRef.current && snapshotRef.current) queuePersistentSave();
-      else {
-        setBusy(false);
-        setProgress({ percent: 100, phase: "complete" });
-      }
+      completeDataChange();
       return;
     }
     activeFileRef.current = next;
@@ -460,11 +545,7 @@ export default function App() {
     const next = additionalQueueRef.current.shift();
     if (!next) {
       activeFileRef.current = null;
-      if (persistenceEnabledRef.current && snapshotRef.current) queuePersistentSave();
-      else {
-        setBusy(false);
-        setProgress({ percent: 100, phase: "complete" });
-      }
+      completeDataChange();
       return;
     }
     activeFileRef.current = next.file;
@@ -640,6 +721,85 @@ export default function App() {
     chooseLocalFiles(event.dataTransfer?.files);
   };
 
+  const authoriseGoogleDrive = async ({ prompt = "select_account" } = {}) => {
+    if (!drive.configured || drive.busy) return false;
+    setDrive((current) => ({ ...current, busy: true, error: null }));
+    try {
+      await driveClientRef.current.authorise({ prompt });
+      driveConnectedRef.current = true;
+      const backup = await driveClientRef.current.refreshBackup();
+      setDrive((current) => ({
+        ...current,
+        connected: true,
+        busy: false,
+        hasBackup: backup.exists,
+        modifiedTime: backup.modifiedTime || backup.file?.modifiedTime || null,
+        byteLength: Number(backup.size || backup.file?.size || 0),
+        error: null,
+      }));
+      return true;
+    } catch (driveError) {
+      console.error("Could not connect to Google Drive:", driveError);
+      driveConnectedRef.current = false;
+      setDrive((current) => ({ ...current, connected: false, busy: false, error: driveError.code || "driveAuthorisation" }));
+      return false;
+    }
+  };
+
+  const connectGoogleDrive = () => authoriseGoogleDrive({ prompt: "select_account" });
+
+  const saveGoogleDrive = async () => {
+    if (!snapshotRef.current || busy || drive.busy) return;
+    const authorised = driveClientRef.current.isAuthorised() || await authoriseGoogleDrive({ prompt: "select_account" });
+    if (authorised) queueDriveSave(false);
+  };
+
+  const openGoogleDrive = async () => {
+    if (busy || drive.busy || !engineReady) return;
+    if (snapshotRef.current && !window.confirm(t("replaceWithHistoryConfirm"))) return;
+    const authorised = driveClientRef.current.isAuthorised() || await authoriseGoogleDrive({ prompt: "select_account" });
+    if (!authorised) return;
+    setDrive((current) => ({ ...current, busy: true, error: null }));
+    setBusy(true);
+    setProgress({ percent: 5, phase: "drive_backup_open" });
+    try {
+      const { file: metadata, blob } = await driveClientRef.current.downloadHistory();
+      setDrive((current) => ({
+        ...current,
+        connected: true,
+        busy: false,
+        hasBackup: true,
+        modifiedTime: metadata.modifiedTime || current.modifiedTime,
+        byteLength: Number(metadata.size || blob.size),
+        error: null,
+      }));
+      restoringDriveRef.current = true;
+      const file = new File([blob], metadata.name || "xpeng-analytics-history.xpeng", { type: "application/octet-stream" });
+      importHistoryFile(file, [], { skipConfirm: true });
+    } catch (driveError) {
+      console.error("Could not open the Google Drive backup:", driveError);
+      if (["driveReconnect", "driveAuthorisation"].includes(driveError.code)) driveConnectedRef.current = false;
+      setDrive((current) => ({ ...current, connected: driveConnectedRef.current, busy: false, error: driveError.code || "driveDownload" }));
+      setBusy(false);
+      setProgress({ percent: 100, phase: "complete" });
+    }
+  };
+
+  const disconnectGoogleDrive = () => {
+    driveClientRef.current.disconnect();
+    driveClientRef.current.setAutoSync(false);
+    driveConnectedRef.current = false;
+    driveAutoSyncRef.current = false;
+    setDrive((current) => ({ ...current, connected: false, busy: false, autoSync: false, error: null }));
+  };
+
+  const toggleGoogleDriveAutoSync = (enabled) => {
+    const next = Boolean(enabled && driveConnectedRef.current);
+    driveClientRef.current.setAutoSync(next);
+    driveAutoSyncRef.current = next;
+    setDrive((current) => ({ ...current, autoSync: next, error: null }));
+  };
+
   const exportHistory = () => {
     if (!snapshot || busy || !engineReady) return;
     exportPurposeRef.current = "download";
@@ -672,9 +832,6 @@ export default function App() {
     workerRef.current.postMessage({ type: "cancel" });
   };
 
-  const source = snapshot?.summary?.source ?? {};
-  const trips = snapshot?.summary?.trips ?? {};
-  const charges = snapshot?.summary?.charges ?? {};
   const statusText = busy
     ? t(phaseKeys[progress.phase] ?? "loadingEngine")
     : error
@@ -703,6 +860,12 @@ export default function App() {
       onToggleImportReminder={toggleImportReminder}
       onSetImportReminderDays={changeImportReminderDays}
       onForgetSavedHistory={forgetSavedHistory}
+      drive={drive}
+      onConnectDrive={connectGoogleDrive}
+      onSaveDrive={saveGoogleDrive}
+      onOpenDrive={openGoogleDrive}
+      onDisconnectDrive={disconnectGoogleDrive}
+      onToggleDriveAutoSync={toggleGoogleDriveAutoSync}
       theme={theme}
       onToggleTheme={() => setTheme((current) => current === "light" ? "dark" : "light")}
       onStartTutorial={startTutorial}
@@ -748,7 +911,7 @@ export default function App() {
         </div>
       </section>
 
-      <section className={`workspace ${dragActive ? "is-dragging" : ""}`} aria-busy={busy}>
+      <section className={`workspace workspace-start ${dragActive ? "is-dragging" : ""}`} aria-busy={busy}>
         <div className="upload-card">
           <div className="upload-heading">
             {busy ? <strong className="progress-percent">{Math.round(progress.percent ?? 0)}%</strong> : <><span className={`status-dot ${error ? "is-error" : engineReady ? "is-ready" : ""}`} /><strong>{statusText}</strong></>}
@@ -787,39 +950,34 @@ export default function App() {
             <small>{t("dropHint")}</small>
             <span className="drop-browse">{busy ? t("importing") : t("chooseFiles")}</span>
           </label>
-          <div className="processing-time-alert"><strong>{t("processingTimeTitle")}</strong><p>{t("processingTimeBody")}</p></div>
-          <div className="gpx-next-step"><strong>{t("gpxAfterFirstImportTitle")}</strong><p>{t("gpxAfterFirstImportHelp")}</p></div>
-          {persistence.enabled && persistence.hasSavedHistory && !snapshot ? <div className="saved-history-landing">
+        </div>
+
+        <div className="start-options">
+          <div className="start-options-heading">
+            <span>{t("continueKicker")}</span>
+            <strong>{t("continueTitle")}</strong>
+            <p>{t("continueBody")}</p>
+          </div>
+          <div className="drive-landing-card">
+            <div><strong>{t("driveOpenTitle")}</strong><p>{drive.configured ? t("driveOpenHelp") : t("driveNotConfigured")}</p></div>
+            <button type="button" disabled={busy || drive.busy || !engineReady || !drive.configured} onClick={openGoogleDrive}>{drive.busy ? t("driveWorking") : t("driveOpen")}</button>
+            {drive.error ? <span className="drive-error" role="alert">{t(drive.error)}</span> : null}
+          </div>
+          {persistence.enabled && persistence.hasSavedHistory ? <div className="saved-history-landing">
             <div><strong>{t("savedHistoryAvailable")}</strong><p>{t("savedHistoryAvailableHelp")}</p></div>
             <button type="button" disabled={busy || !engineReady} onClick={restoreSavedHistory}>{t("restoreSavedHistory")}</button>
             <button className="danger-link" type="button" disabled={busy} onClick={forgetSavedHistory}>{t("forgetSavedHistory")}</button>
           </div> : null}
-          {snapshot ? <button className="reset-button" type="button" disabled={busy} onClick={reset}>{t("reset")}</button> : null}
-        </div>
-
-        {snapshot ? (
-          <div className="results">
-            <div className="section-label">{t("currentSession")}</div>
-            <div className="metrics">
-              <article><span>{t("imports")}</span><strong>{formatNumber(source.imports, locale)}</strong></article>
-              <article><span>{t("trips")}</span><strong>{formatNumber(trips.trips, locale)}</strong></article>
-              <article><span>{t("distance")}</span><strong>{formatNumber(trips.distance_km, locale, { maximumFractionDigits: 1 })}<small> km</small></strong></article>
-              <article><span>{t("charges")}</span><strong>{formatNumber(charges.sessions, locale)}</strong></article>
-            </div>
+          <div className="start-options-notes">
+            <div className="processing-time-alert"><strong>{t("processingTimeTitle")}</strong><p>{t("processingTimeBody")}</p></div>
+            <div className="gpx-next-step"><strong>{t("gpxAfterFirstImportTitle")}</strong><p>{t("gpxAfterFirstImportHelp")}</p></div>
           </div>
-        ) : (
-          <div className="empty-state"><span>01</span><strong>{t("noDataTitle")}</strong><p>{t("noDataBody")}</p></div>
-        )}
+        </div>
       </section>
 
       <section className="support-card">
         <div><span>{t("supportKicker")}</span><h2>{t("supportTitle")}</h2><p>{t("supportBody")}</p></div>
         <a href="https://ko-fi.com/mpinto" target="_blank" rel="noreferrer">{t("supportCta")}</a>
-      </section>
-
-      <section className="project-credit">
-        <span>{t("creditKicker")}</span>
-        <p>{t("creditBody")} <a href="https://logboox.app" target="_blank" rel="noreferrer">LogbooX</a>, {t("creditAuthor")} <a href="https://github.com/schliflo/logboox" target="_blank" rel="noreferrer">{t("creditSource")}</a>.</p>
       </section>
 
       {history.length ? <section className="history-card">
@@ -834,7 +992,7 @@ export default function App() {
         </div>
       </section> : null}
 
-      <footer className="site-footer"><span>{t("unofficial")}</span><span>{t("ownerLabel")}: Miguel Pinto</span><span>v{APP_VERSION}</span><a href="https://logboox.app" target="_blank" rel="noreferrer">LogbooX</a><a href="https://github.com/josepinto1989/xpeng-analytics/issues" target="_blank" rel="noreferrer">{t("reportIssue")}</a><a href="https://ko-fi.com/mpinto" target="_blank" rel="noreferrer">Ko-fi</a></footer>
+      <footer className="site-footer"><span>{t("unofficial")}</span><span>{t("ownerLabel")}: Miguel Pinto</span><span>v{APP_VERSION}</span><a href={`${import.meta.env.BASE_URL}about.html`} target="_blank" rel="noreferrer">{t("aboutProject")}</a><a href={`${import.meta.env.BASE_URL}privacy.html`} target="_blank" rel="noreferrer">{t("privacyPolicy")}</a><a href="https://github.com/josepinto1989/xpeng-analytics/issues" target="_blank" rel="noreferrer">{t("reportIssue")}</a><a href="https://ko-fi.com/mpinto" target="_blank" rel="noreferrer">Ko-fi</a></footer>
       {tutorialMode ? <TutorialOverlay steps={tutorialSteps} onComplete={finishTutorial} onSkip={skipTutorial} t={t} /> : null}
     </main>
   );

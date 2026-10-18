@@ -1,6 +1,6 @@
 # Publication checklist
 
-## v2.0.0 release candidate — 2026-10-18
+## v2.1.0 release candidate — 2026-10-18
 
 - [x] Persistent local history and 7-, 15-, 25-, and 30-day reminders passed
   owner testing.
@@ -19,14 +19,25 @@
 - [x] Public-tree privacy audit, Python tests, browser tests, translation parity,
   and production build pass on the final candidate.
 - [x] README, user guides, privacy, security, architecture, roadmap, `.xpeng`
-  specification, release notes, notices, and changelog reflect version 2.0.0.
+  specification, release notes, notices, and changelog reflect version 2.1.0.
+- [x] A public OAuth privacy page exists at `/privacy.html`, is linked from
+  both application footers, and explains Google Drive access, storage, sharing,
+  revocation, and deletion.
+- [x] The public About page explains the project's purpose, capabilities,
+  independent status, and local-first data model.
+- [x] Google Drive client tests cover authorisation, folder discovery/creation,
+  resumable upload, backup discovery, and download with mocked APIs.
+- [x] Real Google OAuth save, update, account switching, disconnect, and restore
+  are owner-tested on the registered local origin.
+- [ ] Real Google OAuth save and restore are smoke-tested on the deployed
+  GitHub Pages origin.
 - [x] The reviewed candidate is committed and pushed only to private staging.
 - [x] A final production-build smoke test is complete; staging Pages remains
   intentionally disabled because a private repository does not make Pages
   private.
-- [ ] The exact reviewed commit is approved for public promotion.
+- [x] The exact reviewed commit is approved for public promotion.
 - [ ] The public GitHub release, tag, Pages deployment, and displayed version
-  are verified after publication on 2026-10-19.
+  are verified after publication on 2026-10-18.
 
 ## v1.8.0-beta.3 private staging — 2026-10-16
 

@@ -100,7 +100,7 @@ Build on persistent history with tools that become more useful over several
 months.
 
 The monthly trends and telemetry-block driving-context estimates are implemented
-and owner-validated for v2.0. Manual journey and charging labels, tariff
+and owner-validated for v2.1. Manual journey and charging labels, tariff
 profiles, and export summaries remain for a later Phase 9 iteration.
 
 - Add monthly trends for consumption, range, estimated capacity, relative SOH,
@@ -131,7 +131,7 @@ optional, but once accepted by the user the matched tracks become part of the
 portable `.xpeng` history so the complete archive can be restored from one
 file.
 
-**Status: implemented and owner-validated for v2.0.** It supports a unified
+**Status: implemented and owner-validated for v2.1.** It supports a unified
 later-data importer for XPENG ZIPs, GPX and GPX-in-ZIP,
 BasicAirData and Open GPX Tracker files, fully automatic trip-level timestamp
 matching, duplicate selection, all-day recording segmentation, optional
@@ -174,10 +174,10 @@ Phase 10 iterations.
 
 ### Phase 11 — Personal chart studio
 
-**Status: implemented and owner-validated locally for v2.0; not published.**
+**Status: implemented and owner-validated locally for v2.1; not published.**
 The core builder, live preview, saved-chart management, responsive layout,
 allow-list validation, unit conversion, and `.xpeng` v5 round trip are ready.
-Selection of saved charts for PDF reports remains an optional v2.0 finishing
+Selection of saved charts for PDF reports remains an optional v2.1 finishing
 task rather than a blocker for the validated chart studio.
 
 Add a dedicated **My charts** section where users can build, name, save, and
@@ -221,7 +221,7 @@ the timestamped telemetry already present in the XPENG export. The experience
 must be presented as a visual reconstruction, not as an official XPENG vehicle
 simulation or a safety-accurate digital twin.
 
-**Status: implemented and owner-validated locally for v2.0; not published.** It
+**Status: implemented and owner-validated locally for v2.1; not published.** It
 includes a three-month activity calendar, journey selection, telemetry
 playback and seeking, 1x/2x/3x/5x/10x speed, a generic animated vehicle,
 responsive analytical HUD, synchronized charts, compressed data gaps, and a
@@ -261,11 +261,11 @@ timestamp-synchronised GPX map.
 
 ### Phase 13 — Visual and navigation consolidation
 
-Refresh the information architecture before the v2.0 release so the growing
+Refresh the information architecture before the v2.1 release so the growing
 feature set remains calm and easy to navigate rather than accumulating more
 permanent controls in the left sidebar.
 
-**Status: implemented and owner-validated locally for v2.0; not published.** The desktop
+**Status: implemented and owner-validated locally for v2.1; not published.** The desktop
 navigation is grouped into driving, vehicle, tools, and data areas; the mobile
 icon strip has been replaced by a labelled section selector; data import stays
 one click away; and theme, language, measurement, and tyre-pressure preferences
@@ -284,16 +284,16 @@ now share one accessible settings panel.
 - Keep the existing visual identity, bilingual wording, light-first theme,
   accessibility, and current analytical behaviour.
 - Validate the revised hierarchy at desktop, tablet, and mobile widths before
-  including it in the v2.0 release candidate.
+  including it in the v2.1 release candidate.
 
 ### Phase 14 — First-use tutorial and guided onboarding
 
-Add an optional guided introduction after the v2.0 navigation and visual
+Add an optional guided introduction after the v2.1 navigation and visual
 structure has been finalised. The tutorial should help a first-time user
 understand the application without interrupting returning users or collecting
 any usage information.
 
-**Status: implemented and owner-validated locally for v2.0; not published.** The guide
+**Status: implemented and owner-validated locally for v2.1; not published.** The guide
 is split between the first import screen and the populated dashboard, opens
 automatically only for a new user, can be skipped permanently, and can be
 restarted from the landing page or Settings. It is bilingual, responsive,
@@ -322,7 +322,27 @@ completion state.
 - Validate the tour with an empty first-use state and with an existing history
   on desktop and mobile before including it in a release.
 
-### Phase 15 — Native local and offline applications
+### Phase 15 — Optional personal cloud backup
+
+Allow the user to store the portable history in an account they control while
+preserving local processing and avoiding an XPENG Analytics backend.
+
+- Use official Google Identity Services and the limited `drive.file` scope.
+- Create one visible XPENG Analytics folder and one replaceable `.xpeng`
+  backup, with explicit save, restore, disconnect, and session auto-update.
+- Keep access tokens in memory and never request a Google password, persist a
+  refresh token, or add a client secret to the static site.
+- Restore the same history on another computer through the normal validated
+  importer.
+- Document that the backup is unencrypted and that Google receives it only
+  when this optional feature is enabled.
+- Validate cancellation, expired authorisation, missing files, quota errors,
+  large resumable uploads, and cross-device restore before release.
+
+Status: implemented for the 2.1 release candidate; real OAuth validation is
+pending owner testing.
+
+### Phase 16 — Native local and offline applications
 
 Package the existing interface as lightweight native desktop applications for
 Windows, macOS, and Linux while keeping the browser version available.

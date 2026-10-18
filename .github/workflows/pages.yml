@@ -38,6 +38,8 @@ jobs:
       - name: Test browser runtime and translations
         run: pnpm --dir web test
       - name: Build static site
+        env:
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
         run: pnpm --dir web build
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

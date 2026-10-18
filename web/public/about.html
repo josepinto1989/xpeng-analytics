@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="The story and purpose of XPENG Analytics." />
+    <link rel="icon" type="image/png" href="./assets/xpeng-analytics-mark-minimal.png" />
+    <title>About · XPENG Analytics</title>
+    <style>
+      :root { color-scheme:light; --bg:#f4f8f7; --panel:#fff; --ink:#102f32; --muted:#5d7475; --line:#d7e3df; --accent:#079b77; --soft:#eef9f5; }
+      * { box-sizing:border-box; }
+      body { margin:0; color:var(--ink); background:var(--bg); font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { width:min(860px,calc(100% - 32px)); margin:40px auto; padding:clamp(24px,5vw,56px); border:1px solid var(--line); border-radius:20px; background:var(--panel); box-shadow:0 18px 55px rgba(20,57,55,.08); }
+      header { padding-bottom:30px; border-bottom:1px solid var(--line); }
+      .brand { display:inline-flex; align-items:center; gap:12px; color:var(--ink); text-decoration:none; }
+      .brand img { width:42px; height:42px; border-radius:12px; }
+      .brand span { display:grid; line-height:1.1; }
+      .brand strong { letter-spacing:.16em; }
+      .brand small { margin-top:5px; color:var(--muted); }
+      .kicker { display:block; margin-top:38px; color:var(--accent); font-size:12px; font-weight:800; letter-spacing:.13em; text-transform:uppercase; }
+      h1 { max-width:720px; margin:10px 0 16px; font-size:clamp(38px,7vw,64px); line-height:1; letter-spacing:-.05em; }
+      h2 { margin:36px 0 8px; font-size:22px; letter-spacing:-.025em; }
+      p { color:var(--muted); }
+      .lead { max-width:720px; margin:0; color:var(--ink); font-size:19px; line-height:1.55; }
+      .purpose { margin-top:30px; padding:20px 22px; border-left:4px solid var(--accent); border-radius:9px; background:var(--soft); }
+      .purpose strong { display:block; margin-bottom:5px; }
+      .purpose p { margin:0; }
+      .features { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:18px; }
+      .features article { padding:18px; border:1px solid var(--line); border-radius:12px; }
+      .features strong { display:block; font-size:14px; }
+      .features p { margin:6px 0 0; font-size:14px; }
+      a { color:var(--accent); font-weight:700; }
+      footer { display:flex; flex-wrap:wrap; gap:10px 22px; margin-top:42px; padding-top:22px; border-top:1px solid var(--line); font-size:14px; }
+      @media (max-width:620px) { main { margin:16px auto; } .features { grid-template-columns:1fr; } }
+      @media (prefers-color-scheme:dark) { :root { color-scheme:dark; --bg:#091719; --panel:#102426; --ink:#eef8f5; --muted:#a7bcba; --line:#294143; --accent:#58d7b2; --soft:#14322d; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <a class="brand" href="./">
+          <img src="./assets/xpeng-analytics-mark-minimal.png" alt="" />
+          <span><strong>XPENG</strong><small>Analytics</small></span>
+        </a>
+        <span class="kicker">About the project</span>
+        <h1>Understand your car through your own data.</h1>
+        <p class="lead">XPENG Analytics started with a simple curiosity: how is the car really being used, how much energy does it consume, and what can its exported data tell us over time?</p>
+      </header>
+
+      <section>
+        <h2>Why it exists</h2>
+        <p>The XPENG app shows useful information, but I wanted a clearer and more complete view of journeys, charging, consumption, regeneration, battery behaviour and long-term trends. This project turns the files supplied through the XPENG Data Act portal into a dashboard that is easier to explore and compare.</p>
+        <div class="purpose">
+          <strong>Built to answer everyday questions.</strong>
+          <p>How efficient was this journey? How much energy was recovered? What are my charging habits? Is consumption changing over time? XPENG Analytics brings those answers together in one place.</p>
+        </div>
+      </section>
+
+      <section>
+        <h2>What you can do</h2>
+        <div class="features">
+          <article><strong>Explore journeys</strong><p>Review speed, energy, driving inputs and other available telemetry for each journey.</p></article>
+          <article><strong>Understand charging</strong><p>Compare AC and DC sessions, efficiency, charging curves, power and estimated losses.</p></article>
+          <article><strong>Build a history</strong><p>Keep adding new XPENG exports and carry the combined history in a compact <code>.xpeng</code> file.</p></article>
+          <article><strong>Add GPS routes</strong><p>Match GPX tracks to journeys automatically and explore them on a map when location data is available.</p></article>
+          <article><strong>Create reports</strong><p>Generate local PDF summaries for selected dates, including distance, energy, charging and optional costs.</p></article>
+          <article><strong>Make your own charts</strong><p>Use the available data to create personal visualisations that stay with your history.</p></article>
+        </div>
+      </section>
+
+      <section>
+        <h2>Your data stays under your control</h2>
+        <p>The analysis runs in your browser. There is no XPENG Analytics account and no application server collecting vehicle histories. You decide whether to keep a local browser copy, export a portable <code>.xpeng</code> file, or use the optional backup in your own Google Drive.</p>
+      </section>
+
+      <section>
+        <h2>An independent community project</h2>
+        <p>XPENG Analytics is developed and supervised by Miguel Pinto as an independent project and is not affiliated with XPENG. Feedback from other owners helps identify useful metrics, improve compatibility and decide what to build next.</p>
+      </section>
+
+      <footer>
+        <a href="./">Open XPENG Analytics</a>
+        <a href="./privacy.html">Privacy Policy</a>
+        <a href="https://github.com/josepinto1989/xpeng-analytics">GitHub</a>
+        <a href="https://github.com/josepinto1989/xpeng-analytics/issues">Suggest an improvement</a>
+      </footer>
+    </main>
+  </body>
+</html>
