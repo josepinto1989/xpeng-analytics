@@ -20,8 +20,10 @@
   and production build pass on the final candidate.
 - [x] README, user guides, privacy, security, architecture, roadmap, `.xpeng`
   specification, release notes, notices, and changelog reflect version 2.0.0.
-- [ ] The reviewed candidate is committed and pushed only to private staging.
-- [ ] A final staging smoke test is complete.
+- [x] The reviewed candidate is committed and pushed only to private staging.
+- [x] A final production-build smoke test is complete; staging Pages remains
+  intentionally disabled because a private repository does not make Pages
+  private.
 - [ ] The exact reviewed commit is approved for public promotion.
 - [ ] The public GitHub release, tag, Pages deployment, and displayed version
   are verified after publication on 2026-10-19.
