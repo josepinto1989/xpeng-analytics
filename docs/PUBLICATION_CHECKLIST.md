@@ -36,7 +36,7 @@
   intentionally disabled because a private repository does not make Pages
   private.
 - [x] The exact reviewed commit is approved for public promotion.
-- [ ] The public GitHub release, tag, Pages deployment, and displayed version
+- [x] The public GitHub release, tag, Pages deployment, and displayed version
   are verified after publication on 2026-10-18.
 
 ## v1.8.0-beta.3 private staging — 2026-10-16
