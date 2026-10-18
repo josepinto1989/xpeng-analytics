@@ -84,7 +84,7 @@ const exportableState = { ...imported.state, gpsSelectedTracks: matched.selected
 const history = await exportHistory(exportableState, () => {});
 assert.ok(isNativeHistory(new Uint8Array(history)));
 const restored = await importHistory(history, () => {});
-assert.equal(restored.version, 4);
+assert.equal(restored.version, 5);
 assert.equal(restored.gpsTracks.length, 1);
 assert.equal(restored.gpsTracks[0].lat.length, matched.selectedTracks[0].lat.length);
 assert.equal(restored.gpsTracks[0].sourceName, "android.gpx");

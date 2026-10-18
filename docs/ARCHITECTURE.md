@@ -24,15 +24,46 @@ long-term trends, driving-context estimates, local GPS route traces, and PDF
 generation operate on this snapshot and require no application server. Opening
 a journey with a matched GPX route requests the visible OpenStreetMap tiles;
 the route-to-chart synchronisation remains local.
-The interface exposes
-overview, journeys, driving, charging, battery, tyres, activity, trends,
-report, quality, and data-management views.
+The interface exposes overview, journeys, driving, charging, battery, tyres,
+activity, trends, report, personal charts, replay, quality, and data-management
+views.
 
 Driving context is derived in short telemetry blocks during the same pass that
 builds trips. The classifier considers sustained speed bands, stops,
 longitudinal dynamics, and braking, then emits urban-, road-, or
 motorway-style estimates with a confidence score. The current classifier does
 not use GPS or claim to identify the actual road.
+
+Visual replay keeps continuous telemetry in a bounded series and preserves
+brake, gear, door, window, and boot changes as exact timestamped events. Each
+trip includes one minute of context before and after movement so entry, exit,
+and boot activity is not lost at the driving boundary. Discrete values follow
+the XPENG signal dictionary: gears `1`–`4` are D/N/R/P, door-ajar `1` is open,
+window values describe movement rather than opening percentage, and boot state
+`1` is fully closed while states `2`–`10` describe opening, open, closing, or
+intermediate positions. State `0` is treated as unknown.
+
+The replay UI uses a lightweight chase-camera composition rather than a 3D
+runtime. A transparent generic SUV asset is layered over a centred, animated
+road, while the exact door, window, and boot states remain visible in the HUD.
+This avoids additional GPU memory pressure on mobile browsers and keeps the
+telemetry panel responsive while playback is running.
+
+## Runtime performance
+
+The landing page and each optional analytics workspace are split into separate
+JavaScript chunks. Dashboard charts, My Charts, replay, Leaflet, and their CSS
+are loaded only when the user reaches the relevant screen. Import progress
+messages are throttled in the worker so large archives do not force React to
+paint hundreds of near-identical updates.
+
+Trip telemetry is sampled once into a bounded replay series. The normal trip
+series references the same point objects instead of building a second copy,
+which reduces retained heap without changing the calculated metrics. During
+replay, chart paths remain static and only their lightweight playhead and live
+values update. The map marker is moved in place and map panning is separately
+throttled. This keeps playback responsive without continuously rebuilding SVG
+charts or Leaflet layers.
 
 GPX files are parsed in the same worker. Each recording is sliced against the
 exact XPENG trip timestamps before matching, so an all-day recording can cover
@@ -45,7 +76,7 @@ telemetry remains the source for all vehicle metrics.
 
 The previous Python/WebAssembly and SQLite processor remains available as a
 compatibility reader for version 1 and 2 histories. It is not loaded for a new
-XPENG ZIP or a native version 3 or 4 history.
+XPENG ZIP or a native version 3, 4, or 5 history.
 
 ## Memory and browser boundary
 
@@ -77,7 +108,7 @@ telemetry is not written to `localStorage`.
 
 ## Portable history
 
-New exports use `xpeng-analytics-columnar-history` version 4 with the `.xpeng`
+New exports use `xpeng-analytics-columnar-history` version 5 with the `.xpeng`
 extension. The file contains a small JSON manifest followed by individually
 gzip-compressed timeline and signal columns. Each block has its own SHA-256
 checksum, original size, and byte range. Restoring a history reads each block
@@ -87,13 +118,15 @@ before rebuilding all derived analytics. Version 4 adds individually
 compressed GPS time, latitude, longitude, elevation, speed, and segment blocks,
 plus GPX import provenance, the matched trip identifier, and discarded-source
 provenance. Only matched trip slices are written; these blocks are omitted when
-no GPS data was matched.
+no GPS data was matched. Version 5 adds an allow-listed `customCharts` manifest
+array containing only compact display definitions. Chart data and rendered
+images are never duplicated in the history.
 
 Per-column compression avoids Base64 and SQLite overhead and lets the file stay
 close to the size of the original XPENG ZIP. Histories remain unencrypted and
 must be treated as sensitive personal files. Version 1 JSON.GZ and version 2
 SQLite/XZ histories remain importable through the compatibility processor; new
-exports always use version 4. The native reader accepts version 3 and 4.
+exports always use version 5. The native reader accepts versions 3, 4, and 5.
 
 ## Attribution
 

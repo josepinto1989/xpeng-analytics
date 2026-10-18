@@ -1,5 +1,31 @@
 # Publication checklist
 
+## v2.0.0 release candidate — 2026-10-18
+
+- [x] Persistent local history and 7-, 15-, 25-, and 30-day reminders passed
+  owner testing.
+- [x] Trends, driving-context estimates, automatic GPX matching, maps, chart
+  synchronization, PDF route traces, and `.xpeng` restoration passed owner
+  testing.
+- [x] My Charts creation, editing, reordering, deletion, unit conversion, and
+  `.xpeng` v5 round trip passed owner testing.
+- [x] Journey replay, GPS and no-GPS layouts, seeking, playback speeds, charts,
+  vehicle states, lights, steering, and driving-personality interaction passed
+  owner testing.
+- [x] Consolidated navigation, Settings, desktop/mobile layouts, and the
+  bilingual first-use guide passed owner testing.
+- [x] Current `.xpeng` histories skip automatic onboarding; legacy histories
+  can introduce the new 2.0 areas once.
+- [x] Public-tree privacy audit, Python tests, browser tests, translation parity,
+  and production build pass on the final candidate.
+- [x] README, user guides, privacy, security, architecture, roadmap, `.xpeng`
+  specification, release notes, notices, and changelog reflect version 2.0.0.
+- [ ] The reviewed candidate is committed and pushed only to private staging.
+- [ ] A final staging smoke test is complete.
+- [ ] The exact reviewed commit is approved for public promotion.
+- [ ] The public GitHub release, tag, Pages deployment, and displayed version
+  are verified after publication on 2026-10-19.
+
 ## v1.8.0-beta.3 private staging — 2026-10-16
 
 - [x] Synthetic GPX parsing, trip-level matching, duplicate rejection, trimming, and v4

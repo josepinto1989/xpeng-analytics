@@ -78,6 +78,15 @@ explicit and keep the data on your device.
   across any journey chart also highlights the corresponding route position.
 - Optional local route traces in PDF reports. GPS tracks are preserved in the
   portable `.xpeng` history so one file can restore the full session.
+- A local journey replay with a lightweight chase-camera view, synchronized
+  speed, pedals, steering, brake indication, available door and boot signals,
+  compact live telemetry, and the current GPX position.
+- A personal chart studio for building, previewing, saving, reordering, and
+  restoring custom charts without duplicating telemetry.
+- A compact, grouped navigation system with one settings panel for language,
+  theme, measurement system, tyre-pressure units, and the optional guide.
+- A bilingual first-use guide that introduces imports and the main dashboard
+  without accounts, analytics, or remote state.
 
 The interface is available in European Portuguese and English, with light and
 dark themes.
@@ -138,11 +147,12 @@ Read the full [privacy notes](PRIVACY.md), [security guidance](SECURITY.md), and
 | [Privacy](PRIVACY.md) | What stays local and how to handle sensitive files |
 | [Security](SECURITY.md) | Safe reporting and importer security boundaries |
 | [Architecture](docs/ARCHITECTURE.md) | Browser engine, data flow, and portable-history design |
-| [`.xpeng` v4 format](docs/XPENG_HISTORY_V4_SPEC.md) | Technical format specification for telemetry and optional GPS tracks |
+| [`.xpeng` v5 format](docs/XPENG_HISTORY_V5_SPEC.md) | Technical format specification for telemetry, optional GPS tracks, and saved personal charts |
+| [v2.0.0 release notes](docs/RELEASE_NOTES_2.0.0.md) | Complete summary of the 2.0 release |
 | [v1.8.0 beta notes](docs/RELEASE_NOTES_1.8.0-beta.3.md) | Private-staging notes for automatic GPX matching and journey maps |
 | [v1.7.0 beta notes](docs/RELEASE_NOTES_1.7.0-beta.1.md) | Private-staging notes for long-term trends and driving context |
 | [v1.6.0 beta notes](docs/RELEASE_NOTES_1.6.0-beta.2.md) | Private-staging notes for persistent local history testing |
-| [v1.5.1 release notes](docs/RELEASE_NOTES_1.5.1.md) | Detailed summary of the current release |
+| [v1.5.1 release notes](docs/RELEASE_NOTES_1.5.1.md) | Historical notes for the mobile import update |
 | [Deployment](docs/DEPLOYMENT.md) | GitHub Pages build and deployment notes |
 | [Private staging](docs/STAGING.md) | Safety rules and the pre-release owner test checklist |
 | [Contributing](CONTRIBUTING.md) | How to propose a safe change |
@@ -163,7 +173,7 @@ The normal import path is a dedicated JavaScript Web Worker that streams the
 ZIP, keeps the required signals in typed columns, and computes the dashboard in
 memory. The earlier Python/WebAssembly processor remains bundled only so that
 existing version 1 and 2 history files can still be opened. The native reader
-also accepts version 3 histories; new exports use version 4.
+accepts version 3, 4, and 5 histories; new exports use version 5.
 
 ## Open-source acknowledgement
 

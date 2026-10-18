@@ -1,6 +1,7 @@
 // Streaming, columnar browser architecture inspired by LogbooX.
 // See THIRD_PARTY_NOTICES.md for attribution and the MIT licence notice.
 import { GPX_LIMITS, gpsSnapshot, parseGpxText } from "./gpx.js";
+import { validateCustomCharts } from "../custom-charts.js";
 
 const FAMILY_MARKERS = {
   operation: "driving_operation",
@@ -17,8 +18,8 @@ const SPECS = {
     ["eps_steeringangle", "steering_angle_deg", null, (x) => Math.abs(x) > 900],
     ["eps_steeringanglespd", "steering_speed_deg_s", null, (x) => Math.abs(x) > 2_000],
     ["ldcu_accpedalsig", "accelerator_pct", null, (x) => x < 0 || x > 100],
-    ["ldcu_brkpedalst", "brake_status", ["ldcu_brkpedalst", "ipb_brkpedalst", "esp_brkpedalst"]],
-    ["ldcu_currentgearlev", "gear_level"],
+    ["ldcu_brkpedalst", "brake_status", ["ldcu_brkpedalst", "ipb_brkpedalst", "esp_brkpedalst"], (x) => !Number.isInteger(x) || x < 0 || x > 1],
+    ["ldcu_currentgearlev", "gear_level", null, (x) => !Number.isInteger(x) || x < 1 || x > 4],
   ],
   energy: [
     ["ipuf_actrotspd", "front_motor_rpm"], ["ipur_actrotspd", "rear_motor_rpm"],
@@ -34,12 +35,12 @@ const SPECS = {
     ["ldcu_dstbatdisp_dynamic", "displayed_range_km", null, (x) => x < 0 || x > 1_000],
   ],
   status: [
-    ["ldcu_driverdoorajarst", "driver_door_ajar"], ["rdcu_psngrdoorajarst", "passenger_door_ajar"],
-    ["ldcu_rldoorajarst", "rear_left_door_ajar"], ["rdcu_rrdoorajarst", "rear_right_door_ajar"],
-    ["ldcu_flwinposstfb", "front_left_window_position"], ["ldcu_rlwinposstfb", "rear_left_window_position"],
-    ["frwinposstfb", "front_right_window_position", ["frwinposstfb", "rdcu_frwinposstfb", "ldcu_frwinposstfb"]],
-    ["rrwinposstfb", "rear_right_window_position", ["rrwinposstfb", "rdcu_rrwinposstfb", "ldcu_rrwinposstfb"]],
-    ["rdm_tropenersts", "trunk_open_status"],
+    ["ldcu_driverdoorajarst", "driver_door_ajar", null, (x) => !Number.isInteger(x) || x < 0 || x > 1], ["rdcu_psngrdoorajarst", "passenger_door_ajar", null, (x) => !Number.isInteger(x) || x < 0 || x > 1],
+    ["ldcu_rldoorajarst", "rear_left_door_ajar", null, (x) => !Number.isInteger(x) || x < 0 || x > 1], ["rdcu_rrdoorajarst", "rear_right_door_ajar", null, (x) => !Number.isInteger(x) || x < 0 || x > 1],
+    ["ldcu_flwinposstfb", "front_left_window_position", null, (x) => !Number.isInteger(x) || x < 0 || x > 5], ["ldcu_rlwinposstfb", "rear_left_window_position", null, (x) => !Number.isInteger(x) || x < 0 || x > 5],
+    ["frwinposstfb", "front_right_window_position", ["frwinposstfb", "rdcu_frwinposstfb", "ldcu_frwinposstfb"], (x) => !Number.isInteger(x) || x < 0 || x > 5],
+    ["rrwinposstfb", "rear_right_window_position", ["rrwinposstfb", "rdcu_rrwinposstfb", "ldcu_rrwinposstfb"], (x) => !Number.isInteger(x) || x < 0 || x > 5],
+    ["rdm_tropenersts", "trunk_open_status", null, (x) => !Number.isInteger(x) || x < 0 || x > 10, (raw) => raw.trim().toUpperCase() === "A" ? 10 : Number.parseFloat(raw)],
     ["ldcu_tpmsprfl", "tyre_pressure_fl_kpa", null, (x) => x < 100 || x > 400],
     ["ldcu_tpmsprfr", "tyre_pressure_fr_kpa", null, (x) => x < 100 || x > 400],
     ["ldcu_tpmsprrl", "tyre_pressure_rl_kpa", null, (x) => x < 100 || x > 400],
@@ -49,8 +50,9 @@ const SPECS = {
 
 const CENTRAL = 0x02014b50, END = 0x06054b50, LOCAL = 0x04034b50;
 const MOVING = 1, TRIP_BREAK = 300, JOURNEY_BREAK = 3600, CHARGE_POWER = 0.2, CHARGE_BREAK = 600, MAX_GAP = 10;
+const REPLAY_CONTEXT_SECONDS = 60, REPLAY_SERIES_LIMIT = 300;
 const HISTORY_MAGIC_PREFIX = new Uint8Array([88, 80, 69, 78, 71, 65, 0]);
-const HISTORY_VERSION = 4;
+const HISTORY_VERSION = 5;
 const HISTORY_MAGIC = new Uint8Array([...HISTORY_MAGIC_PREFIX, HISTORY_VERSION]);
 const HISTORY_FORMAT = "xpeng-analytics-columnar-history";
 
@@ -240,7 +242,7 @@ async function parseFamily(source, entries, family, report, totals, profile) {
       if (replaceLast) { times.setLast(timer); duplicates++; }
       else times.push(timer);
       for (const field of plan) {
-        const raw = field.slot >= 0 ? fields[field.slot] : ""; let value = raw ? Number.parseFloat(raw) : NaN;
+        const raw = field.slot >= 0 ? fields[field.slot] : ""; let value = raw ? (field.parse ? field.parse(raw) : Number.parseFloat(raw)) : NaN;
         if (!finite(value) || field.invalid?.(value)) { if (raw && finite(Number.parseFloat(raw))) invalidFields[field.source] = (invalidFields[field.source] || 0) + 1; value = NaN; }
         if (replaceLast) builders[field.target].setLast(value);
         else builders[field.target].push(value);
@@ -264,7 +266,7 @@ async function parseFamily(source, entries, family, report, totals, profile) {
           if (timerIndex < 0) throw new Error("invalid_data");
           const known = new Set(["vin", "vmodel", "timer", "ds", ...specs.flatMap(([source, , aliases]) => aliases ?? [source]).map((v) => v.toLowerCase())]);
           header.filter((name) => !known.has(name)).forEach((name) => unknownColumns.add(name));
-          plan = specs.map(([source, target, aliases, invalid]) => ({ source, target, invalid, index: (aliases ?? [source]).map((name) => header.indexOf(name.toLowerCase())).find((candidate) => candidate >= 0) ?? -1 }));
+          plan = specs.map(([source, target, aliases, invalid, parse]) => ({ source, target, invalid, parse, index: (aliases ?? [source]).map((name) => header.indexOf(name.toLowerCase())).find((candidate) => candidate >= 0) ?? -1 }));
           fieldReader = selectedFieldReader(header, [timerIndex, modelIndex, ...plan.map((field) => field.index)]);
           plan.forEach((field) => { field.slot = fieldReader.slot(field.index); });
           continue;
@@ -323,7 +325,11 @@ function mergeStream(oldStream, fresh) {
   return { family: fresh.family, time, columns, model: fresh.model || oldStream.model, stats: { ...fresh.stats, uniqueRows: n, mergedRows: n, emptyColumns, unknownColumns } };
 }
 
-export function emptyState() { return { format: HISTORY_FORMAT, version: HISTORY_VERSION, streams: {}, imports: [], model: "", gpsTracks: [], gpsSelectedTracks: [], gpsImports: [] }; }
+export function emptyState() { return { format: HISTORY_FORMAT, version: HISTORY_VERSION, streams: {}, imports: [], model: "", gpsTracks: [], gpsSelectedTracks: [], gpsImports: [], customCharts: [] }; }
+
+export function setCustomCharts(state, charts) {
+  return { ...state, version: HISTORY_VERSION, customCharts: validateCustomCharts(charts) };
+}
 
 export async function importArchive(state, source, filename, report, processingProfile = {}) {
   const profile = typeof processingProfile === "number" ? { memoryBudgetBytes: processingProfile, mode: "desktop" } : processingProfile;
@@ -435,18 +441,85 @@ function binnedSeries(operation, energy, status, startTime, endTime, limit = 180
   const start = lowerBound(operation.time, startTime), end = upperBound(operation.time, endTime), width = Math.max(1, Math.ceil((end - start) / limit)), rows = [];
   const energyAt = monotonicIndex(energy.time, operation.time[start]), statusAt = monotonicIndex(status.time, operation.time[start]);
   for (let base = start; base < end; base += width) {
-    const stop = Math.min(end, base + width), samples = { speed: sampleStats(), power: sampleStats(), soc: sampleStats(), range: sampleStats(), temp: sampleStats(), accelerator: sampleStats(), brake: sampleStats(), longitudinal: sampleStats(), lateral: sampleStats(), steering: sampleStats(), rearRpm: sampleStats(), rearTorque: sampleStats(), rearRotorTemp: sampleStats(), tyreFl: sampleStats(), tyreFr: sampleStats(), tyreRl: sampleStats(), tyreRr: sampleStats() };
+    const stop = Math.min(end, base + width), samples = { speed: sampleStats(), power: sampleStats(), soc: sampleStats(), range: sampleStats(), temp: sampleStats(), accelerator: sampleStats(), brake: sampleStats(), longitudinal: sampleStats(), lateral: sampleStats(), steering: sampleStats(), gear: sampleStats(), rearRpm: sampleStats(), rearTorque: sampleStats(), rearRotorTemp: sampleStats(), tyreFl: sampleStats(), tyreFr: sampleStats(), tyreRl: sampleStats(), tyreRr: sampleStats(), doorDriver: sampleStats(), doorPassenger: sampleStats(), doorRearLeft: sampleStats(), doorRearRight: sampleStats(), windowFrontLeft: sampleStats(), windowFrontRight: sampleStats(), windowRearLeft: sampleStats(), windowRearRight: sampleStats(), trunk: sampleStats() };
     for (let i = base; i < stop; i++) {
       const timestamp = operation.time[i], ei = energyAt(timestamp), si = statusAt(timestamp), brake = val(operation, "brake_status", i), rearRotorTemp = val(energy, "rear_rotor_temp_c", ei);
       observe(samples.speed, val(operation, "speed_kmh", i)); observe(samples.accelerator, val(operation, "accelerator_pct", i)); observe(samples.brake, finite(brake) && brake ? 100 : 0);
-      observe(samples.longitudinal, val(operation, "longitudinal_accel", i)); observe(samples.lateral, val(operation, "lateral_accel", i)); observe(samples.steering, val(operation, "steering_angle_deg", i));
+      observe(samples.longitudinal, val(operation, "longitudinal_accel", i)); observe(samples.lateral, val(operation, "lateral_accel", i)); observe(samples.steering, val(operation, "steering_angle_deg", i)); observe(samples.gear, val(operation, "gear_level", i));
       observe(samples.power, powerAt(energy, ei)); observe(samples.soc, val(energy, "soc_pct", ei)); observe(samples.range, val(energy, "displayed_range_km", ei)); observe(samples.temp, val(energy, "battery_temp_max_c", ei));
       observe(samples.rearRpm, val(energy, "rear_motor_rpm", ei)); observe(samples.rearTorque, val(energy, "rear_motor_torque_nm", ei)); observe(samples.rearRotorTemp, finite(rearRotorTemp) && rearRotorTemp > 0 ? rearRotorTemp : NaN);
       observe(samples.tyreFl, val(status, "tyre_pressure_fl_kpa", si)); observe(samples.tyreFr, val(status, "tyre_pressure_fr_kpa", si)); observe(samples.tyreRl, val(status, "tyre_pressure_rl_kpa", si)); observe(samples.tyreRr, val(status, "tyre_pressure_rr_kpa", si));
+      observe(samples.doorDriver, val(status, "driver_door_ajar", si)); observe(samples.doorPassenger, val(status, "passenger_door_ajar", si)); observe(samples.doorRearLeft, val(status, "rear_left_door_ajar", si)); observe(samples.doorRearRight, val(status, "rear_right_door_ajar", si)); observe(samples.trunk, val(status, "trunk_open_status", si));
+      observe(samples.windowFrontLeft, val(status, "front_left_window_position", si)); observe(samples.windowFrontRight, val(status, "front_right_window_position", si)); observe(samples.windowRearLeft, val(status, "rear_left_window_position", si)); observe(samples.windowRearRight, val(status, "rear_right_window_position", si));
     }
-    rows.push({ timestampUtc: iso(operation.time[base]), elapsedMinutes: rounded((operation.time[base] - startTime) / 60, 2), speedKmh: rounded(sampleAverage(samples.speed), 1), speedPeakKmh: rounded(samples.speed.max, 1), powerKw: rounded(sampleAverage(samples.power), 2), powerPeakKw: rounded(samples.power.max, 2), socPct: rounded(samples.soc.last, 1), displayedRangeKm: rounded(samples.range.last, 1), batteryTempC: rounded(samples.temp.max, 1), acceleratorPct: rounded(sampleAverage(samples.accelerator), 1), acceleratorPeakPct: rounded(samples.accelerator.max, 1), brakePct: rounded(sampleAverage(samples.brake), 1), longitudinalG: rounded(sampleAverage(samples.longitudinal), 3), lateralG: rounded(sampleAverage(samples.lateral), 3), steeringAngleDeg: rounded(sampleAverage(samples.steering), 1), rearMotorRpm: rounded(sampleAverage(samples.rearRpm), 0), rearMotorTorqueNm: rounded(sampleAverage(samples.rearTorque), 1), rearRotorTempC: rounded(samples.rearRotorTemp.max, 1), tyreFrontLeftKpa: rounded(sampleAverage(samples.tyreFl), 1), tyreFrontRightKpa: rounded(sampleAverage(samples.tyreFr), 1), tyreRearLeftKpa: rounded(sampleAverage(samples.tyreRl), 1), tyreRearRightKpa: rounded(sampleAverage(samples.tyreRr), 1) });
+    rows.push({ timestampUtc: iso(operation.time[base]), elapsedMinutes: rounded((operation.time[base] - startTime) / 60, 2), speedKmh: rounded(sampleAverage(samples.speed), 1), speedPeakKmh: rounded(samples.speed.max, 1), powerKw: rounded(sampleAverage(samples.power), 2), powerPeakKw: rounded(samples.power.max, 2), socPct: rounded(samples.soc.last, 1), displayedRangeKm: rounded(samples.range.last, 1), batteryTempC: rounded(samples.temp.max, 1), acceleratorPct: rounded(sampleAverage(samples.accelerator), 1), acceleratorPeakPct: rounded(samples.accelerator.max, 1), brakePct: rounded(sampleAverage(samples.brake), 1), longitudinalG: rounded(sampleAverage(samples.longitudinal), 3), lateralG: rounded(sampleAverage(samples.lateral), 3), steeringAngleDeg: rounded(sampleAverage(samples.steering), 1), gearLevel: rounded(samples.gear.last, 0), rearMotorRpm: rounded(sampleAverage(samples.rearRpm), 0), rearMotorTorqueNm: rounded(sampleAverage(samples.rearTorque), 1), rearRotorTempC: rounded(samples.rearRotorTemp.max, 1), tyreFrontLeftKpa: rounded(sampleAverage(samples.tyreFl), 1), tyreFrontRightKpa: rounded(sampleAverage(samples.tyreFr), 1), tyreRearLeftKpa: rounded(sampleAverage(samples.tyreRl), 1), tyreRearRightKpa: rounded(sampleAverage(samples.tyreRr), 1), driverDoorOpen: rounded(samples.doorDriver.max, 0), passengerDoorOpen: rounded(samples.doorPassenger.max, 0), rearLeftDoorOpen: rounded(samples.doorRearLeft.max, 0), rearRightDoorOpen: rounded(samples.doorRearRight.max, 0), trunkState: rounded(samples.trunk.last, 0), frontLeftWindowPosition: rounded(samples.windowFrontLeft.last, 0), frontRightWindowPosition: rounded(samples.windowFrontRight.last, 0), rearLeftWindowPosition: rounded(samples.windowRearLeft.last, 0), rearRightWindowPosition: rounded(samples.windowRearRight.last, 0) });
   }
   return rows;
+}
+
+const finiteColumnAvailability = new WeakMap();
+function columnHasFiniteValue(values) {
+  if (!values?.length) return false;
+  if (finiteColumnAvailability.has(values)) return finiteColumnAvailability.get(values);
+  let available = false;
+  for (let index = 0; index < values.length; index++) {
+    if (!finite(values[index])) continue;
+    available = true;
+    break;
+  }
+  finiteColumnAvailability.set(values, available);
+  return available;
+}
+
+function replayStateEvents(operation, status, startTime, endTime) {
+  const events = new Map();
+  const add = (timestamp, fields) => {
+    if (!Object.keys(fields).length) return;
+    const current = events.get(timestamp) || { timestampUtc: iso(timestamp) };
+    events.set(timestamp, { ...current, ...fields });
+  };
+  const scan = (stream, mappings) => {
+    const availableMappings = mappings.filter(({ source }) => columnHasFiniteValue(stream.columns[source]));
+    if (!availableMappings.length) return;
+    const start = lowerBound(stream.time, startTime), end = upperBound(stream.time, endTime), previous = {};
+    for (const { source, target, map = (value) => value } of availableMappings) {
+      const values = stream.columns[source] || [];
+      for (let index = start - 1; index >= 0; index--) {
+        if (!finite(values[index])) continue;
+        previous[target] = map(values[index]);
+        break;
+      }
+    }
+    add(startTime, previous);
+    for (let index = start; index < end; index++) {
+      const changed = {};
+      for (const { source, target, map = (value) => value } of availableMappings) {
+        const value = stream.columns[source]?.[index];
+        if (!finite(value)) continue;
+        const normalized = map(value);
+        if (previous[target] === normalized) continue;
+        previous[target] = normalized;
+        changed[target] = normalized;
+      }
+      add(stream.time[index], changed);
+    }
+  };
+  scan(operation, [
+    { source: "brake_status", target: "brakePct", map: (value) => value ? 100 : 0 },
+    { source: "gear_level", target: "gearLevel" },
+  ]);
+  scan(status, [
+    { source: "driver_door_ajar", target: "driverDoorOpen" },
+    { source: "passenger_door_ajar", target: "passengerDoorOpen" },
+    { source: "rear_left_door_ajar", target: "rearLeftDoorOpen" },
+    { source: "rear_right_door_ajar", target: "rearRightDoorOpen" },
+    { source: "trunk_open_status", target: "trunkState" },
+    { source: "front_left_window_position", target: "frontLeftWindowPosition" },
+    { source: "front_right_window_position", target: "frontRightWindowPosition" },
+    { source: "rear_left_window_position", target: "rearLeftWindowPosition" },
+    { source: "rear_right_window_position", target: "rearRightWindowPosition" },
+  ]);
+  return [...events.values()].sort((left, right) => Date.parse(left.timestampUtc) - Date.parse(right.timestampUtc));
 }
 
 function newContextBlock() {
@@ -521,7 +594,10 @@ function buildTrips(operation, energy, status, local) {
     }
     if (distance < .05) continue;
     const eStart = lowerBound(energy.time, startTime), eEnd = upperBound(energy.time, endTime), sStart = lowerBound(status.time, startTime), sEnd = upperBound(status.time, endTime), gross = used + regenerated;
-    const trip = { tripId: id("trip", startTime, endTime), date: local(startTime).date, startedAtUtc: iso(startTime), endedAtUtc: iso(endTime), durationMinutes: rounded((endTime - startTime) / 60, 1), movingMinutes: rounded(moving / 60, 1), distanceKm: rounded(distance), maxSpeedKmh: rounded(maxFinite(speed, start, end), 1), avgSpeedKmh: rounded(distance / ((endTime - startTime) / 3600), 1), energyUsedKwh: rounded(used, 3), netEnergyKwh: rounded(used - regenerated, 3), regeneratedKwh: rounded(regenerated, 3), regenerationSharePct: rounded(gross ? regenerated / gross * 100 : NaN, 1), consumptionKwh100: rounded((used - regenerated) / distance * 100), socStartPct: rounded(firstFinite(energy.columns.soc_pct, eStart, eEnd), 1), socEndPct: rounded(lastFinite(energy.columns.soc_pct, eStart, eEnd), 1), batteryTempMinC: rounded(minFinite(energy.columns.battery_temp_min_c, eStart, eEnd), 1), batteryTempMaxC: rounded(maxFinite(energy.columns.battery_temp_max_c, eStart, eEnd), 1), maxAccelerationG: rounded(maxFinite(operation.columns.longitudinal_accel, start, end), 3), maxBrakingG: rounded(Math.abs(Math.min(0, minFinite(operation.columns.longitudinal_accel, start, end))), 3), maxLateralG: rounded(maxAbsFinite(operation.columns.lateral_accel, start, end), 3), maxSteeringAngleDeg: rounded(maxAbsFinite(operation.columns.steering_angle_deg, start, end), 1), peakDrivePowerKw: rounded(peakDrive, 1), peakRegenPowerKw: rounded(finite(peakRegen) ? Math.abs(Math.min(0, peakRegen)) : NaN, 1), maxRearMotorRpm: rounded(maxFinite(energy.columns.rear_motor_rpm, eStart, eEnd), 0), maxRearTorqueNm: rounded(maxFinite(energy.columns.rear_motor_torque_nm, eStart, eEnd), 1), maxRearRotorTempC: rounded(maxPositiveFinite(energy.columns.rear_rotor_temp_c, eStart, eEnd), 1), tyrePressureMinKpa: rounded(Math.min(...["tyre_pressure_fl_kpa", "tyre_pressure_fr_kpa", "tyre_pressure_rl_kpa", "tyre_pressure_rr_kpa"].map((key) => minFinite(status.columns[key], sStart, sEnd)).filter(finite)), 1), tyrePressureMaxKpa: rounded(Math.max(...["tyre_pressure_fl_kpa", "tyre_pressure_fr_kpa", "tyre_pressure_rl_kpa", "tyre_pressure_rr_kpa"].map((key) => maxFinite(status.columns[key], sStart, sEnd)).filter(finite)), 1), gapCount: gaps, series: binnedSeries(operation, energy, status, startTime, endTime) };
+    const replayStart = startTime - REPLAY_CONTEXT_SECONDS, replayEnd = endTime + REPLAY_CONTEXT_SECONDS;
+    const replaySeries = binnedSeries(operation, energy, status, replayStart, replayEnd, REPLAY_SERIES_LIMIT);
+    const startedAtUtc = iso(startTime), endedAtUtc = iso(endTime), series = replaySeries.filter((point) => point.timestampUtc >= startedAtUtc && point.timestampUtc <= endedAtUtc);
+    const trip = { tripId: id("trip", startTime, endTime), date: local(startTime).date, startedAtUtc, endedAtUtc, durationMinutes: rounded((endTime - startTime) / 60, 1), movingMinutes: rounded(moving / 60, 1), distanceKm: rounded(distance), maxSpeedKmh: rounded(maxFinite(speed, start, end), 1), avgSpeedKmh: rounded(distance / ((endTime - startTime) / 3600), 1), energyUsedKwh: rounded(used, 3), netEnergyKwh: rounded(used - regenerated, 3), regeneratedKwh: rounded(regenerated, 3), regenerationSharePct: rounded(gross ? regenerated / gross * 100 : NaN, 1), consumptionKwh100: rounded((used - regenerated) / distance * 100), socStartPct: rounded(firstFinite(energy.columns.soc_pct, eStart, eEnd), 1), socEndPct: rounded(lastFinite(energy.columns.soc_pct, eStart, eEnd), 1), batteryTempMinC: rounded(minFinite(energy.columns.battery_temp_min_c, eStart, eEnd), 1), batteryTempMaxC: rounded(maxFinite(energy.columns.battery_temp_max_c, eStart, eEnd), 1), maxAccelerationG: rounded(maxFinite(operation.columns.longitudinal_accel, start, end), 3), maxBrakingG: rounded(Math.abs(Math.min(0, minFinite(operation.columns.longitudinal_accel, start, end))), 3), maxLateralG: rounded(maxAbsFinite(operation.columns.lateral_accel, start, end), 3), maxSteeringAngleDeg: rounded(maxAbsFinite(operation.columns.steering_angle_deg, start, end), 1), peakDrivePowerKw: rounded(peakDrive, 1), peakRegenPowerKw: rounded(finite(peakRegen) ? Math.abs(Math.min(0, peakRegen)) : NaN, 1), maxRearMotorRpm: rounded(maxFinite(energy.columns.rear_motor_rpm, eStart, eEnd), 0), maxRearTorqueNm: rounded(maxFinite(energy.columns.rear_motor_torque_nm, eStart, eEnd), 1), maxRearRotorTempC: rounded(maxPositiveFinite(energy.columns.rear_rotor_temp_c, eStart, eEnd), 1), tyrePressureMinKpa: rounded(Math.min(...["tyre_pressure_fl_kpa", "tyre_pressure_fr_kpa", "tyre_pressure_rl_kpa", "tyre_pressure_rr_kpa"].map((key) => minFinite(status.columns[key], sStart, sEnd)).filter(finite)), 1), tyrePressureMaxKpa: rounded(Math.max(...["tyre_pressure_fl_kpa", "tyre_pressure_fr_kpa", "tyre_pressure_rl_kpa", "tyre_pressure_rr_kpa"].map((key) => maxFinite(status.columns[key], sStart, sEnd)).filter(finite)), 1), gapCount: gaps, series, replaySeries, replayEvents: replayStateEvents(operation, status, replayStart, replayEnd) };
     trips.push(trip);
     for (const [position, block] of contextBlocks) { const context = finishContextBlock(block, trip, position); if (context) contexts.push(context); }
   }
@@ -599,7 +675,7 @@ export function buildSnapshot(state, report = () => {}) {
   for (const [family, stream] of Object.entries(state.streams)) { if (stream.stats.duplicates) qualityEvents.push({ family, field: null, rule: "duplicate_timestamp", severity: "low", affectedRows: stream.stats.duplicates, totalRows: stream.stats.inputRows }); if (stream.stats.invalidTimers) qualityEvents.push({ family, field: "timer", rule: "invalid_timer", severity: "high", affectedRows: stream.stats.invalidTimers, totalRows: stream.stats.inputRows }); if (stream.stats.wasUnsorted) qualityEvents.push({ family, field: "timer", rule: "unsorted_rows", severity: "medium", affectedRows: 1, totalRows: stream.stats.inputRows }); for (const [field, count] of Object.entries(stream.stats.invalidFields || {})) qualityEvents.push({ family, field, rule: "invalid_values", severity: "medium", affectedRows: count, totalRows: stream.stats.inputRows }); }
   const distance = sum(trips, "distanceKm"), net = sum(trips, "netEnergyKwh"), wall = sum(charges, "wallEnergyKwh"), batteryEnergy = sum(charges, "batteryEnergyKwh");
   report(96, "native_snapshot", "Preparing dashboard");
-  return { format: "xpeng-analytics-dashboard/v2", generatedAtUtc: new Date().toISOString(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "local", overview: { activeDays: daily.filter((row) => row.trips || row.charges).length, tripCount: trips.length, journeyCount: journeyRows.length, chargeCount: charges.length, distanceKm: rounded(distance), drivingHours: rounded(sum(trips, "durationMinutes") / 60, 1), netEnergyKwh: rounded(net), regeneratedKwh: rounded(sum(trips, "regeneratedKwh")), consumptionKwh100: rounded(distance ? net / distance * 100 : NaN), maxSpeedKmh: rounded(Math.max(...trips.map((row) => row.maxSpeedKmh || 0)), 1), wallEnergyKwh: rounded(wall), batteryEnergyKwh: rounded(batteryEnergy), chargeEfficiencyPct: rounded(wall ? batteryEnergy / wall * 100 : NaN, 1), maxChargePowerKw: rounded(Math.max(...charges.map((row) => row.maxPowerKw || 0)), 1), firstUtc: trips.at(0)?.startedAtUtc || null, lastUtc: trips.at(-1)?.endedAtUtc || null }, daily, trips: trips.slice().reverse(), journeys: enrichedJourneyRows.slice().reverse(), charges: charges.slice().reverse(), driving: { speed: advancedData.speed, pedal: advancedData.pedal, gg: advancedData.gg, events: advancedData.events, contexts }, battery: { capacityKwh: rounded(median(health.map((row) => row.capacityKwh))), latestRelativeSohPct: health.at(-1)?.relativeSohPct ?? null, qualifiedCharges: health.length, history: health, parking: parking.reverse(), daily: advancedData.batteryDaily, rangeSamples: advancedData.rangeSamples, tyres: advancedData.tyres }, activity: { monthly: [...monthly.values()].map((row) => ({ ...row, distanceKm: rounded(row.distanceKm), netEnergyKwh: rounded(row.netEnergyKwh) })), weekday: weekday.map((row) => ({ ...row, distanceKm: rounded(row.distanceKm) })), hours, heatmap: advancedData.heatmap }, gps: gpsData.gps, quality: { coverage: Object.entries(state.streams).map(([family, stream]) => { const emptyColumns = stream.stats?.emptyColumns || [], availableColumns = Object.keys(stream.columns).filter((column) => !emptyColumns.includes(column)); return { family, rows: stream.time.length, firstUtc: iso(stream.time[0]), lastUtc: iso(stream.time.at(-1)), totalColumns: Object.keys(stream.columns).length, availableColumns, emptyColumns, unknownColumns: stream.stats?.unknownColumns || [] }; }), events: qualityEvents }, imports: state.imports, gpsImports: state.gpsImports || [] };
+  return { format: "xpeng-analytics-dashboard/v2", generatedAtUtc: new Date().toISOString(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "local", overview: { activeDays: daily.filter((row) => row.trips || row.charges).length, tripCount: trips.length, journeyCount: journeyRows.length, chargeCount: charges.length, distanceKm: rounded(distance), drivingHours: rounded(sum(trips, "durationMinutes") / 60, 1), netEnergyKwh: rounded(net), regeneratedKwh: rounded(sum(trips, "regeneratedKwh")), consumptionKwh100: rounded(distance ? net / distance * 100 : NaN), maxSpeedKmh: rounded(Math.max(...trips.map((row) => row.maxSpeedKmh || 0)), 1), wallEnergyKwh: rounded(wall), batteryEnergyKwh: rounded(batteryEnergy), chargeEfficiencyPct: rounded(wall ? batteryEnergy / wall * 100 : NaN, 1), maxChargePowerKw: rounded(Math.max(...charges.map((row) => row.maxPowerKw || 0)), 1), firstUtc: trips.at(0)?.startedAtUtc || null, lastUtc: trips.at(-1)?.endedAtUtc || null }, daily, trips: trips.slice().reverse(), journeys: enrichedJourneyRows.slice().reverse(), charges: charges.slice().reverse(), driving: { speed: advancedData.speed, pedal: advancedData.pedal, gg: advancedData.gg, events: advancedData.events, contexts }, battery: { capacityKwh: rounded(median(health.map((row) => row.capacityKwh))), latestRelativeSohPct: health.at(-1)?.relativeSohPct ?? null, qualifiedCharges: health.length, history: health, parking: parking.reverse(), daily: advancedData.batteryDaily, rangeSamples: advancedData.rangeSamples, tyres: advancedData.tyres }, activity: { monthly: [...monthly.values()].map((row) => ({ ...row, distanceKm: rounded(row.distanceKm), netEnergyKwh: rounded(row.netEnergyKwh) })), weekday: weekday.map((row) => ({ ...row, distanceKm: rounded(row.distanceKm) })), hours, heatmap: advancedData.heatmap }, gps: gpsData.gps, customCharts: validateCustomCharts(state.customCharts), quality: { coverage: Object.entries(state.streams).map(([family, stream]) => { const emptyColumns = stream.stats?.emptyColumns || [], availableColumns = Object.keys(stream.columns).filter((column) => !emptyColumns.includes(column)); return { family, rows: stream.time.length, firstUtc: iso(stream.time[0]), lastUtc: iso(stream.time.at(-1)), totalColumns: Object.keys(stream.columns).length, availableColumns, emptyColumns, unknownColumns: stream.stats?.unknownColumns || [] }; }), events: qualityEvents }, imports: state.imports, gpsImports: state.gpsImports || [] };
 }
 
 async function gzip(buffer) { const stream = new Blob([buffer]).stream().pipeThrough(new CompressionStream("gzip")); return new Uint8Array(await new Response(stream).arrayBuffer()); }
@@ -635,7 +711,7 @@ export async function exportHistory(state, report = () => {}) {
       segment: await add(`${base}/segment`, track.segment),
     });
   }
-  const manifest = new TextEncoder().encode(JSON.stringify({ format: HISTORY_FORMAT, version: HISTORY_VERSION, exportedAtUtc: new Date().toISOString(), model: state.model, imports: state.imports, streams, gps: { imports: state.gpsImports || [], tracks: gpsTracks } }));
+  const manifest = new TextEncoder().encode(JSON.stringify({ format: HISTORY_FORMAT, version: HISTORY_VERSION, exportedAtUtc: new Date().toISOString(), model: state.model, imports: state.imports, streams, gps: { imports: state.gpsImports || [], tracks: gpsTracks }, customCharts: validateCustomCharts(state.customCharts) }));
   const length = new Uint8Array(4); new DataView(length.buffer).setUint32(0, manifest.byteLength, false);
   return new Blob([HISTORY_MAGIC, length, manifest, ...chunks]).arrayBuffer();
 }
@@ -643,26 +719,59 @@ export async function exportHistory(state, report = () => {}) {
 export async function importHistory(source, report = () => {}) {
   const sourceSize = sourceLength(source), header = await readSourceRange(source, 0, Math.min(12, sourceSize));
   const magicVersion = header[7];
-  if (header.length < 12 || !HISTORY_MAGIC_PREFIX.every((value, i) => header[i] === value) || ![3, 4].includes(magicVersion)) throw new Error("history_version");
+  if (header.length < 12 || !HISTORY_MAGIC_PREFIX.every((value, i) => header[i] === value) || ![3, 4, 5].includes(magicVersion)) throw new Error("history_version");
   const manifestLength = new DataView(header.buffer, header.byteOffset + 8, 4).getUint32(0, false);
   if (manifestLength > 2_000_000 || 12 + manifestLength > sourceSize) throw new Error("history_integrity");
   const manifestBytes = await readSourceRange(source, 12, 12 + manifestLength);
-  const manifest = JSON.parse(new TextDecoder().decode(manifestBytes));
-  if (manifest.format !== HISTORY_FORMAT || manifest.version !== magicVersion || ![3, 4].includes(manifest.version)) throw new Error("history_version");
+  let manifest;
+  try {
+    manifest = JSON.parse(new TextDecoder().decode(manifestBytes));
+  } catch {
+    throw new Error("history_integrity");
+  }
+  if (manifest.format !== HISTORY_FORMAT || manifest.version !== magicVersion || ![3, 4, 5].includes(manifest.version)) throw new Error("history_version");
   if (!manifest.streams || !["operation", "energy", "status"].every((family) => manifest.streams[family])) throw new Error("history_integrity");
-  const gpsRecords = manifest.version >= 4 ? manifest.gps?.tracks || [] : [];
+  const gpsRecords = manifest.version >= 4 && Array.isArray(manifest.gps?.tracks) ? manifest.gps.tracks : [];
   const payloadStart = 12 + manifestLength, streams = {}; let completed = 0;
-  const total = Object.values(manifest.streams).reduce((n, stream) => n + 1 + Object.keys(stream.columns).length, 0) + gpsRecords.length * 6;
+  const total = ["operation", "energy", "status"].reduce((count, family) => {
+    const allowed = new Set(SPECS[family].map(([, target]) => target));
+    const columns = manifest.streams[family]?.columns;
+    return count + 1 + (columns && typeof columns === "object" ? Object.keys(columns).filter((name) => allowed.has(name)).length : 0);
+  }, 0) + gpsRecords.length * 6;
   const read = async (record, Type) => {
-    if (!Number.isSafeInteger(record.offset) || !Number.isSafeInteger(record.bytes) || !Number.isSafeInteger(record.rawBytes) || record.offset < 0 || record.bytes < 0 || record.rawBytes < 0 || payloadStart + record.offset + record.bytes > sourceSize || record.rawBytes % Type.BYTES_PER_ELEMENT) throw new Error("history_integrity");
+    if (!record || typeof record !== "object" || !Number.isSafeInteger(record.offset) || !Number.isSafeInteger(record.bytes) || !Number.isSafeInteger(record.rawBytes) || record.offset < 0 || record.bytes < 0 || record.rawBytes < 0 || payloadStart + record.offset + record.bytes > sourceSize || record.rawBytes % Type.BYTES_PER_ELEMENT) throw new Error("history_integrity");
     const compressed = await readSourceRange(source, payloadStart + record.offset, payloadStart + record.offset + record.bytes);
     if (await hash(compressed) !== record.sha256) throw new Error("history_integrity");
-    const raw = await gunzip(compressed);
+    let raw;
+    try {
+      raw = await gunzip(compressed);
+    } catch {
+      throw new Error("history_integrity");
+    }
     if (raw.byteLength !== record.rawBytes || raw.byteOffset % Type.BYTES_PER_ELEMENT) throw new Error("history_integrity");
     report(8 + (++completed / total) * 84, "history_read", record.name);
     return new Type(raw.buffer, raw.byteOffset, raw.byteLength / Type.BYTES_PER_ELEMENT);
   };
-  for (const [family, record] of Object.entries(manifest.streams)) { const stream = { family, model: record.model || manifest.model, stats: record.stats, time: await read(record.time, Uint32Array), columns: {} }; for (const [name, column] of Object.entries(record.columns)) stream.columns[name] = await read(column, Float32Array); streams[family] = stream; }
+  for (const family of ["operation", "energy", "status"]) {
+    const record = manifest.streams[family];
+    if (!record || typeof record !== "object" || !record.columns || typeof record.columns !== "object") throw new Error("history_integrity");
+    const stream = { family, model: record.model || manifest.model, stats: record.stats && typeof record.stats === "object" ? record.stats : {}, time: await read(record.time, Uint32Array), columns: {} };
+    for (let index = 1; index < stream.time.length; index++) if (stream.time[index] <= stream.time[index - 1]) throw new Error("history_integrity");
+    const allowed = new Set(SPECS[family].map(([, target]) => target));
+    for (const [name, column] of Object.entries(record.columns)) {
+      if (!allowed.has(name)) continue;
+      stream.columns[name] = await read(column, Float32Array);
+      if (stream.columns[name].length !== stream.time.length) throw new Error("history_integrity");
+    }
+    const missingColumns = [];
+    for (const name of allowed) {
+      if (stream.columns[name]) continue;
+      stream.columns[name] = new Float32Array(stream.time.length).fill(NaN);
+      missingColumns.push(name);
+    }
+    stream.stats.emptyColumns = [...new Set([...(Array.isArray(stream.stats.emptyColumns) ? stream.stats.emptyColumns : []), ...missingColumns])];
+    streams[family] = stream;
+  }
   const gpsTracks = [];
   for (const record of gpsRecords) {
     const track = {
@@ -677,7 +786,7 @@ export async function importHistory(source, report = () => {}) {
     }
     gpsTracks.push(track);
   }
-  return { format: HISTORY_FORMAT, version: HISTORY_VERSION, model: manifest.model || "", imports: manifest.imports || [], streams, gpsTracks, gpsSelectedTracks: [], gpsImports: manifest.gps?.imports || [] };
+  return { format: HISTORY_FORMAT, version: HISTORY_VERSION, sourceHistoryVersion: manifest.version, model: manifest.model || "", imports: Array.isArray(manifest.imports) ? manifest.imports : [], streams, gpsTracks, gpsSelectedTracks: [], gpsImports: Array.isArray(manifest.gps?.imports) ? manifest.gps.imports : [], customCharts: validateCustomCharts(manifest.version >= 5 ? manifest.customCharts : []) };
 }
 
-export function isNativeHistory(bytes) { return bytes.length >= HISTORY_MAGIC.length && HISTORY_MAGIC_PREFIX.every((value, index) => bytes[index] === value) && [3, 4].includes(bytes[7]); }
+export function isNativeHistory(bytes) { return bytes.length >= HISTORY_MAGIC.length && HISTORY_MAGIC_PREFIX.every((value, index) => bytes[index] === value) && [3, 4, 5].includes(bytes[7]); }

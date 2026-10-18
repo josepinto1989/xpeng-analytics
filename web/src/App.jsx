@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import Dashboard from "./Dashboard.jsx";
 import { defaultLocale, translator } from "./i18n.js";
 import { APP_VERSION } from "./version.js";
 import { classifyLocalFiles, createImportPlan } from "./file-selection.js";
+import TutorialOverlay from "./TutorialOverlay.jsx";
+import { completeTutorialMode, nextTutorialMode, readTutorialState, shouldShowDashboardTutorialForHistory, tutorialStates, writeTutorialState } from "./onboarding.js";
 import {
   deletePersistentHistory,
   importReminderDays,
@@ -20,6 +21,7 @@ import {
   supportsPersistentHistory,
 } from "./persistent-history.js";
 
+const Dashboard = React.lazy(() => import("./Dashboard.jsx"));
 
 const phaseKeys = {
   runtime_load: "phaseRuntimeLoad",
@@ -101,12 +103,15 @@ function processingProfile() {
 const nativeHistoryPrefix = [88, 80, 69, 78, 71, 65, 0];
 const isNativeHistory = (buffer) => {
   const bytes = new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 8));
-  return bytes.length === 8 && nativeHistoryPrefix.every((value, index) => bytes[index] === value) && [3, 4].includes(bytes[7]);
+  return bytes.length === 8 && nativeHistoryPrefix.every((value, index) => bytes[index] === value) && [3, 4, 5].includes(bytes[7]);
 };
 
 export default function App() {
   const [locale, setLocale] = useState(defaultLocale);
   const [theme, setTheme] = useState("light");
+  const [tutorialStatus, setTutorialStatus] = useState(() => readTutorialState());
+  const [tutorialMode, setTutorialMode] = useState(null);
+  const [dashboardTutorialEligible, setDashboardTutorialEligible] = useState(null);
   const [engineReady, setEngineReady] = useState(false);
   const [busy, setBusy] = useState(true);
   const [progress, setProgress] = useState({ percent: 2, phase: "runtime_load" });
@@ -147,7 +152,42 @@ export default function App() {
   const startupRestoreAttemptedRef = useRef(false);
   const restoringSavedHistoryRef = useRef(false);
   const exportPurposeRef = useRef(null);
+  const tutorialAutoStartedRef = useRef({ landing: false, dashboard: false });
   const t = useMemo(() => translator(locale), [locale]);
+  const tutorialSteps = useMemo(() => tutorialMode === "dashboard" ? [
+    { target: [".dashboard-topbar"], title: t("tutorialDashboardTitle"), body: t("tutorialDashboardBody") },
+    { target: [".dashboard-sidebar nav", ".mobile-nav"], title: t("tutorialNavigationTitle"), body: t("tutorialNavigationBody") },
+    { target: ["[data-tutorial='tools']", ".mobile-nav"], title: t("tutorialToolsTitle"), body: t("tutorialToolsBody") },
+    { target: [".topbar-data-action"], title: t("tutorialMoreDataTitle"), body: t("tutorialMoreDataBody") },
+    { target: [".settings-trigger"], title: t("tutorialSettingsTitle"), body: t("tutorialSettingsBody") },
+    { target: [".privacy-mini", ".settings-trigger"], title: t("tutorialHistoryTitle"), body: t("tutorialHistoryBody") },
+  ] : [
+    { target: [".hero-copy"], title: t("tutorialWelcomeTitle"), body: t("tutorialWelcomeBody") },
+    { target: [".data-source-card"], title: t("tutorialGetDataTitle"), body: t("tutorialGetDataBody") },
+    { target: [".landing-drop-zone"], title: t("tutorialImportTitle"), body: t("tutorialImportBody") },
+    { target: [".gpx-next-step"], title: t("tutorialPortableTitle"), body: t("tutorialPortableBody") },
+  ], [tutorialMode, t]);
+
+  useEffect(() => {
+    if (busy || persistence.loading || tutorialMode) return;
+    const mode = nextTutorialMode(tutorialStatus, Boolean(snapshot), dashboardTutorialEligible === true);
+    if (!mode || tutorialAutoStartedRef.current[mode]) return;
+    tutorialAutoStartedRef.current[mode] = true;
+    const timer = setTimeout(() => setTutorialMode(mode), 350);
+    return () => clearTimeout(timer);
+  }, [busy, dashboardTutorialEligible, persistence.loading, snapshot, tutorialMode, tutorialStatus]);
+
+  const skipTutorial = () => {
+    const next = writeTutorialState(tutorialStates.DISMISSED);
+    setTutorialStatus(next);
+    setTutorialMode(null);
+  };
+  const finishTutorial = () => {
+    const next = writeTutorialState(completeTutorialMode(tutorialMode));
+    setTutorialStatus(next);
+    setTutorialMode(null);
+  };
+  const startTutorial = () => setTutorialMode(snapshot ? "dashboard" : "landing");
 
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -218,6 +258,7 @@ export default function App() {
           setProgress({ percent: 0, phase: null });
         }
       } else if (message.type === "imported") {
+        setDashboardTutorialEligible(true);
         snapshotRef.current = message.snapshot;
         setSnapshot(message.snapshot);
         setHistory((current) => [{
@@ -227,6 +268,8 @@ export default function App() {
         }, ...current]);
         requestAnimationFrame(() => setTimeout(processNext, 0));
       } else if (message.type === "history_imported") {
+        const sourceHistoryVersion = Number(message.metadata?.sourceVersion ?? message.metadata?.version ?? 0);
+        setDashboardTutorialEligible(shouldShowDashboardTutorialForHistory(sourceHistoryVersion));
         snapshotRef.current = message.snapshot;
         setSnapshot(message.snapshot);
         setHistory([{ name: activeFileRef.current?.name ?? "—", status: "historyLoaded", rows: message.snapshot?.overview?.tripCount ?? 0 }]);
@@ -253,6 +296,11 @@ export default function App() {
           rows: message.kind === "gps" ? message.result.pointCount ?? 0 : message.result.totalRows ?? 0,
         }, ...current]);
         requestAnimationFrame(() => setTimeout(processAdditionalNext, 0));
+      } else if (message.type === "custom_charts_updated") {
+        const updated = { ...snapshotRef.current, customCharts: message.charts || [] };
+        snapshotRef.current = updated;
+        setSnapshot(updated);
+        if (persistenceEnabledRef.current) queuePersistentSave();
       } else if (message.type === "history_exported") {
         const blob = new Blob([message.payload], { type: "application/octet-stream" });
         const purpose = message.purpose || exportPurposeRef.current || "download";
@@ -304,6 +352,7 @@ export default function App() {
         setProgress({ percent: 100, phase: "history_export_complete" });
       } else if (message.type === "reset_complete") {
         additionalQueueRef.current = [];
+        setDashboardTutorialEligible(null);
         snapshotRef.current = null;
         setSnapshot(null);
         setHistory([]);
@@ -601,6 +650,11 @@ export default function App() {
     workerRef.current.postMessage({ type: "export_history" });
   };
 
+  const saveCustomCharts = (charts) => {
+    if (!snapshotRef.current || !engineReady || workerModeRef.current !== "native") return;
+    workerRef.current.postMessage({ type: "set_custom_charts", charts });
+  };
+
   const reset = () => {
     if (!window.confirm(t("resetConfirm"))) return;
     startupRestoreAttemptedRef.current = true;
@@ -628,7 +682,7 @@ export default function App() {
       : t(phaseKeys[progress.phase] ?? "ready");
 
   if (snapshot) {
-    return <Dashboard
+    return <><React.Suspense fallback={<main className="app-shell"><div className="section-empty"><strong>{t("loadingEngine")}</strong></div></main>}><Dashboard
       data={snapshot}
       locale={locale}
       setLocale={setLocale}
@@ -639,6 +693,7 @@ export default function App() {
       onChooseAdditional={chooseAdditionalFiles}
       onChooseHistory={chooseHistory}
       onExport={exportHistory}
+      onSaveCustomCharts={saveCustomCharts}
       onReset={reset}
       onCancel={cancelProcessing}
       canCancel={workerModeRef.current === "native"}
@@ -650,7 +705,8 @@ export default function App() {
       onForgetSavedHistory={forgetSavedHistory}
       theme={theme}
       onToggleTheme={() => setTheme((current) => current === "light" ? "dark" : "light")}
-    />;
+      onStartTutorial={startTutorial}
+    /></React.Suspense>{tutorialMode ? <TutorialOverlay steps={tutorialSteps} onComplete={finishTutorial} onSkip={skipTutorial} t={t} /> : null}</>;
   }
 
   return (
@@ -661,6 +717,7 @@ export default function App() {
           <span><strong>XPENG</strong><small>Analytics</small></span>
         </a>
         <div className="topbar-actions">
+          <button className="tutorial-launch" type="button" onClick={startTutorial}>{t("tutorialOpen")}</button>
           <button className="theme-toggle" type="button" onClick={() => setTheme((current) => current === "light" ? "dark" : "light")} aria-label={theme === "light" ? t("darkTheme") : t("lightTheme")}><span aria-hidden="true" />{theme === "light" ? t("dark") : t("light")}</button>
           <label className="language-picker">
             <span>{t("language")}</span>
@@ -778,6 +835,7 @@ export default function App() {
       </section> : null}
 
       <footer className="site-footer"><span>{t("unofficial")}</span><span>{t("ownerLabel")}: Miguel Pinto</span><span>v{APP_VERSION}</span><a href="https://logboox.app" target="_blank" rel="noreferrer">LogbooX</a><a href="https://github.com/josepinto1989/xpeng-analytics/issues" target="_blank" rel="noreferrer">{t("reportIssue")}</a><a href="https://ko-fi.com/mpinto" target="_blank" rel="noreferrer">Ko-fi</a></footer>
+      {tutorialMode ? <TutorialOverlay steps={tutorialSteps} onComplete={finishTutorial} onSkip={skipTutorial} t={t} /> : null}
     </main>
   );
 }

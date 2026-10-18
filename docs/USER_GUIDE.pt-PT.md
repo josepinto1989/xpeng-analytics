@@ -163,6 +163,46 @@ energia regenerada, consumo e confiança. É uma estimativa do software baseada
 em velocidade, paragens, aceleração e travagem. Não usa GPS nem identifica a
 estrada real.
 
+### Reprodução visual
+
+Apresenta num calendário as datas com jornadas registadas. Escolhe uma data e
+uma jornada e inicia uma reconstrução local com reprodução, pausa, reinício,
+navegação na linha temporal e velocidades 1x, 2x, 3x, 5x ou 10x. O HUD e os
+gráficos sincronizados acompanham os sinais disponíveis de velocidade,
+potência, pedais, bateria, direção, mudança, portas e bagageira. Sinais em falta
+não são apresentados como estados medidos.
+
+Quando existe telemetria, a reprodução inclui também o minuto imediatamente
+anterior e posterior à parte em movimento. Assim, não se perdem eventos como
+abrir uma porta ou a bagageira antes de arrancar ou depois de chegar. As fases
+de abertura e fecho da bagageira e o movimento ativo dos vidros são mostrados
+a partir dos respetivos códigos registados; não são apresentados como uma
+percentagem exata de abertura.
+
+Quando a jornada tem um percurso GPX associado, o marcador do mapa acompanha a
+reprodução pelos timestamps. Sem GPX, a reprodução continua com a telemetria
+XPENG. Intervalos longos sem dados são encurtados e identificados. O veículo é
+uma visualização 2.5D genérica e original, não um modelo XPENG nem um simulador
+com precisão de segurança. As rodas dianteiras acompanham a direção observada e
+as luzes de travagem usam o sinal real do travão. Como a exportação não fornece
+atualmente o estado das luzes, os médios são uma aproximação visual entre as
+20:00 e as 08:00. No telemóvel, os mesmos dados usam uma composição vertical
+mais leve.
+
+### Os meus gráficos
+
+Cria visualizações pessoais com a informação já processada no browser. Escolhe
+um grupo de dados, tipo de gráfico, eixo horizontal, até três métricas, período
+e, quando fizer sentido, agrupamento diário ou mensal. A pré-visualização é
+atualizada enquanto editas. Estão disponíveis gráficos de linhas, área, barras,
+dispersão e histogramas quando os campos selecionados o permitem.
+
+Os gráficos guardados podem ser editados, duplicados, reordenados ou eliminados.
+As escolhas Métrico/Imperial e bar/psi são aplicadas no momento da apresentação.
+O `.xpeng` guarda apenas a definição compacta, sem imagens nem telemetria
+duplicada. Se um histórico futuro não tiver uma métrica usada, o gráfico
+mantém-se guardado e apresenta um aviso claro de dados indisponíveis.
+
 ### Relatório
 
 Cria localmente um PDF para as datas escolhidas. Inclui distância, consumo,
@@ -200,14 +240,22 @@ de histórico local persistente.
 A maioria das páginas permite selecionar 7, 15 ou 30 dias, todos os dados ou um
 intervalo personalizado.
 
-Os controlos no canto superior direito alternam entre inglês e português
-europeu e entre tema claro e escuro. Na barra lateral podes selecionar:
+Abre **Definições** na parte inferior da barra lateral do computador ou no
+cabeçalho do painel em ecrãs mais pequenos. O mesmo painel permite selecionar:
 
 - unidades métricas ou imperiais para distância, velocidade, consumo e
   temperatura;
 - pressão dos pneus, separadamente, em bar ou psi.
 
 Os novos PDFs usam também as unidades selecionadas.
+
+### Guia inicial
+
+Na primeira visita, o guia opcional explica a exportação XPENG, o processamento
+local e as principais áreas do painel. Pode ser ignorado e reiniciado em
+**Definições** a qualquer momento. Um histórico `.xpeng` atual não interrompe
+um utilizador recorrente; um histórico antigo pode apresentar uma vez as novas
+áreas da versão 2.0. Só é guardada localmente a escolha de conclusão ou omissão.
 
 ## 7. Guardar a sessão em `.xpeng`
 
@@ -221,6 +269,7 @@ O ficheiro:
 - permite adicionar novos ZIPs depois de ser restaurado;
 - inclui checksums para detetar corrupção;
 - preserva os recortes GPS opcionais associados automaticamente;
+- preserva as definições validadas dos gráficos pessoais;
 - está comprimido, mas **não está encriptado**.
 
 Trata-o com o mesmo cuidado que a exportação original da XPENG.

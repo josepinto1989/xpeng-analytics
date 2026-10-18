@@ -26,15 +26,15 @@ patterns, charging behaviour, and other personal information. Users should
 store exported histories as sensitive files and should not attach them to bug
 reports or commit them to Git.
 
-Version 4 portable histories contain normalised telemetry, model information
-when available, and import provenance such as source filenames and archive
-hashes. If the user imports GPX data, the same history also contains precise
-timestamps and coordinates for the route slices automatically matched to
-XPENG trips; unmatched recordings and rejected duplicates are not exported.
-Histories do not contain the original VIN
-and are not encrypted; possession of the file grants access to its processed
-data. The `.xpeng` extension and compression reduce size but do not provide
-encryption or access control.
+Version 5 portable histories contain normalised telemetry, model information
+when available, import provenance such as source filenames and archive hashes,
+and validated personal-chart definitions. If the user imports GPX data, the
+same history also contains precise timestamps and coordinates for the route
+slices automatically matched to XPENG trips; unmatched recordings and rejected
+duplicates are not exported. Histories do not contain the original VIN and are
+not encrypted; possession of the file grants access to its processed data. The
+`.xpeng` extension and compression reduce size but do not provide encryption or
+access control.
 
 The application must never add telemetry, advertising, remote fonts, crash
 uploads, or analytics without a separate public design review and an explicit

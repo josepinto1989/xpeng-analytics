@@ -1,4 +1,4 @@
-import { buildSnapshot, detectAdditionalFileKind, emptyState, exportHistory, importArchive, importGps, importHistory } from "./native-engine.js";
+import { buildSnapshot, detectAdditionalFileKind, emptyState, exportHistory, importArchive, importGps, importHistory, setCustomCharts } from "./native-engine.js";
 
 let state = emptyState();
 let queue = Promise.resolve();
@@ -11,7 +11,7 @@ const progress = (percent, phase, detail = "") => self.postMessage({ type: "prog
 const guardedProgress = (percent, phase, detail = "") => {
   if (cancelRequested) throw new Error("cancelled");
   const now = performance.now();
-  if (phase !== lastProgressPhase || percent >= 96 || percent - lastProgressPercent >= .5 || now - lastProgressAt >= 120) {
+  if (phase !== lastProgressPhase || percent >= 96 || percent - lastProgressPercent >= 1 || now - lastProgressAt >= 200) {
     lastProgressAt = now;
     lastProgressPercent = percent;
     lastProgressPhase = phase;
@@ -35,6 +35,11 @@ async function handle(message) {
   if (message?.type === "reset") {
     state = emptyState();
     self.postMessage({ type: "reset_complete" });
+    return;
+  }
+  if (message?.type === "set_custom_charts") {
+    state = setCustomCharts(state, message.charts);
+    self.postMessage({ type: "custom_charts_updated", charts: state.customCharts });
     return;
   }
   if (message?.type === "import") {
@@ -77,7 +82,7 @@ async function handle(message) {
     const snapshot = buildSnapshot(restored, guardedProgress);
     state = restored;
     progress(100, "complete", "Done");
-    self.postMessage({ type: "history_imported", engine: "native", metadata: { format: state.format, version: state.version }, snapshot });
+    self.postMessage({ type: "history_imported", engine: "native", metadata: { format: state.format, version: state.version, sourceVersion: restored.sourceHistoryVersion }, snapshot });
     return;
   }
   if (message?.type === "import_gps") {

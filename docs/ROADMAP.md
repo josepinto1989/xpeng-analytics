@@ -35,7 +35,7 @@ Validate the deployed application in Firefox, Chrome, and Edge; complete a
 real 30-day import; verify populated battery charts; export and restore a
 JSON.GZ history; and publish the first stable release.
 
-## Next
+## Active and planned
 
 ### Phase 7 — User acceptance and operational improvements
 
@@ -99,10 +99,9 @@ and can be promoted with the next reviewed public release.
 Build on persistent history with tools that become more useful over several
 months.
 
-The first private-staging implementation is available as `1.7.0-beta.1`. It
-adds monthly trends and telemetry-block driving-context estimates. Manual
-journey and charging labels, tariff profiles, and export summaries remain for
-the next Phase 9 iteration.
+The monthly trends and telemetry-block driving-context estimates are implemented
+and owner-validated for v2.0. Manual journey and charging labels, tariff
+profiles, and export summaries remain for a later Phase 9 iteration.
 
 - Add monthly trends for consumption, range, estimated capacity, relative SOH,
   parked use, charging, and tyre pressure.
@@ -132,9 +131,8 @@ optional, but once accepted by the user the matched tracks become part of the
 portable `.xpeng` history so the complete archive can be restored from one
 file.
 
-The owner-validated private-staging implementation is available as
-`1.8.0-beta.3`. It
-supports a unified later-data importer for XPENG ZIPs, GPX and GPX-in-ZIP,
+**Status: implemented and owner-validated for v2.0.** It supports a unified
+later-data importer for XPENG ZIPs, GPX and GPX-in-ZIP,
 BasicAirData and Open GPX Tracker files, fully automatic trip-level timestamp
 matching, duplicate selection, all-day recording segmentation, optional
 route-end trimming, OpenStreetMap journey maps, chart-to-map position
@@ -175,6 +173,12 @@ Phase 10 iterations.
   OpenStreetMap tile service must not be bulk-downloaded for offline packs.
 
 ### Phase 11 — Personal chart studio
+
+**Status: implemented and owner-validated locally for v2.0; not published.**
+The core builder, live preview, saved-chart management, responsive layout,
+allow-list validation, unit conversion, and `.xpeng` v5 round trip are ready.
+Selection of saved charts for PDF reports remains an optional v2.0 finishing
+task rather than a blocker for the validated chart studio.
 
 Add a dedicated **My charts** section where users can build, name, save, and
 reopen their own visualisations from the data already processed locally. The
@@ -217,6 +221,12 @@ the timestamped telemetry already present in the XPENG export. The experience
 must be presented as a visual reconstruction, not as an official XPENG vehicle
 simulation or a safety-accurate digital twin.
 
+**Status: implemented and owner-validated locally for v2.0; not published.** It
+includes a three-month activity calendar, journey selection, telemetry
+playback and seeking, 1x/2x/3x/5x/10x speed, a generic animated vehicle,
+responsive analytical HUD, synchronized charts, compressed data gaps, and a
+timestamp-synchronised GPX map.
+
 - Let the user open a journey and select **Replay journey** without changing
   the underlying analytics or imported data.
 - Start with a lightweight, original generic vehicle visual that does not copy
@@ -232,7 +242,7 @@ simulation or a safety-accurate digital twin.
   regeneration, speed, and vehicle direction without claiming a physically
   exact simulation.
 - Add play, pause, restart, timeline scrubbing, elapsed and recorded time, and
-  1x, 2x, and 3x playback speeds. Compress long telemetry gaps rather than
+  1x, 2x, 3x, 5x, and 10x playback speeds. Compress long telemetry gaps rather than
   leaving the replay apparently frozen, while showing when a gap was skipped.
 - When a matched GPX route exists, synchronise the map marker with the replay
   using the same timestamp-to-position logic introduced for journey charts in
@@ -249,7 +259,70 @@ simulation or a safety-accurate digital twin.
   playback speed, gaps, missing signals, event ordering, and GPX marker
   synchronisation before testing with private real exports.
 
-### Phase 13 — Native local and offline applications
+### Phase 13 — Visual and navigation consolidation
+
+Refresh the information architecture before the v2.0 release so the growing
+feature set remains calm and easy to navigate rather than accumulating more
+permanent controls in the left sidebar.
+
+**Status: implemented and owner-validated locally for v2.0; not published.** The desktop
+navigation is grouped into driving, vehicle, tools, and data areas; the mobile
+icon strip has been replaced by a labelled section selector; data import stays
+one click away; and theme, language, measurement, and tyre-pressure preferences
+now share one accessible settings panel.
+
+- Reduce the permanent width and visual weight of the desktop sidebar while
+  retaining clear labels and keyboard-accessible navigation.
+- Group related destinations into a small number of understandable areas,
+  such as driving, vehicle, tools, and data, without hiding important actions.
+- Move secondary preferences such as language, theme, measurement system, and
+  tyre-pressure units into one compact settings surface.
+- Preserve quick access to data import, Ko-fi, version information, privacy
+  state, and issue reporting without letting them compete with analytics.
+- Revisit top bars, filters, cards, spacing, and responsive navigation so the
+  dashboard feels less dense on laptop and mobile screens.
+- Keep the existing visual identity, bilingual wording, light-first theme,
+  accessibility, and current analytical behaviour.
+- Validate the revised hierarchy at desktop, tablet, and mobile widths before
+  including it in the v2.0 release candidate.
+
+### Phase 14 — First-use tutorial and guided onboarding
+
+Add an optional guided introduction after the v2.0 navigation and visual
+structure has been finalised. The tutorial should help a first-time user
+understand the application without interrupting returning users or collecting
+any usage information.
+
+**Status: implemented and owner-validated locally for v2.0; not published.** The guide
+is split between the first import screen and the populated dashboard, opens
+automatically only for a new user, can be skipped permanently, and can be
+restarted from the landing page or Settings. It is bilingual, responsive,
+keyboard-accessible, reduced-motion aware, and stores only its local
+completion state.
+
+- Offer the tutorial on the first visit and provide clear **Start tutorial**
+  and **Skip** actions.
+- Explain how to request the XPENG Data Act export, import the first ZIP, and
+  understand that all processing happens locally.
+- Introduce the main navigation areas and point out where to find journeys,
+  charging, battery, tyres, reports, My Charts, replay, and data management.
+- Explain how to add later XPENG ZIPs and optional GPX files after the first
+  vehicle import.
+- Explain the `.xpeng` portable history, local remembered history, privacy
+  implications, and the importance of keeping a backup.
+- Use short contextual callouts anchored to the real interface instead of a
+  long modal or separate manual.
+- Let users move forwards and backwards, close the tutorial at any time, and
+  restart it later from Help or Settings.
+- Remember only the local completion or dismissal preference; do not add
+  accounts, analytics, tracking, or a server.
+- Provide the complete tutorial in English and European Portuguese, with
+  keyboard navigation, visible focus, screen-reader labels, reduced motion,
+  and responsive layouts.
+- Validate the tour with an empty first-use state and with an existing history
+  on desktop and mobile before including it in a release.
+
+### Phase 15 — Native local and offline applications
 
 Package the existing interface as lightweight native desktop applications for
 Windows, macOS, and Linux while keeping the browser version available.

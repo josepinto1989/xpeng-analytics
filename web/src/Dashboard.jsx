@@ -1,18 +1,30 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Area as RechartsArea, AreaChart as RechartsAreaChart, Bar as RechartsBar, BarChart, CartesianGrid, Cell, ComposedChart as RechartsComposedChart, Legend, Line as RechartsLine, LineChart as RechartsLineChart, Pie as RechartsPie, PieChart, ReferenceLine, ResponsiveContainer, Scatter as RechartsScatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from "recharts";
 import "leaflet/dist/leaflet.css";
 import { APP_VERSION } from "./version.js";
+import { calculateDrivingPersonality } from "./driving-personality.js";
 import { formatStoredBytes, IMPORT_REMINDER_DAY_OPTIONS, nextReminderAt } from "./persistent-history.js";
 import { createTimestampLookup, nearestTimestampPoint, telemetryPointFromChart } from "./route-sync.js";
 import { consumptionUnit, consumptionValue, distanceUnit, distanceValue, pressureUnitLabel, pressureValue, speedUnit, speedValue, temperatureUnit, temperatureValue } from "./units.js";
 
-const sections = ["overview", "journeys", "driving", "charging", "battery", "tyres", "activity", "trends", "report", "quality", "data"];
+const Replay = React.lazy(() => import("./Replay.jsx"));
+const MyCharts = React.lazy(() => import("./MyCharts.jsx"));
+const navGroups = [
+  { key: null, items: ["overview"] },
+  { key: "driving", items: ["journeys", "driving", "activity", "trends", "replay"] },
+  { key: "vehicle", items: ["charging", "battery", "tyres"] },
+  { key: "tools", items: ["mycharts", "report"] },
+  { key: "data", items: ["quality", "data"] },
+];
+const sections = navGroups.flatMap((group) => group.items);
 const iconPaths = {
   overview: "M4 13h6V4H4v9Zm10 7h6v-9h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z",
   journeys: "M5 19c4-8 10-3 14-14M14 5h5v5", charging: "M13 2 5 14h6l-1 8 8-12h-6l1-8Z",
   driving: "M4 16c2-5 5-8 8-8s6 3 8 8M8 16h8M12 8V4",
   battery: "M3 7h17v12H3V7Zm17 4h2v4h-2M6 10h7v6H6v-6Z", tyres: "M6 12a6 6 0 1 0 12 0 6 6 0 1 0-12 0Zm3 0a3 3 0 1 0 6 0 3 3 0 1 0-6 0Z", activity: "M4 19V9m5 10V5m5 14v-7m5 7V3",
   trends: "M4 18 9 12l4 3 7-9M15 6h5v5",
+  replay: "M5 5h14v14H5V5Zm5 4 6 3-6 3V9Z",
+  mycharts: "M4 19V9m5 10V5m5 14v-7m5 7V3M3 21h18",
   report: "M6 2h9l4 4v16H6V2Zm9 0v5h4M9 11h7M9 15h7M9 19h5", quality: "m4 12 5 5L20 6", data: "M12 3v12m-5-5 5 5 5-5M5 20h14",
 };
 const C = { mint: "#20a983", teal: "#3ab5ae", cyan: "#63b7d4", amber: "#e3a62f", coral: "#e27b66", violet: "#8a82d5" };
@@ -33,13 +45,60 @@ const newestFirst = (rows) => safe(rows).slice().sort((a, b) => String(b?.starte
 const sum = (rows, field) => safe(rows).reduce((total, row) => total + (Number(row?.[field]) || 0), 0);
 const maximum = (rows, field) => { const values = safe(rows).map((row)=>Number(row?.[field])).filter(Number.isFinite); return values.length ? Math.max(...values) : null; };
 const median = (values) => { const rows = safe(values).map(Number).filter(Number.isFinite).sort((a,b)=>a-b); if (!rows.length) return null; const middle = Math.floor(rows.length / 2); return rows.length % 2 ? rows[middle] : (rows[middle - 1] + rows[middle]) / 2; };
+const sampleTimeline = (rows, limit = 420) => {
+  const source = safe(rows);
+  if (source.length <= limit) return source;
+  const sampled = [source[0]], slots = limit - 2, step = (source.length - 2) / slots;
+  for (let index = 0; index < slots; index++) sampled.push(source[1 + Math.floor(index * step)]);
+  sampled.push(source.at(-1));
+  return sampled;
+};
+const sampleScatter = (rows, limit = 900) => {
+  const source = safe(rows);
+  if (source.length <= limit) return source;
+  let minX = 0, maxX = 0, minY = 0, maxY = 0;
+  for (let index = 1; index < source.length; index++) {
+    const x = Number(source[index]?.lateralG), y = Number(source[index]?.longitudinalG);
+    if (x < Number(source[minX]?.lateralG)) minX = index;
+    if (x > Number(source[maxX]?.lateralG)) maxX = index;
+    if (y < Number(source[minY]?.longitudinalG)) minY = index;
+    if (y > Number(source[maxY]?.longitudinalG)) maxY = index;
+  }
+  const indexes = new Set([0, source.length - 1, minX, maxX, minY, maxY]);
+  const slots = Math.max(1, limit - indexes.size), step = (source.length - 1) / Math.max(1, slots - 1);
+  for (let index = 0; index < slots; index++) indexes.add(Math.round(index * step));
+  return [...indexes].sort((a, b) => a - b).slice(0, limit).map((index) => source[index]);
+};
 const signalText = (field, t) => signalLabels[field] ? t(signalLabels[field]) : String(field || "").replaceAll("_", " ");
-const num = (value, locale, digits = 1) => value == null || !Number.isFinite(Number(value)) ? "—" : new Intl.NumberFormat(locale, { maximumFractionDigits: digits }).format(Number(value));
-const dateText = (value, locale) => value ? new Intl.DateTimeFormat(locale, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value)) : "—";
-const timeText = (value, locale) => value ? new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "—";
+const numberFormatters = new Map(), dateFormatters = new Map(), timeFormatters = new Map(), secondTimeFormatters = new Map(), monthFormatters = new Map();
+const num = (value, locale, digits = 1) => {
+  if (value == null || !Number.isFinite(Number(value))) return "—";
+  const key = `${locale}|${digits}`;
+  if (!numberFormatters.has(key)) numberFormatters.set(key, new Intl.NumberFormat(locale, { maximumFractionDigits: digits }));
+  return numberFormatters.get(key).format(Number(value));
+};
+const dateText = (value, locale) => {
+  if (!value) return "—";
+  if (!dateFormatters.has(locale)) dateFormatters.set(locale, new Intl.DateTimeFormat(locale, { day: "2-digit", month: "short", year: "numeric" }));
+  return dateFormatters.get(locale).format(new Date(value));
+};
+const timeText = (value, locale) => {
+  if (!value) return "—";
+  if (!timeFormatters.has(locale)) timeFormatters.set(locale, new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }));
+  return timeFormatters.get(locale).format(new Date(value));
+};
+const secondTimeText = (value, locale) => {
+  if (!value) return "—";
+  if (!secondTimeFormatters.has(locale)) secondTimeFormatters.set(locale, new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+  return secondTimeFormatters.get(locale).format(new Date(value));
+};
 const localHour = (value) => { const date = new Date(value); return Number.isFinite(date.getTime()) ? date.getHours() : null; };
 const duration = (minutes, t) => minutes == null ? "—" : minutes >= 60 ? `${Math.floor(minutes / 60)} ${t("hourShort")} ${Math.round(minutes % 60)} ${t("minuteShort")}` : `${Math.round(minutes)} ${t("minuteShort")}`;
-const monthText = (value, locale) => value ? new Intl.DateTimeFormat(locale, { month: "short", year: "2-digit" }).format(new Date(`${value}-01T00:00:00Z`)) : "—";
+const monthText = (value, locale) => {
+  if (!value) return "—";
+  if (!monthFormatters.has(locale)) monthFormatters.set(locale, new Intl.DateTimeFormat(locale, { month: "short", year: "2-digit" }));
+  return monthFormatters.get(locale).format(new Date(`${value}-01T00:00:00Z`));
+};
 
 const telemetrySyncProps = (data) => safe(data).some((row) => Object.hasOwn(row, "elapsed")) ? { syncId: "journey-telemetry", syncMethod: "value" } : safe(data).some((row) => Object.hasOwn(row, "elapsedMinutes")) ? { syncId: "charging-telemetry", syncMethod: "value" } : {};
 const JourneyTimelineContext = React.createContext(null);
@@ -76,8 +135,76 @@ function ChargingTooltip({ active, label, series, locale, t, units }) {
 }
 function ChargingTip({ series, locale, t, units }) { return <Tooltip content={<ChargingTooltip series={series} locale={locale} t={t} units={units}/>} />; }
 function Chart({ children, height = 285 }) { return <div className="chart-wrap" style={{ height }}><ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{width:800,height}}>{children}</ResponsiveContainer></div>; }
-function Metric({ label, value, unit, note, tone = "" }) { return <article className={`dash-metric ${tone ? `tone-${tone}` : ""}`}><span>{label}</span><strong>{value}{unit ? <small>{unit}</small> : null}</strong>{note ? <em>{note}</em> : null}</article>; }
+function Metric({ label, value, unit, note, tone = "", onActivate = null, ariaLabel = null }) {
+  const activateFromKeyboard = (event) => {
+    if (!onActivate || (event.key !== "Enter" && event.key !== " ")) return;
+    event.preventDefault();
+    onActivate();
+  };
+  return <article className={`dash-metric ${tone ? `tone-${tone}` : ""} ${onActivate ? "is-secret-trigger" : ""}`} onClick={onActivate || undefined} onKeyDown={activateFromKeyboard} role={onActivate ? "button" : undefined} tabIndex={onActivate ? 0 : undefined} aria-label={ariaLabel || undefined}><span>{label}</span><strong>{value}{unit ? <small>{unit}</small> : null}</strong>{note ? <em>{note}</em> : null}</article>;
+}
 function Panel({ title, subtitle, action, children }) { return <section className="dash-panel"><header><div><h3>{title}</h3>{subtitle ? <p>{subtitle}</p> : null}</div>{action}</header>{children}</section>; }
+
+const DRIVING_PERSONALITY_AVATARS = {
+  smoothOperator: "smooth-operator.png",
+  efficiencyHunter: "efficiency-hunter.png",
+  regenerationMaster: "regeneration-master.png",
+  highwayCruiser: "highway-cruiser.png",
+  urbanNavigator: "urban-navigator.png",
+  roadTripper: "road-tripper.png",
+  dynamicDriver: "dynamic-driver.png",
+  nightOwl: "night-owl.png",
+  earlyBird: "early-bird.png",
+  weekendExplorer: "weekend-explorer.png",
+  onePedalArtist: "one-pedal-artist.png",
+  allRounder: "all-rounder.png",
+};
+
+function drivingPersonalityAvatar(key) {
+  const file = DRIVING_PERSONALITY_AVATARS[key] || DRIVING_PERSONALITY_AVATARS.allRounder;
+  return `${import.meta.env.BASE_URL}assets/personalities/${file}`;
+}
+
+function DrivingPersonalityDialog({ personality, t, onClose }) {
+  useEffect(() => {
+    const closeOnEscape = (event) => { if (event.key === "Escape") onClose(); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+  const name = (key) => t(`drivingPersonality_${key}`), description = (key) => t(`drivingPersonality_${key}_description`);
+  return <div className="driving-personality-layer" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="driving-personality-card" role="dialog" aria-modal="true" aria-labelledby="driving-personality-title"><button className="driving-personality-close" type="button" onClick={onClose} aria-label={t("close")}>×</button><div className="driving-personality-mark" aria-hidden="true"><img src={drivingPersonalityAvatar(personality.primary.key)} alt="" /></div><span>{t("drivingPersonalityUnlocked")}</span><h2 id="driving-personality-title">{name(personality.primary.key)}</h2><p>{description(personality.primary.key)}</p>{personality.secondary.length ? <div className="driving-personality-traits"><small>{t("drivingPersonalitySecondary")}</small><div>{personality.secondary.map((trait) => <span key={trait.key}><img src={drivingPersonalityAvatar(trait.key)} alt="" aria-hidden="true" />{name(trait.key)}</span>)}</div></div> : null}<footer><strong>{t("drivingPersonalityPeriod")}</strong></footer></section></div>;
+}
+function DrivingPersonalityMetric({ personality, profileKey, t }) {
+  const [open, setOpen] = useState(false), tap = useRef(0);
+  const traitKey = [personality.primary.key, ...personality.secondary.map((trait) => trait.key)].join("|");
+  useEffect(() => {
+    const preload = () => traitKey.split("|").forEach((key) => { const image = new Image(); image.decoding = "async"; image.src = drivingPersonalityAvatar(key); });
+    if (typeof window.requestIdleCallback === "function") { const id = window.requestIdleCallback(preload, { timeout: 1200 }); return () => window.cancelIdleCallback(id); }
+    const id = window.setTimeout(preload, 200); return () => window.clearTimeout(id);
+  }, [traitKey]);
+  const unlock = () => { const now = Date.now(); if (now - tap.current <= 650) { tap.current = 0; setOpen(true); } else tap.current = now; };
+  const value = profileKey ? t(`drivingProfile_${profileKey}`) : "—";
+  return <><Metric tone={profileKey === "aggressive" ? "coral" : profileKey === "dynamic" ? "amber" : "mint"} label={t("estimatedDrivingProfile")} value={value} note={<>{t("softwareEstimate")}<small className="secret-tease">{t("drivingPersonalityTease")}</small></>} onActivate={unlock} ariaLabel={`${t("estimatedDrivingProfile")}: ${value}`}/>{open ? <DrivingPersonalityDialog personality={personality} t={t} onClose={() => setOpen(false)}/> : null}</>;
+}
+function ProgressiveChartGrid({ children, resetKey }) {
+  const items = React.Children.toArray(children), containerRef = useRef(null);
+  const [inRange, setInRange] = useState(false), [visibleCount, setVisibleCount] = useState(0);
+  useEffect(() => {
+    setInRange(false); setVisibleCount(0);
+    const node = containerRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") { setInRange(true); return undefined; }
+    const observer = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) { setInRange(true); observer.disconnect(); } }, { rootMargin: "280px 0px" });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [resetKey]);
+  useEffect(() => {
+    if (!inRange || visibleCount >= items.length) return undefined;
+    const showNext = () => setVisibleCount((count) => Math.min(items.length, count + 1));
+    if (typeof window.requestIdleCallback === "function") { const id = window.requestIdleCallback(showNext, { timeout: 250 }); return () => window.cancelIdleCallback(id); }
+    const id = window.setTimeout(showNext, 16); return () => window.clearTimeout(id);
+  }, [inRange, items.length, visibleCount]);
+  return <div ref={containerRef} className="dashboard-grid two technical-grid progressive-chart-grid">{items.map((item, index) => index < visibleCount ? item : <div className="progressive-chart-placeholder" aria-hidden="true" key={`placeholder-${index}`} />)}</div>;
+}
 function Empty({ t }) { return <div className="section-empty"><strong>{t("noResults")}</strong><p>{t("changePeriod")}</p></div>; }
 function ChartEmpty({ t, message }) { return <div className="chart-empty-state"><strong>{t("noChartData")}</strong><p>{message || t("noChartDataHelp")}</p></div>; }
 
@@ -140,7 +267,7 @@ function RouteMap({ gps, timeline, t, locale }) {
         const map=mapRef.current,L=leafletRef.current,activePoint=nearestTimestampPoint(routeLookup,pending),status=statusRef.current;
         if(!map||!L)return;
         if(!activePoint){activeMarkerRef.current?.remove();activeMarkerRef.current=null;if(status){status.textContent=t("mapChartHint");status.classList.remove("is-active");}return;}
-        const position=[activePoint.lat,activePoint.lon],label=`${t("mapChartPosition")} · ${new Intl.DateTimeFormat(locale,{hour:"2-digit",minute:"2-digit",second:"2-digit"}).format(new Date(activePoint.timestampUtc))}`;
+        const position=[activePoint.lat,activePoint.lon],label=`${t("mapChartPosition")} · ${secondTimeText(activePoint.timestampUtc,locale)}`;
         if(!activeMarkerRef.current)activeMarkerRef.current=L.circleMarker(position,{radius:8,color:"#ffffff",weight:3,fillColor:"#8a82d5",fillOpacity:1,className:"route-live-marker"}).addTo(map).bindTooltip(label,{direction:"top",offset:[0,-8]});
         else activeMarkerRef.current.setLatLng(position).setTooltipContent(label);
         activeMarkerRef.current.bringToFront();
@@ -154,64 +281,78 @@ function RouteMap({ gps, timeline, t, locale }) {
     <div className="route-map-toolbar"><div><strong>{t("routeMap")}</strong><small>{t("routeMapLocalTrace")}</small></div><span ref={statusRef} className="route-map-sync">{t("mapChartHint")}</span></div>
     <div ref={containerRef} className="route-map has-tiles" aria-label={t("routeMap")}/>
     <div className="route-map-meta"><span>{t("gpsSource")}: <strong>{gps.sourceName}</strong></span><span>{t("matchConfidence")}: <strong>{num(gps.confidenceScore,locale,0)}%</strong></span><span>{num(gps.points,locale,0)} {t("gpsPointsLower")}</span>{gps.trimMeters?<span>{t("trimmedRouteEnds")}: {num(gps.trimMeters,locale,0)} m</span>:null}</div>
-    <p className={`route-map-privacy ${tileError?"is-error":""}`}>{tileError?t("mapTilesError"):t("osmPrivacyActive")}</p>
+    {tileError?<p className="route-map-privacy is-error">{t("mapTilesError")}</p>:null}
   </div>;
 }
 
 function JourneyDetail({ selected, trips, locale, t, units }) {
   const timeline=useRef({update:()=>{}}).current;
   useEffect(()=>timeline.update(null),[selected.journeyId,timeline]);
-  const segments = safe(selected.tripIds).map((id) => trips.find((row) => row.tripId === id)).filter(Boolean);
-  const journeyStartedAt = new Date(selected.startedAtUtc).getTime();
-  const series = segments.flatMap((trip, segment) => safe(trip.series).map((point) => {
-    const timestamp = new Date(point.timestampUtc).getTime();
-    const elapsed = Number.isFinite(timestamp) && Number.isFinite(journeyStartedAt) ? (timestamp - journeyStartedAt) / 60000 : segment * 1000 + Number(point.elapsedMinutes || 0);
-    return { ...point, speedKmh:speedValue(point.speedKmh,units.system), speedPeakKmh:speedValue(point.speedPeakKmh,units.system), displayedRangeKm:distanceValue(point.displayedRangeKm,units.system), batteryTempC:temperatureValue(point.batteryTempC,units.system), tyreFrontLeftKpa:pressureValue(point.tyreFrontLeftKpa,units.pressure), tyreFrontRightKpa:pressureValue(point.tyreFrontRightKpa,units.pressure), tyreRearLeftKpa:pressureValue(point.tyreRearLeftKpa,units.pressure), tyreRearRightKpa:pressureValue(point.tyreRearRightKpa,units.pressure), elapsed: Math.max(0, Math.round(elapsed * 100) / 100) };
-  }));
+  const segments = useMemo(() => {
+    const tripById = new Map(safe(trips).map((trip) => [trip.tripId, trip]));
+    return safe(selected.tripIds).map((id) => tripById.get(id)).filter(Boolean);
+  }, [selected.tripIds, trips]);
+  const series = useMemo(() => {
+    const journeyStartedAt = new Date(selected.startedAtUtc).getTime();
+    const source = segments.flatMap((trip, segment) => safe(trip.series).map((point) => ({ point, segment })));
+    return sampleTimeline(source, 420).map(({ point, segment }) => {
+      const timestamp = new Date(point.timestampUtc).getTime();
+      const elapsed = Number.isFinite(timestamp) && Number.isFinite(journeyStartedAt) ? (timestamp - journeyStartedAt) / 60000 : segment * 1000 + Number(point.elapsedMinutes || 0);
+      return { ...point, speedKmh:speedValue(point.speedKmh,units.system), speedPeakKmh:speedValue(point.speedPeakKmh,units.system), displayedRangeKm:distanceValue(point.displayedRangeKm,units.system), batteryTempC:temperatureValue(point.batteryTempC,units.system), tyreFrontLeftKpa:pressureValue(point.tyreFrontLeftKpa,units.pressure), tyreFrontRightKpa:pressureValue(point.tyreFrontRightKpa,units.pressure), tyreRearLeftKpa:pressureValue(point.tyreRearLeftKpa,units.pressure), tyreRearRightKpa:pressureValue(point.tyreRearRightKpa,units.pressure), elapsed: Math.max(0, Math.round(elapsed * 100) / 100) };
+    });
+  }, [segments, selected.startedAtUtc, units.pressure, units.system]);
   const maxOf = (field) => maximum(segments, field);
   const hasSeries = (fields) => series.some((row) => fields.some((field) => Number.isFinite(Number(row[field]))));
   return <JourneyTimelineContext.Provider value={timeline}><div className="detail-stack"><Panel title={`${dateText(selected.startedAtUtc, locale)} · ${timeText(selected.startedAtUtc, locale)}`} subtitle={`${duration(selected.durationMinutes, t)} · ${segments.length} ${t("segmentsLower")}`}><div className="metric-grid detail-metrics"><Metric label={t("distance")} value={num(distanceValue(selected.distanceKm,units.system), locale)} unit={` ${distanceUnit(units.system)}`} /><Metric label={t("consumption")} value={num(consumptionValue(selected.consumptionKwh100,units.system), locale)} unit={` ${consumptionUnit(units.system)}`} /><Metric label={t("netEnergy")} value={num(selected.netEnergyKwh, locale)} unit=" kWh" /><Metric label={t("regenerated")} value={num(selected.regeneratedKwh, locale)} unit=" kWh" note={`${num(selected.regenerationSharePct,locale)}% ${t("grossEnergy")}`} /><Metric label={t("maximumSpeed")} value={num(speedValue(selected.maxSpeedKmh,units.system), locale)} unit={` ${speedUnit(units.system)}`} /></div></Panel>
     {selected.gps?<Panel title={t("journeyRoute")} subtitle={t("journeyRouteHelp")}><RouteMap gps={selected.gps} timeline={timeline} t={t} locale={locale}/></Panel>:null}
     {segments.some((row)=>row.peakDrivePowerKw!=null)?<Panel title={t("technicalHighlights")} subtitle={t("technicalHighlightsHelp")}><div className="metric-grid detail-metrics"><Metric label={t("peakDrivePower")} value={num(maxOf("peakDrivePowerKw"),locale)} unit=" kW"/><Metric label={t("peakRegeneration")} value={num(maxOf("peakRegenPowerKw"),locale)} unit=" kW"/><Metric label={t("maximumAcceleration")} value={num(maxOf("maxAccelerationG"),locale,2)} unit=" g"/><Metric label={t("maximumBraking")} value={num(maxOf("maxBrakingG"),locale,2)} unit=" g"/><Metric label={t("maximumCornering")} value={num(maxOf("maxLateralG"),locale,2)} unit=" g"/><Metric label={t("maximumSteeringAngle")} value={num(maxOf("maxSteeringAngleDeg"),locale,0)} unit="°"/><Metric label={t("rearMotorSpeed")} value={num(maxOf("maxRearMotorRpm"),locale,0)} unit=" rpm"/><Metric label={t("rearMotorTorque")} value={num(maxOf("maxRearTorqueNm"),locale,0)} unit=" Nm"/><Metric label={t("rearRotorTemperature")} value={num(temperatureValue(maxOf("maxRearRotorTempC"),units.system),locale)} unit={` ${temperatureUnit(units.system)}`}/><Metric label={t("tyrePressureRange")} value={`${num(pressureValue(Math.min(...segments.map((row)=>row.tyrePressureMinKpa).filter(Number.isFinite)),units.pressure),locale)}–${num(pressureValue(maxOf("tyrePressureMaxKpa"),units.pressure),locale)}`} unit={` ${pressureUnitLabel(units.pressure)}`}/></div></Panel>:null}
-    <div className="dashboard-grid two technical-grid"><Panel title={t("speedProfile")} subtitle={t("speedProfileHelp")}><Chart><LineChart data={series} margin={{ top: 15, right: 12, left: -12 }}><CartesianGrid stroke="var(--grid)" vertical={false} /><XAxis dataKey="elapsed" hide /><YAxis tick={{ fill: "var(--muted)", fontSize: 10 }} axisLine={false} tickLine={false} /><Tip locale={locale} suffix={` ${speedUnit(units.system)}`} /><Line type="monotone" dataKey="speedKmh" name={t("speed")} stroke={C.teal} dot={false} strokeWidth={2} /><Line type="monotone" dataKey="speedPeakKmh" name={t("peak")} stroke={C.cyan} dot={false} /></LineChart></Chart></Panel><Panel title={t("powerProfile")} subtitle={t("powerProfileHelp")}><Chart><AreaChart data={series} margin={{ top: 15, right: 12, left: -12 }}><CartesianGrid stroke="var(--grid)" vertical={false} /><XAxis dataKey="elapsed" hide /><YAxis tick={{ fill: "var(--muted)", fontSize: 10 }} axisLine={false} tickLine={false} /><ReferenceLine y={0} stroke="var(--muted)" /><Tip locale={locale} suffix=" kW"/><Area type="monotone" dataKey="powerKw" name={t("power")} stroke={C.amber} fill="rgba(227,166,47,.18)" /></AreaChart></Chart></Panel><Panel title={t("socAndRange")} subtitle={t("socAndRangeHelp")}><Chart><LineChart data={series} margin={{ top: 15, right: 12, left: -12 }}><CartesianGrid stroke="var(--grid)" vertical={false} /><XAxis dataKey="elapsed" hide /><YAxis yAxisId="a" tick={{ fill: "var(--muted)", fontSize: 10 }} /><YAxis yAxisId="b" orientation="right" tick={{ fill: "var(--muted)", fontSize: 10 }} /><Tip locale={locale} /><Legend wrapperStyle={{ fontSize: 11 }} /><Line yAxisId="a" type="monotone" dataKey="socPct" name="SOC %" stroke={C.mint} dot={false} strokeWidth={2} /><Line yAxisId="b" type="monotone" dataKey="displayedRangeKm" name={`${t("displayedRange")} ${distanceUnit(units.system)}`} stroke={C.violet} dot={false} strokeWidth={2} /></LineChart></Chart></Panel><Panel title={t("temperatureProfile")} subtitle={t("temperatureProfileHelp")}><Chart><LineChart data={series} margin={{ top: 15, right: 12, left: -12 }}><CartesianGrid stroke="var(--grid)" vertical={false} /><XAxis dataKey="elapsed" hide /><YAxis tick={{ fill: "var(--muted)", fontSize: 10 }} /><Tip locale={locale} suffix={` ${temperatureUnit(units.system)}`} /><Line type="monotone" dataKey="batteryTempC" name={t("batteryTemperature")} stroke={C.coral} dot={false} strokeWidth={2} /></LineChart></Chart></Panel></div>
-    <div className="dashboard-grid two technical-grid">
+    <ProgressiveChartGrid key={`primary-${selected.journeyId}`} resetKey={selected.journeyId}><Panel title={t("speedProfile")} subtitle={t("speedProfileHelp")}><Chart><LineChart data={series} margin={{ top: 15, right: 12, left: -12 }}><CartesianGrid stroke="var(--grid)" vertical={false} /><XAxis dataKey="elapsed" hide /><YAxis tick={{ fill: "var(--muted)", fontSize: 10 }} axisLine={false} tickLine={false} /><Tip locale={locale} suffix={` ${speedUnit(units.system)}`} /><Line type="monotone" dataKey="speedKmh" name={t("speed")} stroke={C.teal} dot={false} strokeWidth={2} /><Line type="monotone" dataKey="speedPeakKmh" name={t("peak")} stroke={C.cyan} dot={false} /></LineChart></Chart></Panel><Panel title={t("powerProfile")} subtitle={t("powerProfileHelp")}><Chart><AreaChart data={series} margin={{ top: 15, right: 12, left: -12 }}><CartesianGrid stroke="var(--grid)" vertical={false} /><XAxis dataKey="elapsed" hide /><YAxis tick={{ fill: "var(--muted)", fontSize: 10 }} axisLine={false} tickLine={false} /><ReferenceLine y={0} stroke="var(--muted)" /><Tip locale={locale} suffix=" kW"/><Area type="monotone" dataKey="powerKw" name={t("power")} stroke={C.amber} fill="rgba(227,166,47,.18)" /></AreaChart></Chart></Panel><Panel title={t("socAndRange")} subtitle={t("socAndRangeHelp")}><Chart><LineChart data={series} margin={{ top: 15, right: 12, left: -12 }}><CartesianGrid stroke="var(--grid)" vertical={false} /><XAxis dataKey="elapsed" hide /><YAxis yAxisId="a" tick={{ fill: "var(--muted)", fontSize: 10 }} /><YAxis yAxisId="b" orientation="right" tick={{ fill: "var(--muted)", fontSize: 10 }} /><Tip locale={locale} /><Legend wrapperStyle={{ fontSize: 11 }} /><Line yAxisId="a" type="monotone" dataKey="socPct" name="SOC %" stroke={C.mint} dot={false} strokeWidth={2} /><Line yAxisId="b" type="monotone" dataKey="displayedRangeKm" name={`${t("displayedRange")} ${distanceUnit(units.system)}`} stroke={C.violet} dot={false} strokeWidth={2} /></LineChart></Chart></Panel><Panel title={t("temperatureProfile")} subtitle={t("temperatureProfileHelp")}><Chart><LineChart data={series} margin={{ top: 15, right: 12, left: -12 }}><CartesianGrid stroke="var(--grid)" vertical={false} /><XAxis dataKey="elapsed" hide /><YAxis tick={{ fill: "var(--muted)", fontSize: 10 }} /><Tip locale={locale} suffix={` ${temperatureUnit(units.system)}`} /><Line type="monotone" dataKey="batteryTempC" name={t("batteryTemperature")} stroke={C.coral} dot={false} strokeWidth={2} /></LineChart></Chart></Panel></ProgressiveChartGrid>
+    <ProgressiveChartGrid key={`secondary-${selected.journeyId}`} resetKey={selected.journeyId}>
       <Panel title={t("drivingForces")} subtitle={t("drivingForcesHelp")}>{hasSeries(["longitudinalG","lateralG"])?<Chart><LineChart data={series} margin={{top:15,right:12,left:-12}}><CartesianGrid stroke="var(--grid)" vertical={false}/><XAxis dataKey="elapsed" hide/><YAxis unit=" g" tick={{fill:"var(--muted)",fontSize:10}}/><ReferenceLine y={0} stroke="var(--muted)"/><Tip locale={locale}/><Legend wrapperStyle={{fontSize:11}}/><Line type="monotone" dataKey="longitudinalG" name={t("longitudinalAcceleration")} stroke={C.teal} dot={false}/><Line type="monotone" dataKey="lateralG" name={t("lateralAcceleration")} stroke={C.violet} dot={false}/></LineChart></Chart>:<ChartEmpty t={t}/>}</Panel>
       <Panel title={t("pedalProfile")} subtitle={t("pedalProfileHelp")}>{hasSeries(["acceleratorPct","acceleratorPeakPct","brakePct"])?<Chart><ComposedChart data={series} margin={{top:15,right:12,left:-12}}><CartesianGrid stroke="var(--grid)" vertical={false}/><XAxis dataKey="elapsed" hide/><YAxis domain={[0,100]} unit="%" tick={{fill:"var(--muted)",fontSize:10}}/><Tip locale={locale}/><Legend wrapperStyle={{fontSize:11}}/><Area dataKey="acceleratorPct" name={t("averageAccelerator")} stroke={C.cyan} fill="rgba(99,183,212,.16)"/><Line dataKey="acceleratorPeakPct" name={t("peakAccelerator")} stroke={C.teal} dot={false}/><Line dataKey="brakePct" name={t("brakeActive")} stroke={C.coral} dot={false}/></ComposedChart></Chart>:<ChartEmpty t={t}/>}</Panel>
       <Panel title={t("rearMotorProfile")} subtitle={t("rearMotorProfileHelp")}>{hasSeries(["rearMotorTorqueNm","rearMotorRpm"])?<Chart><LineChart data={series} margin={{top:15,right:12,left:-12}}><CartesianGrid stroke="var(--grid)" vertical={false}/><XAxis dataKey="elapsed" hide/><YAxis yAxisId="torque" unit=" Nm" tick={{fill:"var(--muted)",fontSize:10}}/><YAxis yAxisId="rpm" orientation="right" unit=" rpm" tick={{fill:"var(--muted)",fontSize:10}}/><Tip locale={locale}/><Legend wrapperStyle={{fontSize:11}}/><Line yAxisId="torque" dataKey="rearMotorTorqueNm" name={t("rearMotorTorque")} stroke={C.amber} dot={false}/><Line yAxisId="rpm" dataKey="rearMotorRpm" name={t("rearMotorSpeed")} stroke={C.teal} dot={false}/></LineChart></Chart>:<ChartEmpty t={t}/>}</Panel>
       <Panel title={t("journeyTyrePressure")} subtitle={t("journeyTyrePressureHelp")}>{hasSeries(["tyreFrontLeftKpa","tyreFrontRightKpa","tyreRearLeftKpa","tyreRearRightKpa"])?<Chart><LineChart data={series} margin={{top:15,right:12,left:4}}><CartesianGrid stroke="var(--grid)" vertical={false}/><XAxis dataKey="elapsed" hide/><YAxis width={48} domain={["auto","auto"]} tickFormatter={(value)=>num(value,locale,units.pressure==="bar"?2:1)} tick={{fill:"var(--muted)",fontSize:10}}/><Tip locale={locale} suffix={` ${pressureUnitLabel(units.pressure)}`}/><Legend wrapperStyle={{fontSize:11}}/><Line dataKey="tyreFrontLeftKpa" name={t("frontLeftShort")} stroke={C.mint} dot={false}/><Line dataKey="tyreFrontRightKpa" name={t("frontRightShort")} stroke={C.cyan} dot={false}/><Line dataKey="tyreRearLeftKpa" name={t("rearLeftShort")} stroke={C.amber} dot={false}/><Line dataKey="tyreRearRightKpa" name={t("rearRightShort")} stroke={C.coral} dot={false}/></LineChart></Chart>:<ChartEmpty t={t}/>}</Panel>
-    </div>
+    </ProgressiveChartGrid>
     <Panel title={t("journeyStructure")} subtitle={t("journeyStructureHelp")}><div className="detail-table">{segments.map((row, index) => <div key={row.tripId}><span className="segment-number">{index + 1}</span><strong>{timeText(row.startedAtUtc, locale)}</strong><span>{num(distanceValue(row.distanceKm,units.system), locale)} {distanceUnit(units.system)}</span><span>{duration(row.durationMinutes, t)}</span><span>{num(consumptionValue(row.consumptionKwh100,units.system), locale)} {consumptionUnit(units.system)}</span><span>{num(row.socStartPct, locale, 0)} → {num(row.socEndPct, locale, 0)}%</span></div>)}</div></Panel></div></JourneyTimelineContext.Provider>;
 }
 
+const JourneyDetailSection = memo(JourneyDetail);
+
 function Journeys({ data, locale, t, period, maxDate, customRange, selectedId, setSelectedId, units }) {
-  const rows = newestFirst(safe(data.journeys).filter((row) => inPeriod(row.date, period, maxDate, customRange)));
+  const rows = useMemo(() => newestFirst(safe(data.journeys).filter((row) => inPeriod(row.date, period, maxDate, customRange))), [data.journeys, period, maxDate, customRange]);
   const [query, setQuery] = useState("");
-  const visible = rows.filter((row) => `${row.date} ${row.distanceKm}`.toLowerCase().includes(query.toLowerCase()));
+  const visible = useMemo(() => rows.filter((row) => `${row.date} ${row.distanceKm}`.toLowerCase().includes(query.toLowerCase())), [query, rows]);
   const selected = visible.find((row) => row.journeyId === selectedId) ?? visible[0];
+  const deferredSelected = useDeferredValue(selected);
   if (!selected) return <Empty t={t} />;
-  return <><div className="list-toolbar"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("searchJourneys")} /><span>{visible.length} {t("journeysLower")}</span></div><div className="master-detail"><Panel title={t("journeyList")}><div className="record-list">{visible.map((row) => <button key={row.journeyId} className={`record-button ${row.journeyId === selected.journeyId ? "is-active" : ""}`} onClick={() => setSelectedId(row.journeyId)}><span><strong>{dateText(row.startedAtUtc, locale)} {row.gps?<i className="route-available" title={t("routeAvailable")}>⌖</i>:null}</strong><small>{timeText(row.startedAtUtc, locale)} · {safe(row.tripIds).length} {t("segmentsLower")}</small></span><span><strong>{num(distanceValue(row.distanceKm,units.system), locale)} {distanceUnit(units.system)}</strong><small>{num(consumptionValue(row.consumptionKwh100,units.system), locale)} {consumptionUnit(units.system)}</small></span></button>)}</div></Panel><JourneyDetail selected={selected} trips={safe(data.trips)} locale={locale} t={t} units={units}/></div></>;
+  const detailSelected = deferredSelected ?? selected, detailPending = detailSelected.journeyId !== selected.journeyId;
+  return <><div className="list-toolbar"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("searchJourneys")} /><span>{visible.length} {t("journeysLower")}</span></div><div className="master-detail"><Panel title={t("journeyList")}><div className="record-list">{visible.map((row) => <button key={row.journeyId} className={`record-button ${row.journeyId === selected.journeyId ? "is-active" : ""}`} onClick={() => setSelectedId(row.journeyId)}><span><strong>{dateText(row.startedAtUtc, locale)} {row.gps?<i className="route-available" title={t("routeAvailable")} aria-label={t("routeAvailable")}>GPS</i>:null}</strong><small>{timeText(row.startedAtUtc, locale)} · {safe(row.tripIds).length} {t("segmentsLower")}</small></span><span><strong>{num(distanceValue(row.distanceKm,units.system), locale)} {distanceUnit(units.system)}</strong><small>{num(consumptionValue(row.consumptionKwh100,units.system), locale)} {consumptionUnit(units.system)}</small></span></button>)}</div></Panel><div className={`journey-detail-shell ${detailPending?"is-updating":""}`} aria-busy={detailPending}><JourneyDetailSection selected={detailSelected} trips={safe(data.trips)} locale={locale} t={t} units={units}/></div></div></>;
 }
 
 function Driving({ data, locale, t, period, maxDate, customRange }) {
-  const filter = (row) => inPeriod(row.date,period,maxDate,customRange);
-  const trips=safe(data.trips).filter(filter), speed=safe(data.driving?.speed).filter(filter), pedal=safe(data.driving?.pedal).filter(filter), gg=safe(data.driving?.gg).filter(filter), events=safe(data.driving?.events).filter(filter);
-  const aggregate=(rows)=>[...rows.reduce((map,row)=>map.set(row.band,(map.get(row.band)||0)+Number(row.seconds||0)),new Map())].map(([band,seconds])=>({band,minutes:seconds/60}));
-  const speedRows=aggregate(speed), pedalRows=aggregate(pedal), drivingMinutes=speedRows.reduce((total,row)=>total+row.minutes,0), regenerated=sum(trips,"regeneratedKwh"), used=sum(trips,"energyUsedKwh"), fast=speedRows.filter((row)=>row.band.startsWith("120")||row.band.startsWith("150")).reduce((total,row)=>total+row.minutes,0);
-  const pedalMinutes=pedalRows.reduce((total,row)=>total+row.minutes,0), highPedal=pedalRows.filter((row)=>row.band.startsWith("50")||row.band.startsWith("75")).reduce((total,row)=>total+row.minutes,0);
-  const forceSamples=trips.flatMap((trip)=>safe(trip.series)).filter((row)=>Number(row.speedKmh)>=1&&Number.isFinite(Number(row.longitudinalG))&&Number.isFinite(Number(row.lateralG)));
-  const dynamicSamples=forceSamples.filter((row)=>Math.max(Math.abs(Number(row.longitudinalG)),Math.abs(Number(row.lateralG)))>=.18).length;
-  const profileInputs=[
-    {available:pedalMinutes>0,value:highPedal/pedalMinutes,reference:.12,weight:35},
-    {available:drivingMinutes>0,value:fast/drivingMinutes,reference:.08,weight:25},
-    {available:forceSamples.length>0,value:dynamicSamples/forceSamples.length,reference:.15,weight:40},
-  ].filter((row)=>row.available);
-  const profileWeight=profileInputs.reduce((total,row)=>total+row.weight,0), profileScore=profileWeight?profileInputs.reduce((total,row)=>total+Math.min(1,row.value/row.reference)*row.weight,0)/profileWeight*100:null;
-  const profileKey=profileScore==null?null:profileScore<25?"calm":profileScore<55?"normal":profileScore<75?"dynamic":"aggressive";
+  const model = useMemo(() => {
+    const filter = (row) => inPeriod(row.date,period,maxDate,customRange);
+    const trips=safe(data.trips).filter(filter), speed=safe(data.driving?.speed).filter(filter), pedal=safe(data.driving?.pedal).filter(filter), gg=safe(data.driving?.gg).filter(filter), events=safe(data.driving?.events).filter(filter);
+    const aggregate=(rows)=>[...rows.reduce((map,row)=>map.set(row.band,(map.get(row.band)||0)+Number(row.seconds||0)),new Map())].map(([band,seconds])=>({band,minutes:seconds/60}));
+    const speedRows=aggregate(speed), pedalRows=aggregate(pedal), drivingMinutes=speedRows.reduce((total,row)=>total+row.minutes,0), regenerated=sum(trips,"regeneratedKwh"), used=sum(trips,"energyUsedKwh"), fast=speedRows.filter((row)=>row.band.startsWith("120")||row.band.startsWith("150")).reduce((total,row)=>total+row.minutes,0);
+    const pedalMinutes=pedalRows.reduce((total,row)=>total+row.minutes,0), highPedal=pedalRows.filter((row)=>row.band.startsWith("50")||row.band.startsWith("75")).reduce((total,row)=>total+row.minutes,0);
+    const forceSamples=trips.flatMap((trip)=>safe(trip.series)).filter((row)=>Number(row.speedKmh)>=1&&Number.isFinite(Number(row.longitudinalG))&&Number.isFinite(Number(row.lateralG)));
+    const dynamicSamples=forceSamples.filter((row)=>Math.max(Math.abs(Number(row.longitudinalG)),Math.abs(Number(row.lateralG)))>=.18).length;
+    const profileInputs=[
+      {available:pedalMinutes>0,value:highPedal/pedalMinutes,reference:.12,weight:35},
+      {available:drivingMinutes>0,value:fast/drivingMinutes,reference:.08,weight:25},
+      {available:forceSamples.length>0,value:dynamicSamples/forceSamples.length,reference:.15,weight:40},
+    ].filter((row)=>row.available);
+    const profileWeight=profileInputs.reduce((total,row)=>total+row.weight,0), profileScore=profileWeight?profileInputs.reduce((total,row)=>total+Math.min(1,row.value/row.reference)*row.weight,0)/profileWeight*100:null;
+    const profileKey=profileScore==null?null:profileScore<25?"calm":profileScore<55?"normal":profileScore<75?"dynamic":"aggressive";
+    return { trips, speedRows, pedalRows, gg:sampleScatter(gg), events:events.slice().sort((a,b)=>b.valueG-a.valueG), drivingMinutes, regenerated, used, fast, profileKey, personality:calculateDrivingPersonality({trips,speedRows,pedalRows,events,profileScore}) };
+  }, [data.trips, data.driving?.speed, data.driving?.pedal, data.driving?.gg, data.driving?.events, period, maxDate, customRange]);
+  const { trips, speedRows, pedalRows, gg, events, drivingMinutes, regenerated, used, fast, profileKey, personality } = model;
   const peak=(kind)=>maximum(events.filter((row)=>row.kind===kind),"valueG");
   if(!trips.length)return <Empty t={t}/>;
-  return <><div className="metric-grid activity-metrics"><Metric tone="mint" label={t("regeneratedEnergy")} value={num(regenerated,locale)} unit=" kWh" note={`${num(used+regenerated?regenerated/(used+regenerated)*100:null,locale)}% ${t("grossEnergy")}`}/><Metric tone="cyan" label={t("movingTime")} value={duration(drivingMinutes,t)} note={`${trips.length} ${t("segmentsLower")}`}/><Metric tone="violet" label={t("maximumAcceleration")} value={num(peak("acceleration"),locale,2)} unit=" g"/><Metric tone="amber" label={t("maximumBraking")} value={num(peak("braking"),locale,2)} unit=" g"/><Metric tone="coral" label={t("maximumCornering")} value={num(peak("cornering"),locale,2)} unit=" g"/><Metric tone="violet" label={t("timeAbove120")} value={duration(fast,t)} note={`${num(drivingMinutes?fast/drivingMinutes*100:null,locale)}%`}/><Metric tone={profileKey==="aggressive"?"coral":profileKey==="dynamic"?"amber":"mint"} label={t("estimatedDrivingProfile")} value={profileKey?t(`drivingProfile_${profileKey}`):"—"} note={t("softwareEstimate")}/></div>
+  return <><div className="metric-grid activity-metrics"><Metric tone="mint" label={t("regeneratedEnergy")} value={num(regenerated,locale)} unit=" kWh" note={`${num(used+regenerated?regenerated/(used+regenerated)*100:null,locale)}% ${t("grossEnergy")}`}/><Metric tone="cyan" label={t("movingTime")} value={duration(drivingMinutes,t)} note={`${trips.length} ${t("segmentsLower")}`}/><Metric tone="violet" label={t("maximumAcceleration")} value={num(peak("acceleration"),locale,2)} unit=" g"/><Metric tone="amber" label={t("maximumBraking")} value={num(peak("braking"),locale,2)} unit=" g"/><Metric tone="coral" label={t("maximumCornering")} value={num(peak("cornering"),locale,2)} unit=" g"/><Metric tone="violet" label={t("timeAbove120")} value={duration(fast,t)} note={`${num(drivingMinutes?fast/drivingMinutes*100:null,locale)}%`}/><DrivingPersonalityMetric personality={personality} profileKey={profileKey} t={t}/></div>
     <div className="method-note"><strong>{t("observationalMetrics")}</strong><p>{t("drivingDisclaimer")}</p></div>
-    <div className="dashboard-grid two"><Panel title={t("speedDistribution")} subtitle={t("speedDistributionHelp")}><Chart><BarChart data={speedRows} margin={{top:12,right:12,left:-12}}><CartesianGrid stroke="var(--grid)" vertical={false}/><XAxis dataKey="band" tick={{fill:"var(--muted)",fontSize:9}}/><YAxis tick={{fill:"var(--muted)",fontSize:10}}/><Tip locale={locale} suffix={` ${t("minuteShort")}`}/><Bar dataKey="minutes" fill={C.mint} radius={[4,4,0,0]}/></BarChart></Chart></Panel><Panel title={t("acceleratorUse")} subtitle={t("acceleratorUseHelp")}><Chart><BarChart data={pedalRows} margin={{top:12,right:12,left:-12}}><CartesianGrid stroke="var(--grid)" vertical={false}/><XAxis dataKey="band" tick={{fill:"var(--muted)",fontSize:9}}/><YAxis tick={{fill:"var(--muted)",fontSize:10}}/><Tip locale={locale} suffix={` ${t("minuteShort")}`}/><Bar dataKey="minutes" fill={C.cyan} radius={[4,4,0,0]}/></BarChart></Chart></Panel><Panel title={t("ggDiagram")} subtitle={t("ggDiagramHelp")}><Chart><ScatterChart margin={{top:12,right:12,left:-12}}><CartesianGrid stroke="var(--grid)"/><XAxis type="number" dataKey="lateralG" name={t("lateralAcceleration")} unit=" g" tick={{fill:"var(--muted)",fontSize:10}}/><YAxis type="number" dataKey="longitudinalG" name={t("longitudinalAcceleration")} unit=" g" tick={{fill:"var(--muted)",fontSize:10}}/><Tip locale={locale}/><Scatter data={gg} fill={C.violet}/></ScatterChart></Chart></Panel><Panel title={t("dynamicEvents")} subtitle={t("dynamicEventsHelp")}><div className="compact-records">{events.sort((a,b)=>b.valueG-a.valueG).slice(0,12).map((row,index)=><div key={`${row.timestampUtc}-${index}`}><span><strong>{t(`event_${row.kind}`)}</strong><small>{dateText(row.timestampUtc,locale)} · {timeText(row.timestampUtc,locale)}</small></span><span><strong>{num(row.valueG,locale,2)} g</strong><small>{num(row.speedKmh,locale)} km/h</small></span></div>)}</div></Panel></div></>;
+    <div className="dashboard-grid two"><Panel title={t("speedDistribution")} subtitle={t("speedDistributionHelp")}><Chart><BarChart data={speedRows} margin={{top:12,right:12,left:-12}}><CartesianGrid stroke="var(--grid)" vertical={false}/><XAxis dataKey="band" tick={{fill:"var(--muted)",fontSize:9}}/><YAxis tick={{fill:"var(--muted)",fontSize:10}}/><Tip locale={locale} suffix={` ${t("minuteShort")}`}/><Bar dataKey="minutes" fill={C.mint} radius={[4,4,0,0]}/></BarChart></Chart></Panel><Panel title={t("acceleratorUse")} subtitle={t("acceleratorUseHelp")}><Chart><BarChart data={pedalRows} margin={{top:12,right:12,left:-12}}><CartesianGrid stroke="var(--grid)" vertical={false}/><XAxis dataKey="band" tick={{fill:"var(--muted)",fontSize:9}}/><YAxis tick={{fill:"var(--muted)",fontSize:10}}/><Tip locale={locale} suffix={` ${t("minuteShort")}`}/><Bar dataKey="minutes" fill={C.cyan} radius={[4,4,0,0]}/></BarChart></Chart></Panel><Panel title={t("ggDiagram")} subtitle={t("ggDiagramHelp")}><Chart><ScatterChart margin={{top:12,right:12,left:-12}}><CartesianGrid stroke="var(--grid)"/><XAxis type="number" dataKey="lateralG" name={t("lateralAcceleration")} unit=" g" tick={{fill:"var(--muted)",fontSize:10}}/><YAxis type="number" dataKey="longitudinalG" name={t("longitudinalAcceleration")} unit=" g" tick={{fill:"var(--muted)",fontSize:10}}/><Tip locale={locale}/><Scatter data={gg} fill={C.violet}/></ScatterChart></Chart></Panel><Panel title={t("dynamicEvents")} subtitle={t("dynamicEventsHelp")}><div className="compact-records">{events.slice(0,12).map((row,index)=><div key={`${row.timestampUtc}-${index}`}><span><strong>{t(`event_${row.kind}`)}</strong><small>{dateText(row.timestampUtc,locale)} · {timeText(row.timestampUtc,locale)}</small></span><span><strong>{num(row.valueG,locale,2)} g</strong><small>{num(row.speedKmh,locale)} km/h</small></span></div>)}</div></Panel></div></>;
 }
 
 function ChargeTechnicalSummary({ selected, locale, t, units }) {
@@ -488,16 +629,58 @@ const TrendsSection = memo(Trends);
 const ReportSection = memo(Report);
 const QualitySection = memo(Quality);
 
-export default function Dashboard({ data, locale, setLocale, t, busy, progress, error, onChooseAdditional, onChooseHistory, onExport, onReset, onCancel, canCancel, persistence, onToggleRememberHistory, onToggleImportReminder, onSetImportReminderDays, onForgetSavedHistory, theme, onToggleTheme }) {
-  const [section,setSection]=useState("overview"), [period,setPeriod]=useState("all"), [selectedJourneyId,setSelectedJourneyId]=useState(null), [selectedChargeId,setSelectedChargeId]=useState(null), [measurementSystem,setMeasurementSystem]=useState("metric"), [pressureUnit,setPressureUnit]=useState("bar");
-  const availableDates=[...safe(data.daily).map((row)=>row.date),...safe(data.trips).map((row)=>row.date),...safe(data.journeys).map((row)=>row.date),...safe(data.charges).map((row)=>row.date),...safe(data.battery?.history).map((row)=>row.date),...safe(data.battery?.parking).map((row)=>String(row.startedAtUtc||"").slice(0,10))].filter(Boolean).sort();
-  const minDate=availableDates.at(0)??"", maxDate=availableDates.at(-1)??new Date().toISOString().slice(0,10);
+export default function Dashboard({ data, locale, setLocale, t, busy, progress, error, onChooseAdditional, onChooseHistory, onExport, onSaveCustomCharts, onReset, onCancel, canCancel, persistence, onToggleRememberHistory, onToggleImportReminder, onSetImportReminderDays, onForgetSavedHistory, theme, onToggleTheme, onStartTutorial }) {
+  const [section,setSection]=useState("overview"), [period,setPeriod]=useState("all"), [selectedJourneyId,setSelectedJourneyId]=useState(null), [selectedChargeId,setSelectedChargeId]=useState(null), [measurementSystem,setMeasurementSystem]=useState("metric"), [pressureUnit,setPressureUnit]=useState("bar"), [settingsOpen,setSettingsOpen]=useState(false), [compactNavigation,setCompactNavigation]=useState(()=>typeof window!=="undefined"&&window.matchMedia("(max-width: 850px)").matches);
+  const settingsRef=useRef(null);
+  const [minDate,maxDate]=useMemo(()=>{
+    const availableDates=[...safe(data.daily).map((row)=>row.date),...safe(data.trips).map((row)=>row.date),...safe(data.journeys).map((row)=>row.date),...safe(data.charges).map((row)=>row.date),...safe(data.battery?.history).map((row)=>row.date),...safe(data.battery?.parking).map((row)=>String(row.startedAtUtc||"").slice(0,10))].filter(Boolean).sort();
+    return [availableDates.at(0)??"",availableDates.at(-1)??new Date().toISOString().slice(0,10)];
+  },[data]);
   const [customRange,setCustomRange]=useState(()=>({start:minDate,end:maxDate}));
   const units=useMemo(()=>({system:measurementSystem,pressure:pressureUnit}),[measurementSystem,pressureUnit]);
   const shared={data,locale,t,period,maxDate,customRange,units};
-  const openSection=useCallback((target)=>{setSection(target);requestAnimationFrame(()=>window.scrollTo({top:0,behavior:"auto"}));},[]);
+  useEffect(()=>{
+    if(!settingsOpen)return undefined;
+    const dismiss=(event)=>{if(!settingsRef.current?.contains(event.target))setSettingsOpen(false);};
+    const escape=(event)=>{if(event.key==="Escape")setSettingsOpen(false);};
+    document.addEventListener("pointerdown",dismiss);
+    document.addEventListener("keydown",escape);
+    return()=>{document.removeEventListener("pointerdown",dismiss);document.removeEventListener("keydown",escape);};
+  },[settingsOpen]);
+  useEffect(()=>{
+    const media=window.matchMedia("(max-width: 850px)"),sync=()=>{setCompactNavigation(media.matches);setSettingsOpen(false);};
+    sync();media.addEventListener("change",sync);return()=>media.removeEventListener("change",sync);
+  },[]);
+  const openSection=useCallback((target)=>{setSection(target);setSettingsOpen(false);requestAnimationFrame(()=>window.scrollTo({top:0,behavior:"auto"}));},[]);
   const openRecord=useCallback((target,id)=>{if(target==="journeys")setSelectedJourneyId(id);if(target==="charging")setSelectedChargeId(id);openSection(target);},[openSection]);
-  const content=({overview:<OverviewSection {...shared} openSection={openSection} openRecord={openRecord}/>,journeys:<JourneysSection {...shared} selectedId={selectedJourneyId} setSelectedId={setSelectedJourneyId}/>,driving:<DrivingSection {...shared}/>,charging:<ChargingSection {...shared} selectedId={selectedChargeId} setSelectedId={setSelectedChargeId}/>,battery:<BatterySection {...shared}/>,tyres:<TyresSection {...shared}/>,activity:<ActivitySection {...shared}/>,trends:<TrendsSection {...shared}/>,report:<ReportSection data={data} locale={locale} t={t} minDate={minDate} maxDate={maxDate} units={units}/>,quality:<QualitySection data={data} locale={locale} t={t}/>,data:<DataSection data={data} locale={locale} t={t} busy={busy} onChooseAdditional={onChooseAdditional} onChooseHistory={onChooseHistory} onExport={onExport} onReset={onReset} persistence={persistence} onToggleRememberHistory={onToggleRememberHistory} onToggleImportReminder={onToggleImportReminder} onSetImportReminderDays={onSetImportReminderDays} onForgetSavedHistory={onForgetSavedHistory}/>})[section];
+  let content;
+  if(section==="overview")content=<OverviewSection {...shared} openSection={openSection} openRecord={openRecord}/>;
+  else if(section==="journeys")content=<JourneysSection {...shared} selectedId={selectedJourneyId} setSelectedId={setSelectedJourneyId}/>;
+  else if(section==="driving")content=<DrivingSection {...shared}/>;
+  else if(section==="charging")content=<ChargingSection {...shared} selectedId={selectedChargeId} setSelectedId={setSelectedChargeId}/>;
+  else if(section==="battery")content=<BatterySection {...shared}/>;
+  else if(section==="tyres")content=<TyresSection {...shared}/>;
+  else if(section==="activity")content=<ActivitySection {...shared}/>;
+  else if(section==="trends")content=<TrendsSection {...shared}/>;
+  else if(section==="replay")content=<React.Suspense fallback={<div className="section-empty"><strong>{t("replayLoading")}</strong></div>}><Replay data={data} locale={locale} t={t} units={units}/></React.Suspense>;
+  else if(section==="mycharts")content=<React.Suspense fallback={<div className="section-empty"><strong>{t("loadingEngine")}</strong></div>}><MyCharts data={data} locale={locale} t={t} units={units} onSave={onSaveCustomCharts}/></React.Suspense>;
+  else if(section==="report")content=<ReportSection data={data} locale={locale} t={t} minDate={minDate} maxDate={maxDate} units={units}/>;
+  else if(section==="quality")content=<QualitySection data={data} locale={locale} t={t}/>;
+  else content=<DataSection data={data} locale={locale} t={t} busy={busy} onChooseAdditional={onChooseAdditional} onChooseHistory={onChooseHistory} onExport={onExport} onReset={onReset} persistence={persistence} onToggleRememberHistory={onToggleRememberHistory} onToggleImportReminder={onToggleImportReminder} onSetImportReminderDays={onSetImportReminderDays} onForgetSavedHistory={onForgetSavedHistory}/>;
   const filteredSections=["overview","journeys","driving","charging","battery","tyres","activity","trends"];
-  return <div className="dashboard-shell"><aside className="dashboard-sidebar"><div className="dashboard-brand"><span className="brand-mark"><img src={`${import.meta.env.BASE_URL}assets/xpeng-analytics-mark-minimal.png`} alt="" /></span><span><strong>XPENG</strong><small>Analytics</small></span></div><nav>{sections.map((item)=><button key={item} className={section===item?"is-active":""} onClick={()=>openSection(item)}><Icon name={item}/><span>{t(`nav_${item}`)}</span></button>)}</nav><div className="sidebar-bottom"><div className="sidebar-unit-controls"><label><span>{t("measurementUnits")}</span><select value={measurementSystem} onChange={(event)=>setMeasurementSystem(event.currentTarget.value)}><option value="metric">{t("metricUnits")}</option><option value="imperial">{t("imperialUnits")}</option></select></label><label><span>{t("tyrePressureUnit")}</span><select value={pressureUnit} onChange={(event)=>setPressureUnit(event.currentTarget.value)}><option value="bar">bar</option><option value="psi">psi</option></select></label></div><a className="sidebar-kofi" href="https://ko-fi.com/mpinto" target="_blank" rel="noreferrer">☕ {t("supportCta")}</a><div className="privacy-mini"><i/><span><strong>{t("localOnly")}</strong><small>{persistence.enabled ? t("savedOnThisDevice") : t("sessionOnly")}</small></span></div><small className="sidebar-version">XPENG Analytics · v{APP_VERSION}</small></div></aside><main className="dashboard-main"><header className="dashboard-topbar"><div><span className="dashboard-eyebrow">{t("dashboard")}</span><h1>{t(`section_${section}`)}</h1><p>{t(`section_${section}_help`)}</p></div><div className="topbar-actions"><button className="theme-toggle" type="button" onClick={onToggleTheme} aria-label={theme==="light"?t("darkTheme"):t("lightTheme")}><span/>{theme==="light"?t("dark"):t("light")}</button><label className="language-picker"><span>{t("language")}</span><select value={locale} onChange={(event)=>setLocale(event.target.value)}><option value="pt-PT">Português</option><option value="en">English</option></select></label></div></header><div className="mobile-nav">{sections.map((item)=><button key={item} className={section===item?"is-active":""} onClick={()=>openSection(item)} title={t(`nav_${item}`)}><Icon name={item}/></button>)}</div>{filteredSections.includes(section)?<PeriodBar period={period} setPeriod={setPeriod} customRange={customRange} setCustomRange={setCustomRange} minDate={minDate} maxDate={maxDate} t={t}/>:null}{busy?<div className="dashboard-progress"><div className="dashboard-progress-heading"><strong>{Math.round(progress.percent||0)}%</strong><span>{t(phaseKeys[progress.phase]||"loadingEngine")}{progress.detail?` · ${progress.detail}`:""}</span>{canCancel?<button className="cancel-processing" type="button" onClick={onCancel}>{t("cancelProcessing")}</button>:null}</div><div><i style={{width:`${Math.max(3,progress.percent||0)}%`}}/></div></div>:null}{error?<div className="dashboard-error">{t(`error_${error}`)}</div>:null}<div className="dashboard-content">{content}</div><footer className="site-footer dashboard-footer"><span>{t("unofficial")}</span><span>{t("ownerLabel")}: Miguel Pinto</span><span>v{APP_VERSION}</span><a href="https://logboox.app" target="_blank" rel="noreferrer">LogbooX</a><a href="https://github.com/josepinto1989/xpeng-analytics/issues" target="_blank" rel="noreferrer">{t("reportIssue")}</a><a href="https://ko-fi.com/mpinto" target="_blank" rel="noreferrer">Ko-fi</a></footer></main></div>;
+  const utilityActions=<div className={`dashboard-utility-actions ${compactNavigation?"is-mobile":"is-sidebar"}`}><button className={`topbar-data-action ${section==="data"?"is-active":""}`} type="button" onClick={()=>openSection("data")}><Icon name="data"/><span>{t("addMoreData")}</span></button><div className="settings-popover" ref={settingsRef}><button className={`settings-trigger ${settingsOpen?"is-active":""}`} type="button" aria-expanded={settingsOpen} aria-controls="dashboard-settings" onClick={()=>setSettingsOpen((current)=>!current)}>{t("settings")}</button>{settingsOpen?<div className="settings-panel" id="dashboard-settings" role="dialog" aria-label={t("settings")}><header><span><strong>{t("settings")}</strong><small>{t("settingsHelp")}</small></span><button type="button" onClick={()=>setSettingsOpen(false)}>{t("close")}</button></header><button className="settings-theme-button" type="button" onClick={onToggleTheme} aria-label={theme==="light"?t("darkTheme"):t("lightTheme")}><span><strong>{t("theme")}</strong><small>{theme==="light"?t("light"):t("dark")}</small></span><i className={theme==="dark"?"is-dark":""}/></button><label><span>{t("language")}</span><select value={locale} onChange={(event)=>setLocale(event.target.value)}><option value="pt-PT">Português</option><option value="en">English</option></select></label><label><span>{t("measurementUnits")}</span><select value={measurementSystem} onChange={(event)=>setMeasurementSystem(event.currentTarget.value)}><option value="metric">{t("metricUnits")}</option><option value="imperial">{t("imperialUnits")}</option></select></label><label><span>{t("tyrePressureUnit")}</span><select value={pressureUnit} onChange={(event)=>setPressureUnit(event.currentTarget.value)}><option value="bar">bar</option><option value="psi">psi</option></select></label><button className="settings-tutorial-button" type="button" onClick={()=>{setSettingsOpen(false);onStartTutorial?.();}}><span><strong>{t("tutorialOpen")}</strong><small>{t("tutorialRestartHelp")}</small></span><b aria-hidden="true">→</b></button></div>:null}</div></div>;
+  return <div className="dashboard-shell">
+    <aside className="dashboard-sidebar">
+      <button className="dashboard-brand" type="button" onClick={()=>openSection("overview")} aria-label={t("nav_overview")}><span className="brand-mark"><img src={`${import.meta.env.BASE_URL}assets/xpeng-analytics-mark-minimal.png`} alt="" /></span><span><strong>XPENG</strong><small>Analytics</small></span></button>
+      <nav aria-label={t("navigation")}>{navGroups.map((group)=><div className={`nav-group ${group.key?"":"nav-group-primary"}`} data-tutorial={group.key||"overview"} key={group.key||"primary"}>{group.key?<span className="nav-group-label">{t(`navGroup_${group.key}`)}</span>:null}{group.items.map((item)=><button key={item} type="button" className={section===item?"is-active":""} aria-current={section===item?"page":undefined} onClick={()=>openSection(item)}><Icon name={item}/><span>{t(`nav_${item}`)}</span></button>)}</div>)}</nav>
+      <div className="sidebar-bottom">{!compactNavigation?utilityActions:null}<a className="sidebar-kofi" href="https://ko-fi.com/mpinto" target="_blank" rel="noreferrer">{t("supportCta")}</a><div className="privacy-mini"><i/><span><strong>{t("localOnly")}</strong><small>{persistence.enabled ? t("savedOnThisDevice") : t("sessionOnly")}</small></span></div><small className="sidebar-version">XPENG Analytics · v{APP_VERSION}</small></div>
+    </aside>
+    <main className="dashboard-main">
+      <header className="dashboard-topbar"><div><span className="dashboard-eyebrow">{t("dashboard")}</span><h1>{t(`section_${section}`)}</h1><p>{t(`section_${section}_help`)}</p></div>{compactNavigation?utilityActions:null}</header>
+      <label className="mobile-nav"><span>{t("navigation")}</span><select value={section} onChange={(event)=>openSection(event.currentTarget.value)}><option value="overview">{t("nav_overview")}</option>{navGroups.filter((group)=>group.key).map((group)=><optgroup key={group.key} label={t(`navGroup_${group.key}`)}>{group.items.map((item)=><option key={item} value={item}>{t(`nav_${item}`)}</option>)}</optgroup>)}</select></label>
+      {filteredSections.includes(section)?<PeriodBar period={period} setPeriod={setPeriod} customRange={customRange} setCustomRange={setCustomRange} minDate={minDate} maxDate={maxDate} t={t}/>:null}
+      {busy?<div className="dashboard-progress"><div className="dashboard-progress-heading"><strong>{Math.round(progress.percent||0)}%</strong><span>{t(phaseKeys[progress.phase]||"loadingEngine")}{progress.detail?` · ${progress.detail}`:""}</span>{canCancel?<button className="cancel-processing" type="button" onClick={onCancel}>{t("cancelProcessing")}</button>:null}</div><div><i style={{width:`${Math.max(3,progress.percent||0)}%`}}/></div></div>:null}
+      {error?<div className="dashboard-error">{t(`error_${error}`)}</div>:null}<div className="dashboard-content">{content}</div><footer className="site-footer dashboard-footer"><span>{t("unofficial")}</span><span>{t("ownerLabel")}: Miguel Pinto</span><span>v{APP_VERSION}</span><a href="https://logboox.app" target="_blank" rel="noreferrer">LogbooX</a><a href="https://github.com/josepinto1989/xpeng-analytics/issues" target="_blank" rel="noreferrer">{t("reportIssue")}</a><a href="https://ko-fi.com/mpinto" target="_blank" rel="noreferrer">Ko-fi</a></footer>
+    </main>
+  </div>;
 }

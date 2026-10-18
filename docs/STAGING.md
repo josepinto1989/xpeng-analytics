@@ -17,6 +17,32 @@ hands-on validation before a change is promoted to the public project.
 - Promote the same reviewed commit or an explicitly reviewed follow-up commit;
   do not reimplement the feature separately in the public repository.
 
+## v2.0.0 final candidate checklist
+
+1. Open the candidate with no stored state and confirm the landing guide can be
+   completed, skipped, and restarted.
+2. Import a current `.xpeng` v5 history and confirm it opens directly without an
+   automatic tutorial. Import a legacy v3 history in a clean profile and confirm
+   the new dashboard guide appears once.
+3. Confirm Overview, Journeys, Driving, Charging, Battery, Tyres, Activity,
+   Trends, Report, My Charts, Replay, Quality, and Data open through the grouped
+   navigation and mobile selector.
+4. Open Settings and confirm language, theme, Metric/Imperial, bar/psi, and
+   guide controls persist as expected.
+5. Create and save a personal chart, export `.xpeng`, reset, restore the file,
+   and confirm the chart definition and optional matched GPS routes return.
+6. Replay a journey with and without GPS. Confirm play/pause/seeking,
+   1x/2x/3x/5x/10x, analytical chart cursors, map position, brake indication,
+   steering, and available door, window, and boot states.
+7. Enable remembered history, refresh, add a later export, verify deduplication,
+   then permanently delete the stored history.
+8. Generate a PDF with the selected unit system, estimated costs, authorship,
+   application URL, and optional route diagrams.
+9. Repeat the main navigation, Settings, import, journey, replay, and report
+   smoke tests in current Firefox, Chrome, and Edge. Check one mobile browser.
+10. Confirm the displayed version is `2.0.0` and that no real ZIP, `.xpeng`, GPX,
+    VIN, credential, generated report, or private screenshot is tracked.
+
 ## Phase 8 beta checklist
 
 1. Import an XPENG ZIP or `.xpeng` history and confirm the dashboard totals.

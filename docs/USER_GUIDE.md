@@ -156,6 +156,43 @@ telemetry blocks. It displays distance, time, energy used, regenerated energy,
 consumption, and confidence. This is a software estimate based on speed, stops,
 acceleration, and braking. It does not use GPS or identify the actual road.
 
+### Visual replay
+
+Shows the dates with recorded journeys in a calendar. Choose a date and journey,
+then start a local visual reconstruction with play, pause, restart, timeline
+seeking, and 1x, 2x, 3x, 5x, or 10x speed. The HUD and synchronized charts
+follow available speed, power, pedal, battery, steering, gear, door, and boot
+observations. Missing signals are not presented as measured states.
+
+The replay also includes one minute immediately before and after the moving
+part of the trip when that telemetry exists. This captures events such as
+opening a door or the boot just before departure or just after arrival. Boot
+opening and closing phases and active window movement are shown from their
+recorded state codes; they are not inferred as precise opening percentages.
+
+When the journey has a matched GPX route, the map marker follows the replay by
+timestamp. Without GPX, the journey can still be replayed from XPENG telemetry.
+Long gaps in the source data are shortened and identified. The vehicle is an
+original generic 2.5D visual, not an XPENG model or a safety-accurate simulator.
+Its front wheels follow the observed steering direction and its brake lamps use
+the recorded brake signal. Because the export does not currently expose a
+lighting signal, low beams are a visual approximation between 20:00 and 08:00.
+On mobile the same data is available in a lighter, vertically stacked layout.
+
+### My charts
+
+Builds personal visualisations from the information already processed in the
+browser. Choose a data group, chart type, horizontal axis, up to three metrics,
+date period, and optional daily or monthly grouping. The preview updates while
+you edit. Line, area, bar, scatter, and histogram charts are available when the
+selected fields support them.
+
+Saved charts can be edited, duplicated, reordered, or deleted. Metric/Imperial
+and bar/psi choices are applied when the chart is rendered. Only the compact
+chart definition is stored in an exported `.xpeng`; no chart image or duplicate
+telemetry is added. If a definition references a metric absent from a future
+history, the chart remains saved and shows a clear unavailable-data message.
+
 ### Report
 
 Creates a local PDF for a selected date range. The report includes distance,
@@ -193,13 +230,21 @@ persistent-history controls.
 Most analytical pages support 7 days, 15 days, 30 days, all data, or a custom
 date range.
 
-The top-right controls switch between English and European Portuguese and
-between light and dark themes. The sidebar controls switch:
+Open **Settings** from the lower part of the desktop sidebar or the dashboard
+header on smaller screens. The same panel controls:
 
 - Metric and Imperial distance, speed, consumption, and temperature units;
 - tyre pressure independently between bar and psi.
 
 The selected units are also used in newly generated PDF reports.
+
+### First-use guide
+
+On a first visit, the optional guide explains the XPENG export, local
+processing, and the main dashboard areas. It can be skipped and restarted from
+**Settings** at any time. A current `.xpeng` history does not interrupt a
+returning user; a legacy history may introduce the new 2.0 areas once. Only the
+local completion or dismissal choice is stored.
 
 ## 7. Save your session as `.xpeng`
 
@@ -213,6 +258,7 @@ The file:
 - supports adding future XPENG ZIP exports after restoration;
 - contains checksums for corruption detection;
 - preserves the automatically matched optional GPS route slices;
+- preserves validated personal chart definitions;
 - is compressed but **not encrypted**.
 
 Treat it with the same care as the original XPENG export.

@@ -1,60 +1,65 @@
-# Design QA
+# Design QA — Journey Replay analytical workbench
 
-- Source visual truth: `C:\Users\seque\AppData\Local\Temp\codex-clipboard-84886386-b19c-4549-bb0c-7afa1462a9ac.png` and `C:\Users\seque\AppData\Local\Temp\codex-clipboard-f95ccd4e-8d03-4afc-8372-96cc2bc9d94e.png`
-- Implementation: `http://127.0.0.1:4174/`
-- Implementation screenshot evidence: inline Chrome DevTools captures from page 9 (landing, loading at 18%, overview, battery and parked-consumption region)
-- Viewport: 1390 × 1000 CSS px, device scale factor 1
-- Source pixels: 1390 × 1079 (annotated landing) and 856 × 466 (blank-chart crop)
-- Implementation pixels: 1390 px wide full-page landing capture and 1390 × 1000 viewport captures
-- State: light theme; idle landing, XPENG ZIP import, overview with 30-day data, and battery view
-- Density normalization: 1× browser captures; browser chrome excluded from implementation comparison
+## Evidence
 
-## Full-view comparison evidence
+- Source visual truth: private design reference reviewed during implementation;
+  the reference image is intentionally not committed.
+- Source pixels: 1488 × 1058 PNG.
+- Browser-rendered implementation: local production preview reviewed during the
+  implementation session; captures containing private test data are
+  intentionally not committed.
+- Desktop viewport: 1265 × 710 CSS px, device scale 1.
+- Mobile viewport: requested 390 × 844 CSS px; browser content measured 375 CSS px wide, with `scrollWidth === clientWidth === 375`.
+- State: English, light theme, real imported XPENG journey, replay running and then paused. The available persisted journey did not include a matched GPX route, so the map region was verified in its supported no-route state while the unchanged Leaflet route component remained covered by route-sync tests.
+- Primary interactions tested: open Replay, select/start journey, live playback, pause, select 3× and 10×, and seek the timeline.
+- Browser console: no warnings or errors after the interaction pass.
 
-The marked “Private by design” eyebrow is absent. The landing hierarchy, two-column privacy/import layout and established light visual system remain intact. The new project mark occupies the former XA slot without changing the brand lockup dimensions. The processing-time notice and Ko-fi support block extend the page below the original primary task rather than displacing it.
+## Full-view comparison
 
-The import state was captured at 18% with the percentage as the dominant label, the progress bar directly below it and the changing phase text on its own line. The same progress component is used above the dashboard while additional files or histories are processed.
+The rendered implementation preserves the selected concept's defining composition: a roughly 60/40 map-to-telemetry split, compact row-based live telemetry, a technical top-down vehicle status panel, a full-width event timeline with integrated playback controls, and four synchronized analytical charts below. It intentionally retains the product's existing sidebar and page shell, which the standalone concept image omitted.
 
-## Focused-region comparison evidence
-
-The blank parked-consumption reference was compared with the same battery region using the supplied 30-day archive. The implementation now filters invalid/null observations and renders 13 measurable daily-loss observations as bars. If no valid observations exist, the chart is replaced with an explanatory empty state rather than empty axes.
-
-## Findings
-
-- No actionable P0, P1 or P2 differences remain for the requested annotations.
-- P3: the generated mark contains fine internal detail that may simplify further in a future dedicated brand pass, but it remains legible at the current 42 px application size and loads correctly in both themes.
+The comparison was performed from the source mock and the desktop in-app-browser captures shown in the same design-validation session. A second focused capture covered the event timeline and four-chart workbench.
 
 ## Required fidelity surfaces
 
-- Fonts and typography: existing system family, hierarchy, weights and wrapping preserved; percentage uses the existing metric weight.
-- Spacing and layout rhythm: original card grid and content width preserved; new alert and support card use the established spacing scale.
-- Colors and tokens: existing mint, evergreen, amber warning and light/dark tokens reused.
-- Image quality and asset fidelity: original transparent PNG project mark generated for the product; no third-party automotive logo reused.
-- Copy and content: PT-PT and English parity verified; owner and Ko-fi destination shown consistently.
+- Fonts and typography: existing XPENG Analytics type stack retained; hierarchy, compact labels, tabular values, and small chart annotations match the selected analytical direction. No clipping or unintended wrapping was visible.
+- Spacing and layout rhythm: the 60/40 upper grid, thin separators, dense telemetry rows, timeline rhythm, and four-column chart grid match the source. Existing application sidebar width is preserved as an intentional shell constraint.
+- Colors and visual tokens: existing off-white, navy, mint, violet, cyan, coral, muted text, and hairline tokens are reused consistently. Status and event colors remain semantically distinct.
+- Image quality and asset fidelity: the former photorealistic driving scene was removed. A dedicated transparent top-down generic SUV asset is sharp, correctly cropped, brandless, and integrated without a visible raster box.
+- Copy and content: English and pt-PT strings are complete and translation parity passes. Labels reflect actual telemetry and clearly separate calculated reconstruction from official vehicle data.
 
-## Interaction and runtime checks
+## Focused region comparison
 
-- Theme toggle tested: light default and dark option work.
-- Ko-fi links: two landing links and persistent dashboard/footer link point to `https://ko-fi.com/mpinto`.
-- 30-day import tested: 3,426,417 rows, 126 trips, 69 journeys, 11 charges.
-- Loading state captured at 18%; dashboard rendered after completion.
-- Browser console checked: no errors or warnings.
-- Production build, translation parity, browser runtime and Python pipeline tests passed.
+- Telemetry and vehicle status: values align on a disciplined three-column row grid; progress bars are compact and the vehicle/status list remains legible at desktop and mobile widths.
+- Event timeline: the playhead, timestamps, five event lanes, event markers, 1×/2×/3×/5×/10× controls, and seek slider remain synchronized and readable.
+- Charts: speed, power, pedal positions, and steering each have a dedicated chart with a moving cursor, active data point, and live value synchronized to the map and replay timeline.
 
 ## Comparison history
 
-1. P1 source issue: progress state did not foreground percentage or separate the current phase. Fixed with a percentage-first progress component and verified at 18% during a real import.
-2. P1 source issue: parked-consumption chart displayed empty axes. Fixed by filtering usable observations and adding an explicit empty state; post-fix capture shows populated bars from the supplied archive.
-3. P2 source issue: placeholder XA mark and incomplete ownership/support attribution. Fixed with an original project mark, owner credit and Ko-fi CTAs; verified in landing and dashboard captures.
+1. Initial implementation finding — P2: at the start of playback, the playhead label overlapped the event labels and the native range control rendered as a heavy dark bar.
+   - Fix: split timeline labels from the plotting region, anchored the playhead inside the plot, and added consistent WebKit/Firefox range-track and thumb styling.
+   - Post-fix evidence: the second in-app-browser capture shows the `00:01` playhead fully inside the plotting area and a thin muted seek track with a mint thumb.
+2. Mobile verification — no horizontal overflow at 375 CSS px; telemetry becomes a vertical reading sequence, the vehicle remains fully visible, and the lower workbench stacks safely.
+3. Playback follow-up — added 5× and 10× rates, then strengthened chart synchronization with a visible playhead, active points, and current values. A browser pass confirmed 10× advances the shared replay clock and updates all chart readouts.
+
+## Findings
+
+- No actionable P0, P1, or P2 visual or interaction findings remain.
+
+## Open questions
+
+- None blocking. A future polish pass may use a GPX-backed fixture for a pixel-level comparison of the populated Leaflet map state, but route synchronization and matching are already covered by automated tests.
 
 ## Implementation checklist
 
-- [x] Remove annotated eyebrow.
-- [x] Show percentage, bar and changing phase during processing.
-- [x] Add long-processing notice.
-- [x] Replace XA with original project mark and favicon.
-- [x] Add Miguel Pinto owner credit and Ko-fi links.
-- [x] Prevent blank parked-consumption charts.
-- [x] Verify with the supplied 30-day archive.
+- [x] Replace the 3D/videogame scene with the selected analytical workbench.
+- [x] Integrate real telemetry, vehicle states, event markers, charts, playback rates, and seek behavior.
+- [x] Add a brandless technical top-down SUV asset.
+- [x] Verify desktop and mobile layouts.
+- [x] Run translation parity, replay tests, full test suite, and production build.
+
+## Follow-up polish
+
+- P3: consider adding hover descriptions to event marker types if user testing shows that the color legend alone is insufficient.
 
 final result: passed

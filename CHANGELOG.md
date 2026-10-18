@@ -2,6 +2,50 @@
 
 All notable public changes are documented here.
 
+## 2.0.0 — 2026-10-19
+
+- Added opt-in persistent local history in IndexedDB, automatic restoration on
+  the same browser profile, visible storage details, permanent deletion, and
+  configurable 7-, 15-, 25-, or 30-day local import reminders.
+- Added long-term monthly trends for distance, consumption, indicated range,
+  estimated capacity, relative SOH, parked use, charging, and tyre pressure.
+- Added explicitly unofficial urban-, road-, and motorway-style driving
+  estimates based on short telemetry blocks, with confidence and energy data.
+- Added optional GPX and GPX-in-ZIP import from the Data page, automatic
+  timestamp matching, all-day recording segmentation, duplicate selection,
+  optional route-end trimming, and OpenStreetMap journey maps.
+- Synchronized journey charts with the matched map position and added optional
+  local route traces to PDF reports.
+- Added the `.xpeng` version 5 format, preserving compressed telemetry, matched
+  GPS routes, import provenance, integrity checks, and allow-listed personal
+  chart definitions in one portable file.
+- Added **My charts**, with guided data selection, live previews, five chart
+  types, daily or monthly grouping, unit conversion, and saved-chart editing,
+  duplication, reordering, and deletion.
+- Added an interactive journey replay with a three-month journey calendar,
+  seeking, compressed gaps, 1x/2x/3x/5x/10x playback, synchronized analytical
+  charts, and a timestamp-following GPX map when available.
+- Added a lightweight generic vehicle reconstruction with observed speed,
+  power, accelerator, brake, steering, gear, door, window, and boot states.
+  Brake lamps use the recorded brake signal; low beams are a clearly visual
+  day/night approximation when no lighting signal is available.
+- Added a useful no-GPS replay layout so vehicle telemetry and playback remain
+  available without a route recording.
+- Added an optional, local driving-personality easter egg derived from the
+  already calculated driving observations.
+- Reorganized desktop and mobile navigation into clearer groups, kept data
+  import one click away, and consolidated language, theme, units, tyre pressure,
+  and help into one settings panel.
+- Added a bilingual, keyboard-accessible first-use guide. Current histories do
+  not interrupt returning users; older histories can introduce the new 2.0
+  areas once, and the guide can always be restarted manually.
+- Improved large-history responsiveness through lazy-loaded workspaces,
+  deferred journey details, bounded visual samples, isolated modal state,
+  reduced chart rebuilding, and optimized replay and map updates.
+- Expanded automated coverage for onboarding, personal charts, GPX matching,
+  replay timing and states, driving personalities, native-history round trips,
+  translation parity, and browser import behavior.
+
 ## 1.8.0-beta.3 — 2026-10-16
 
 - Unified later XPENG ZIP, GPX, and GPX-in-ZIP additions in one Data-page

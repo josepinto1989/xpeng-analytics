@@ -1,0 +1,23 @@
+import assert from "node:assert/strict";
+import { completeTutorialMode, nextTutorialMode, readTutorialState, shouldShowDashboardTutorialForHistory, tutorialStates, writeTutorialState } from "../src/onboarding.js";
+
+const values = new Map();
+const storage = { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+assert.equal(readTutorialState(storage), tutorialStates.NEW);
+assert.equal(nextTutorialMode(tutorialStates.NEW, false), "landing");
+assert.equal(nextTutorialMode(tutorialStates.NEW, true), "dashboard");
+assert.equal(nextTutorialMode(tutorialStates.NEW, true, false), null);
+assert.equal(completeTutorialMode("landing"), tutorialStates.LANDING_COMPLETE);
+assert.equal(nextTutorialMode(tutorialStates.LANDING_COMPLETE, false), null);
+assert.equal(nextTutorialMode(tutorialStates.LANDING_COMPLETE, true), "dashboard");
+assert.equal(nextTutorialMode(tutorialStates.LANDING_COMPLETE, true, false), null);
+assert.equal(completeTutorialMode("dashboard"), tutorialStates.COMPLETE);
+assert.equal(nextTutorialMode(tutorialStates.COMPLETE, true), null);
+assert.equal(nextTutorialMode(tutorialStates.DISMISSED, false), null);
+assert.equal(shouldShowDashboardTutorialForHistory(3), true, "v1.5 portable histories should introduce the new dashboard once");
+assert.equal(shouldShowDashboardTutorialForHistory(4), false);
+assert.equal(shouldShowDashboardTutorialForHistory(5), false);
+assert.equal(shouldShowDashboardTutorialForHistory(undefined), false);
+writeTutorialState(tutorialStates.DISMISSED, storage);
+assert.equal(readTutorialState(storage), tutorialStates.DISMISSED);
+console.log("First-use tutorial state passed.");

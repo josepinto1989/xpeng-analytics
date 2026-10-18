@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { buildSnapshot, emptyState, exportHistory, importArchive, importGps, importHistory, isNativeHistory } from "../src/engine/native-engine.js";
+import { buildSnapshot, emptyState, exportHistory, importArchive, importGps, importHistory, isNativeHistory, setCustomCharts } from "../src/engine/native-engine.js";
 
 function storedZip(files) {
   const locals = [], centrals = [];
@@ -25,12 +25,13 @@ function storedZip(files) {
 }
 
 function fixture(drivingSpeed = 50, rearRotorTemp = 42) {
-  const start = 1_797_000_000, operation = ["timer,vmodel,esp_vehspd,esp_vehlongaccel,esp_vehlateralaccel,cdcu_totalodometer,eps_steeringangle,ldcu_accpedalsig,ldcu_brkpedalst"], energy = ["timer,vmodel,bms_battvolt,bms_battcurr,ldcu_chrgpwr,ldcu_bms_soc_disp,bms_batttempmax_gb,bms_batttempmin_gb,ldcu_dstbatdisp_dynamic,ipur_actrotspd,ipur_acttorq,ipur_rotoracttemp"], status = ["timer,vmodel,ldcu_tpmsprfl,ldcu_tpmsprfr,ldcu_tpmsprrl,ldcu_tpmsprrr"];
+  const start = 1_797_000_000, operation = ["timer,vmodel,esp_vehspd,esp_vehlongaccel,esp_vehlateralaccel,cdcu_totalodometer,eps_steeringangle,ldcu_accpedalsig,ldcu_brkpedalst,ldcu_currentgearlev"], energy = ["timer,vmodel,bms_battvolt,bms_battcurr,ldcu_chrgpwr,ldcu_bms_soc_disp,bms_batttempmax_gb,bms_batttempmin_gb,ldcu_dstbatdisp_dynamic,ipur_actrotspd,ipur_acttorq,ipur_rotoracttemp"], status = ["timer,vmodel,ldcu_tpmsprfl,ldcu_tpmsprfr,ldcu_tpmsprrl,ldcu_tpmsprrr,ldcu_driverdoorajarst,rdcu_psngrdoorajarst,ldcu_rldoorajarst,rdcu_rrdoorajarst,ldcu_flwinposstfb,frwinposstfb,ldcu_rlwinposstfb,rrwinposstfb,rdm_tropenersts"];
   for (let second = 0; second <= 360; second++) {
-    const timer = start + second, driving = second <= 180, charging = second >= 220;
-    operation.push(`${timer},G6,${driving ? drivingSpeed : 0},${driving ? (second % 20 < 10 ? .18 : -.16) : 0},${driving ? .08 : 0},${10000 + second / 720},${driving ? (second % 30) - 15 : 0},${driving ? 28 : 0},${driving && second % 20 >= 10 ? 1 : 0}`);
+    const timer = start + second, driving = second >= 60 && second <= 240, charging = second >= 280;
+    operation.push(`${timer},G6,${driving ? drivingSpeed : 0},${driving ? (second % 20 < 10 ? .18 : -.16) : 0},${driving ? .08 : 0},${10000 + second / 720},${driving ? (second % 30) - 15 : 0},${driving ? 28 : 0},${driving && second % 20 >= 10 ? 1 : 0},${driving ? 1 : 4}`);
     energy.push(`${timer},G6,400,${charging ? -25 : driving ? 20 : 0},${charging ? 11 : 0},${60 + second / 120},${26 + second / 360},24,330,${driving ? 4200 : 0},${driving ? 80 : 0},${rearRotorTemp}`);
-    status.push(`${timer},G6,250,251,249,250`);
+    const trunkState = second < 5 ? 1 : second < 7 ? 2 : second < 9 ? 5 : second < 11 ? 6 : second < 13 ? 9 : 1;
+    status.push(`${timer},G6,250,251,249,250,${second < 2 ? 1 : 0},0,0,0,0,0,0,0,${trunkState}`);
   }
   return storedZip({ "driving_operation.csv": operation.join("\n"), "driving_power_energy.csv": energy.join("\n"), "driving_status.csv": status.join("\n") });
 }
@@ -56,6 +57,14 @@ assert.ok(snapshot.trips[0].maxRearRotorTempC > 0, "expected rear rotor temperat
 assert.ok(snapshot.trips[0].series.some((row) => row.longitudinalG != null && row.lateralG != null), "expected journey force series");
 assert.ok(snapshot.trips[0].series.some((row) => row.rearMotorTorqueNm != null && row.rearMotorRpm != null), "expected rear motor series");
 assert.ok(snapshot.trips[0].series.some((row) => row.tyreFrontLeftKpa != null && row.tyreRearRightKpa != null), "expected journey tyre series");
+assert.ok(snapshot.trips[0].replayEvents.some((row) => row.driverDoorOpen === 1), "expected observed pre-trip driver-door state in replay telemetry");
+assert.ok(snapshot.trips[0].replayEvents.some((row) => row.trunkState === 5), "expected observed pre-trip fully-open boot state in replay telemetry");
+assert.ok(snapshot.trips[0].series.some((row) => row.gearLevel === 1), "expected observed drive gear state in replay telemetry");
+assert.ok(Date.parse(snapshot.trips[0].replaySeries[0].timestampUtc) < Date.parse(snapshot.trips[0].startedAtUtc), "replay telemetry must include the pre-trip context");
+assert.ok(Date.parse(snapshot.trips[0].replaySeries.at(-1).timestampUtc) > Date.parse(snapshot.trips[0].endedAtUtc), "replay telemetry must include the post-trip context");
+assert.ok(snapshot.trips[0].replaySeries.length <= 300, "replay telemetry must stay within the memory budget");
+assert.ok(snapshot.trips[0].series.every((row) => snapshot.trips[0].replaySeries.includes(row)), "journey charts and replay must reuse the same telemetry objects");
+assert.deepEqual(snapshot.trips[0].replayEvents.map((row) => row.trunkState).filter((value) => value != null), [1, 2, 5, 6, 9, 1], "boot movement states must remain exact replay events");
 assert.ok(snapshot.quality.coverage.every((row) => Array.isArray(row.availableColumns) && Number.isInteger(row.totalColumns)), "expected signal availability metadata");
 
 const futureGpxStart = 1_797_010_000;
@@ -66,14 +75,37 @@ assert.equal(futureGpsSnapshot.gps.matchedTripCount, 0);
 assert.equal(futureGpsImport.state.gpsTracks.length, 1, "an unmatched route must remain available in the active session for a later XPENG ZIP");
 assert.equal(futureGpsImport.state.gpsSelectedTracks.length, 0, "unmatched routes must not be selected for portable history export");
 
-const history = await exportHistory(imported.state);
+const stateWithCharts = setCustomCharts(imported.state, [{ id: "distance", title: "Distance", dataset: "daily", type: "line", x: "date", y: ["distanceKm"], period: "all", groupBy: "none" }]);
+assert.equal(buildSnapshot(stateWithCharts).customCharts.length, 1, "custom chart definitions must be exposed in the dashboard snapshot");
+const history = await exportHistory(stateWithCharts);
 assert.ok(isNativeHistory(new Uint8Array(history)), "expected native history signature");
 const restored = await importHistory(history);
+assert.equal(restored.version, 5);
+assert.equal(restored.sourceHistoryVersion, 5, "the imported history source version must be preserved for migrations and onboarding");
+assert.equal(restored.customCharts[0].id, "distance", "custom chart definitions must survive the .xpeng round trip");
 const restoredSnapshot = buildSnapshot(restored);
 assert.equal(restoredSnapshot.trips.length, snapshot.trips.length);
 assert.equal(restoredSnapshot.charges.length, snapshot.charges.length);
 assert.equal(restoredSnapshot.trips[0].maxSteeringAngleDeg, snapshot.trips[0].maxSteeringAngleDeg);
 assert.equal(restoredSnapshot.trips[0].series[0].rearMotorTorqueNm, snapshot.trips[0].series[0].rearMotorTorqueNm);
+const historyBytes = new Uint8Array(history);
+const originalManifestLength = new DataView(historyBytes.buffer, historyBytes.byteOffset + 8, 4).getUint32(0, false);
+const olderManifest = JSON.parse(new TextDecoder().decode(historyBytes.subarray(12, 12 + originalManifestLength)));
+olderManifest.version = 4;
+delete olderManifest.customCharts;
+delete olderManifest.streams.operation.columns.steering_angle_deg;
+const olderManifestBytes = new TextEncoder().encode(JSON.stringify(olderManifest));
+const olderHeader = historyBytes.slice(0, 8), olderLength = new Uint8Array(4);
+olderHeader[7] = 4;
+new DataView(olderLength.buffer).setUint32(0, olderManifestBytes.byteLength, false);
+const olderHistory = new Blob([olderHeader, olderLength, olderManifestBytes, historyBytes.subarray(12 + originalManifestLength)]);
+const olderRestored = await importHistory(olderHistory);
+assert.equal(olderRestored.version, 5);
+assert.equal(olderRestored.sourceHistoryVersion, 4, "older portable histories must retain their original source version");
+assert.ok(olderRestored.streams.operation.columns.steering_angle_deg.every(Number.isNaN), "signals absent from older histories must be restored as unavailable");
+assert.equal(buildSnapshot(olderRestored).trips.length, snapshot.trips.length, "an older history with fewer signals must still build a complete dashboard");
+const corruptManifest = new Uint8Array([88, 80, 69, 78, 71, 65, 0, 5, 0, 0, 0, 1, 123]);
+await assert.rejects(() => importHistory(corruptManifest), /history_integrity/, "a malformed manifest must produce a controlled integrity error");
 const mobileImported = await importArchive(emptyState(), new Blob([source]), "mobile-fixture.zip", () => {}, { mode: "mobile", memoryBudgetBytes: 1 });
 assert.equal(mobileImported.totalRows, imported.totalRows, "mobile streaming import must retain every row without a conservative memory rejection");
 const mobileRestored = await importHistory(new Blob([history]));

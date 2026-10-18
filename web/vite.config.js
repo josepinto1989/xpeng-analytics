@@ -6,6 +6,9 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 4174,
     strictPort: true,
+    watch: {
+      ignored: ["**/public/processor/**"],
+    },
   },
   preview: {
     host: "127.0.0.1",
