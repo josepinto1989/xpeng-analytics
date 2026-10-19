@@ -689,6 +689,22 @@ body { color: var(--ink); background: var(--panel-soft); transition: background 
 .master-detail .technical-grid .dash-panel > header { min-height: 58px; padding-block: 13px; }
 .master-detail .technical-grid .chart-wrap { height: 230px !important; padding-top: 10px; }
 .master-detail .technical-grid .progressive-chart-placeholder { min-height: 289px; }
+.journey-detail-stack { gap: 14px; }
+.journey-detail-stack .detail-metrics .dash-metric { min-height: 88px; padding: 13px 15px; }
+.journey-detail-stack .route-map-wrap { padding: 14px 16px 16px; }
+.journey-detail-stack .route-map-toolbar { margin-bottom: 9px; }
+.journey-detail-stack .route-map { height: 315px; }
+.journey-detail-stack .route-map-meta { margin-top: 8px; }
+.journey-detail-stack .technical-grid { gap: 10px; }
+.journey-detail-stack .technical-grid .dash-panel > header { min-height: 52px; padding: 11px 16px; }
+.journey-detail-stack .technical-grid .chart-wrap { height: 185px !important; padding: 7px 12px 5px 6px; }
+.journey-detail-stack .technical-grid .progressive-chart-placeholder { min-height: 237px; }
+@media (max-width: 700px) {
+  .journey-detail-stack { gap: 12px; }
+  .journey-detail-stack .route-map { height: 280px; }
+  .journey-detail-stack .technical-grid .chart-wrap { height: 205px !important; }
+  .journey-detail-stack .technical-grid .progressive-chart-placeholder { min-height: 257px; }
+}
 .topbar-data-action, .settings-trigger { min-height: 38px; padding: 8px 12px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: var(--panel); font: inherit; font-size: 10px; font-weight: 700; cursor: pointer; }
 .topbar-data-action:hover, .topbar-data-action.is-active, .settings-trigger:hover, .settings-trigger.is-active { border-color: rgba(32,169,131,.38); color: var(--mint-strong); background: rgba(32,169,131,.07); }
 .topbar-data-action .nav-icon { width: 15px; height: 15px; }

@@ -2,6 +2,17 @@
 
 All notable public changes are documented here.
 
+## 2.1.1 — 2026-10-19
+
+- Changed journey telemetry axes and tooltip headings from elapsed minutes to
+  the actual local time of each recorded sample.
+- Made journey details more compact so the route map and charts are easier to
+  compare without excessive scrolling.
+- Moved **Technical highlights** above the journey map and reduced unused
+  spacing in journey metric, chart, and map panels.
+- Kept the compact layout scoped to Journeys, including a separate mobile
+  adjustment, so other dashboard pages retain their existing presentation.
+
 ## 2.1.0 — 2026-10-18
 
 - Added optional Google Drive backup and restore using Google Identity Services

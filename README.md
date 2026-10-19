@@ -162,6 +162,7 @@ Read the full [privacy notes](PRIVACY.md), [security guidance](SECURITY.md), and
 | [Security](SECURITY.md) | Safe reporting and importer security boundaries |
 | [Architecture](docs/ARCHITECTURE.md) | Browser engine, data flow, and portable-history design |
 | [`.xpeng` v5 format](docs/XPENG_HISTORY_V5_SPEC.md) | Technical format specification for telemetry, optional GPS tracks, and saved personal charts |
+| [v2.1.1 release notes](docs/RELEASE_NOTES_2.1.1.md) | Journey timeline and compact-layout corrections |
 | [v2.1.0 release notes](docs/RELEASE_NOTES_2.1.0.md) | Complete summary of the 2.1 release |
 | [Google Drive setup](docs/GOOGLE_DRIVE_SETUP.md) | OAuth configuration and release validation |
 | [v1.8.0 beta notes](docs/RELEASE_NOTES_1.8.0-beta.3.md) | Private-staging notes for automatic GPX matching and journey maps |

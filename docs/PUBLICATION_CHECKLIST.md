@@ -1,5 +1,16 @@
 # Publication checklist
 
+## v2.1.1 patch release — 2026-10-19
+
+- [x] Journey chart axes and tooltips show the recorded local clock time.
+- [x] Technical highlights appear above the journey map.
+- [x] Journey charts, map, metrics, and spacing use the reviewed compact layout.
+- [x] The journey-specific responsive rules do not change other dashboard pages.
+- [x] Python tests, browser tests, translation parity, public-tree audit, and
+  the production build pass.
+- [x] Version, README, release notes, changelog, and publication checklist are
+  updated for 2.1.1.
+
 ## v2.1.0 release candidate — 2026-10-18
 
 - [x] Persistent local history and 7-, 15-, 25-, and 30-day reminders passed
