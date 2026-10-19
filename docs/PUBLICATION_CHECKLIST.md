@@ -10,6 +10,10 @@
   the production build pass.
 - [x] Version, README, release notes, changelog, and publication checklist are
   updated for 2.1.1.
+- [x] The reviewed commit and annotated `v2.1.1` tag are published on the
+  public repository.
+- [x] Public Quality and GitHub Pages workflows completed successfully, and the
+  deployed site displays version 2.1.1 on 2026-10-19.
 
 ## v2.1.0 release candidate — 2026-10-18
 
