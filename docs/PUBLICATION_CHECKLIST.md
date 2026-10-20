@@ -11,6 +11,10 @@
 - [x] Existing matched route slices and `.xpeng` v5 histories remain compatible.
 - [x] Python tests, browser tests, public-tree audit, production build, and
   release documentation pass for version 2.1.2.
+- [x] The reviewed commit and annotated `v2.1.2` tag are published on the
+  public repository.
+- [x] Public Quality and GitHub Pages workflows completed successfully, and the
+  deployed site displays version 2.1.2 on 2026-10-20.
 
 ## v2.1.1 patch release — 2026-10-19
 
