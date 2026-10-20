@@ -24,8 +24,8 @@ function storedZip(files) {
   return Buffer.concat([...locals, directory, end]);
 }
 
-function fixture(drivingSpeed = 50, rearRotorTemp = 42) {
-  const start = 1_797_000_000, operation = ["timer,vmodel,esp_vehspd,esp_vehlongaccel,esp_vehlateralaccel,cdcu_totalodometer,eps_steeringangle,ldcu_accpedalsig,ldcu_brkpedalst,ldcu_currentgearlev"], energy = ["timer,vmodel,bms_battvolt,bms_battcurr,ldcu_chrgpwr,ldcu_bms_soc_disp,bms_batttempmax_gb,bms_batttempmin_gb,ldcu_dstbatdisp_dynamic,ipur_actrotspd,ipur_acttorq,ipur_rotoracttemp"], status = ["timer,vmodel,ldcu_tpmsprfl,ldcu_tpmsprfr,ldcu_tpmsprrl,ldcu_tpmsprrr,ldcu_driverdoorajarst,rdcu_psngrdoorajarst,ldcu_rldoorajarst,rdcu_rrdoorajarst,ldcu_flwinposstfb,frwinposstfb,ldcu_rlwinposstfb,rrwinposstfb,rdm_tropenersts"];
+function fixture(drivingSpeed = 50, rearRotorTemp = 42, start = 1_797_000_000) {
+  const operation = ["timer,vmodel,esp_vehspd,esp_vehlongaccel,esp_vehlateralaccel,cdcu_totalodometer,eps_steeringangle,ldcu_accpedalsig,ldcu_brkpedalst,ldcu_currentgearlev"], energy = ["timer,vmodel,bms_battvolt,bms_battcurr,ldcu_chrgpwr,ldcu_bms_soc_disp,bms_batttempmax_gb,bms_batttempmin_gb,ldcu_dstbatdisp_dynamic,ipur_actrotspd,ipur_acttorq,ipur_rotoracttemp"], status = ["timer,vmodel,ldcu_tpmsprfl,ldcu_tpmsprfr,ldcu_tpmsprrl,ldcu_tpmsprrr,ldcu_driverdoorajarst,rdcu_psngrdoorajarst,ldcu_rldoorajarst,rdcu_rrdoorajarst,ldcu_flwinposstfb,frwinposstfb,ldcu_rlwinposstfb,rrwinposstfb,rdm_tropenersts"];
   for (let second = 0; second <= 360; second++) {
     const timer = start + second, driving = second >= 60 && second <= 240, charging = second >= 280;
     operation.push(`${timer},G6,${driving ? drivingSpeed : 0},${driving ? (second % 20 < 10 ? .18 : -.16) : 0},${driving ? .08 : 0},${10000 + second / 720},${driving ? (second % 30) - 15 : 0},${driving ? 28 : 0},${driving && second % 20 >= 10 ? 1 : 0},${driving ? 1 : 4}`);
@@ -67,13 +67,34 @@ assert.ok(snapshot.trips[0].series.every((row) => snapshot.trips[0].replaySeries
 assert.deepEqual(snapshot.trips[0].replayEvents.map((row) => row.trunkState).filter((value) => value != null), [1, 2, 5, 6, 9, 1], "boot movement states must remain exact replay events");
 assert.ok(snapshot.quality.coverage.every((row) => Array.isArray(row.availableColumns) && Number.isInteger(row.totalColumns)), "expected signal availability metadata");
 
-const futureGpxStart = 1_797_010_000;
-const futureGpx = `<?xml version="1.0"?><gpx version="1.1" creator="Future test"><trk><trkseg><trkpt lat="38.70" lon="-9.10"><time>${new Date(futureGpxStart * 1000).toISOString()}</time></trkpt><trkpt lat="38.71" lon="-9.11"><time>${new Date((futureGpxStart + 60) * 1000).toISOString()}</time></trkpt></trkseg></trk></gpx>`;
+const futureFixtureStart = 1_797_010_000;
+const futureGpxPoints = [];
+for (let second = 60; second <= 240; second++) futureGpxPoints.push(`<trkpt lat="${38.70 + (second - 60) * .00001}" lon="${-9.10 - (second - 60) * .00001}"><time>${new Date((futureFixtureStart + second) * 1000).toISOString()}</time></trkpt>`);
+const futureGpx = `<?xml version="1.0"?><gpx version="1.1" creator="Future test"><trk><trkseg>${futureGpxPoints.join("")}</trkseg></trk></gpx>`;
 const futureGpsImport = await importGps(imported.state, new Blob([futureGpx]), "future.gpx");
 const futureGpsSnapshot = buildSnapshot(futureGpsImport.state);
 assert.equal(futureGpsSnapshot.gps.matchedTripCount, 0);
 assert.equal(futureGpsImport.state.gpsTracks.length, 1, "an unmatched route must remain available in the active session for a later XPENG ZIP");
-assert.equal(futureGpsImport.state.gpsSelectedTracks.length, 0, "unmatched routes must not be selected for portable history export");
+assert.equal(futureGpsImport.state.gpsSelectedTracks.length, 0, "a pending route must not be presented as a matched route");
+const pendingHistory = await exportHistory(futureGpsImport.state);
+const pendingRestored = await importHistory(pendingHistory);
+assert.equal(pendingRestored.gpsTracks.length, 1, "a recent unmatched route must survive the portable-history round trip");
+assert.equal(pendingRestored.gpsTracks[0].matchedTripId, null, "a retained pending route must remain unmatched");
+assert.equal(pendingRestored.gpsTracks[0].lat.length, futureGpxPoints.length, "pending history must retain the complete original route");
+const futureSource = fixture(50, 42, futureFixtureStart);
+const laterImport = await importArchive(pendingRestored, futureSource.buffer.slice(futureSource.byteOffset, futureSource.byteOffset + futureSource.byteLength), "future-fixture.zip", () => {}, 2_000_000_000);
+const laterSnapshot = buildSnapshot(laterImport.state);
+assert.equal(laterSnapshot.gps.matchedTripCount, 1, "a retained route must be matched automatically when later XPENG telemetry arrives");
+assert.ok(laterSnapshot.journeys.some((journey) => journey.gps), "the later journey must expose its matched GPS route");
+
+const oldGpxStart = 1_797_000_000 - 6 * 24 * 60 * 60;
+const oldGpx = `<?xml version="1.0"?><gpx version="1.1" creator="Old test"><trk><trkseg><trkpt lat="38.70" lon="-9.10"><time>${new Date(oldGpxStart * 1000).toISOString()}</time></trkpt><trkpt lat="38.7001" lon="-9.1001"><time>${new Date((oldGpxStart + 60) * 1000).toISOString()}</time></trkpt></trkseg></trk></gpx>`;
+const oldGpsImport = await importGps(imported.state, new Blob([oldGpx]), "old.gpx");
+buildSnapshot(oldGpsImport.state);
+const prunedHistory = await exportHistory(oldGpsImport.state);
+const prunedRestored = await importHistory(prunedHistory);
+assert.equal(prunedRestored.gpsTracks.length, 0, "an unmatched route older than the five-day telemetry window must be pruned");
+assert.equal(prunedRestored.gpsImports.length, 1, "pruning coordinates must not remove lightweight GPX import provenance");
 
 const stateWithCharts = setCustomCharts(imported.state, [{ id: "distance", title: "Distance", dataset: "daily", type: "line", x: "date", y: ["distanceKm"], period: "all", groupBy: "none" }]);
 assert.equal(buildSnapshot(stateWithCharts).customCharts.length, 1, "custom chart definitions must be exposed in the dashboard snapshot");

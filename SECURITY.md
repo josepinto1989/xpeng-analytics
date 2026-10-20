@@ -29,10 +29,12 @@ A portable history remains sensitive even though version 5 does not retain the
 original vehicle identifier. It contains timestamped vehicle telemetry and
 import provenance that may reveal personal routines, plus user-authored chart
 titles or descriptions. When GPX has been added, it also contains the precise
-location history of automatically matched trip slices. Unmatched recordings
-and rejected duplicate tracks are not written to the portable history. Future
-exports are merged by timestamp and archive content, not by treating the
-history as anonymous.
+location history of automatically matched trip slices and recent complete
+recordings awaiting delayed XPENG data. Pending recordings are retained until
+the latest imported vehicle telemetry is more than five days beyond them;
+older unmatched recordings and rejected duplicate tracks are not written to
+new portable histories. Future exports are merged by timestamp and archive
+content, not by treating the history as anonymous.
 
 Opening a journey with an associated GPX route loads an OpenStreetMap
 background and discloses the viewed map area through ordinary tile requests.

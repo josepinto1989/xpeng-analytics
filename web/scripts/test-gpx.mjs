@@ -85,9 +85,12 @@ const history = await exportHistory(exportableState, () => {});
 assert.ok(isNativeHistory(new Uint8Array(history)));
 const restored = await importHistory(history, () => {});
 assert.equal(restored.version, 5);
-assert.equal(restored.gpsTracks.length, 1);
-assert.equal(restored.gpsTracks[0].lat.length, matched.selectedTracks[0].lat.length);
-assert.equal(restored.gpsTracks[0].sourceName, "android.gpx");
-assert.deepEqual(restored.gpsTracks[0].ignoredSourceIds, matched.selectedTracks[0].ignoredSourceIds, "discarded duplicate provenance must survive .xpeng export and restore");
+assert.equal(restored.gpsTracks.length, 2, "history must keep both the selected slice and its recent source recording for future matching");
+const restoredMatched = restored.gpsTracks.find((track) => track.matchedTripId);
+const restoredPending = restored.gpsTracks.find((track) => !track.matchedTripId);
+assert.equal(restoredMatched.lat.length, matched.selectedTracks[0].lat.length);
+assert.equal(restoredMatched.sourceName, "android.gpx");
+assert.deepEqual(restoredMatched.ignoredSourceIds, matched.selectedTracks[0].ignoredSourceIds, "discarded duplicate provenance must survive .xpeng export and restore");
+assert.equal(restoredPending.lat.length, android[0].lat.length, "the complete recent source recording must remain available for later XPENG trips");
 
 console.log(JSON.stringify({ androidPoints: android[0].stats.points, iphonePoints: iphone[0].stats.points, selected: matched.journeys[0].gps.sourceName, historyBytes: history.byteLength }));

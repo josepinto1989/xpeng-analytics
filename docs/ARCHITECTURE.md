@@ -71,8 +71,13 @@ several car trips while parked periods and unrelated movement are excluded.
 Candidates are compared using temporal coverage, start/end proximity,
 distance, speed agreement, and recording quality. When Android and iPhone
 recordings cover the same trip, one route is chosen deterministically and the
-overlapping alternatives are omitted from the portable history. XPENG
-telemetry remains the source for all vehicle metrics.
+overlapping alternatives are omitted from the displayed journey. The history
+writer also retains a complete source recording while it ends within five days
+of the latest imported vehicle telemetry, or is newer than that telemetry. This
+allows an all-day or same-day GPX to be matched again after delayed XPENG data
+is added. Once telemetry is more than five days beyond an unmatched recording,
+its coordinates are omitted from the next export. XPENG telemetry remains the
+source for all vehicle metrics.
 
 The previous Python/WebAssembly and SQLite processor remains available as a
 compatibility reader for version 1 and 2 histories. It is not loaded for a new
@@ -126,10 +131,13 @@ format, version, bounds, checksum, decompressed size, and required streams
 before rebuilding all derived analytics. Version 4 adds individually
 compressed GPS time, latitude, longitude, elevation, speed, and segment blocks,
 plus GPX import provenance, the matched trip identifier, and discarded-source
-provenance. Only matched trip slices are written; these blocks are omitted when
-no GPS data was matched. Version 5 adds an allow-listed `customCharts` manifest
-array containing only compact display definitions. Chart data and rendered
-images are never duplicated in the history.
+provenance. Version 5 continues to use those blocks for matched trip slices and
+also permits recent complete source recordings with no `matchedTripId` while
+they wait for delayed XPENG telemetry. The five-day retention rule is based on
+the newest imported telemetry timestamp, not the computer clock. Version 5
+also adds an allow-listed `customCharts` manifest array containing only compact
+display definitions. Chart data and rendered images are never duplicated in
+the history.
 
 Per-column compression avoids Base64 and SQLite overhead and lets the file stay
 close to the size of the original XPENG ZIP. Histories remain unencrypted and

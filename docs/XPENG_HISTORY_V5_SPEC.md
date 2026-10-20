@@ -3,9 +3,10 @@
 ## 1. Purpose and compatibility
 
 Version 5 extends the [version 4 format](XPENG_HISTORY_V4_SPEC.md) with saved
-personal chart definitions. Telemetry columns, optional matched GPS route
-blocks, GZIP compression, SHA-256 checksums, and integrity validation are
-unchanged.
+personal chart definitions. Telemetry columns, optional GPS route blocks, GZIP
+compression, SHA-256 checksums, and integrity validation are unchanged. The
+writer may use the existing GPS block schema for recent source recordings that
+are still waiting for delayed XPENG telemetry.
 
 The native reader accepts versions 3, 4, and 5. New exports use version 5.
 Older histories open normally and start with no saved personal charts.
@@ -75,7 +76,31 @@ the following limits and allow-lists before a definition reaches the UI:
 Current chart types are `line`, `area`, `bar`, `scatter`, and `histogram`.
 Current groupings are `none`, `day`, and `month`.
 
-## 5. Units and portability
+## 5. Pending GPS retention
+
+The `gps.tracks` array may contain both:
+
+- route slices associated with a journey, with a non-null `matchedTripId`;
+- complete recent source recordings awaiting a match, with
+  `matchedTripId: null`.
+
+For each export, the writer finds the latest timestamp across the imported
+vehicle telemetry streams. An unmatched source recording is retained if its
+end timestamp is no more than five days before that timestamp, or if it is
+newer than the available telemetry. This rule deliberately uses imported
+telemetry time rather than the computer clock because XPENG exports can lag
+behind GPX recordings.
+
+After a later XPENG archive is added, route matching runs again over retained
+recordings. An unmatched recording older than the five-day boundary is omitted
+from the next portable history, although its lightweight import provenance may
+remain in `gps.imports`.
+
+No format-version change is required because version 4 already defined
+`matchedTripId` as optional and the reader already validates the same aligned
+GPS arrays for matched and unmatched records.
+
+## 6. Units and portability
 
 Definitions store canonical field identifiers, not pre-converted values.
 Distance, speed, consumption, temperature, and pressure are converted at

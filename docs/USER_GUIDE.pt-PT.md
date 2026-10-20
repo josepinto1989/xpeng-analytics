@@ -73,9 +73,18 @@ Antes da importação podes remover opcionalmente os primeiros e últimos 100,
 nada. A aplicação recorta as gravações pelos timestamps exatos dos trajetos
 XPENG e compara cobertura temporal, distância, velocidade e qualidade. Assim,
 um GPX gravado durante todo o dia pode conter várias viagens, enquanto períodos
-parados, caminhadas e outros movimentos são descartados. Se dois telemóveis
-gravaram o mesmo trajeto, o melhor percurso é escolhido automaticamente, sem
-gestão manual de ficheiros.
+parados, caminhadas e outros movimentos ficam excluídos do percurso mostrado
+em cada viagem. Se dois telemóveis gravaram o mesmo trajeto, o melhor percurso
+é escolhido automaticamente, sem gestão manual de ficheiros.
+
+Os exports XPENG podem chegar com um dia de atraso. Por isso, uma gravação GPX
+completa que ainda não tenha uma viagem correspondente fica guardada no
+histórico `.xpeng` enquanto terminar nos cinco dias anteriores aos dados mais
+recentes do veículo, ou for mais recente do que esses dados. Ao adicionar um
+ZIP XPENG posterior, a associação é novamente tentada de forma automática.
+Quando os dados do veículo já estiverem mais de cinco dias à frente de uma
+gravação sem correspondência, as coordenadas deixam de entrar no export
+seguinte.
 
 O processamento GPS fica no dispositivo. As coordenadas são sensíveis e
 passam a fazer parte do histórico `.xpeng` não encriptado. Protege esse
@@ -274,7 +283,8 @@ O ficheiro:
 - permanece no teu computador, exceto se o moveres ou enviares;
 - permite adicionar novos ZIPs depois de ser restaurado;
 - inclui checksums para detetar corrupção;
-- preserva os recortes GPS opcionais associados automaticamente;
+- preserva os recortes GPS associados automaticamente e as gravações GPX
+  completas recentes que ainda aguardam dados XPENG atrasados;
 - preserva as definições validadas dos gráficos pessoais;
 - está comprimido, mas **não está encriptado**.
 

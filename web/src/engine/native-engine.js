@@ -55,6 +55,7 @@ const HISTORY_MAGIC_PREFIX = new Uint8Array([88, 80, 69, 78, 71, 65, 0]);
 const HISTORY_VERSION = 5;
 const HISTORY_MAGIC = new Uint8Array([...HISTORY_MAGIC_PREFIX, HISTORY_VERSION]);
 const HISTORY_FORMAT = "xpeng-analytics-columnar-history";
+const GPS_PENDING_RETENTION_SECONDS = 5 * 24 * 60 * 60;
 
 class ChunkedGrower {
   constructor(Type, chunkSize = 65_536) {
@@ -682,12 +683,29 @@ async function gzip(buffer) { const stream = new Blob([buffer]).stream().pipeThr
 async function gunzip(buffer) { const stream = new Blob([buffer]).stream().pipeThrough(new DecompressionStream("gzip")); return new Uint8Array(await new Response(stream).arrayBuffer()); }
 async function hash(bytes) { return [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((v) => v.toString(16).padStart(2, "0")).join(""); }
 
+function gpsTracksForHistory(state) {
+  const storedTracks = Array.isArray(state.gpsTracks) ? state.gpsTracks : [];
+  const selectedTracks = Array.isArray(state.gpsSelectedTracks) && state.gpsSelectedTracks.length
+    ? state.gpsSelectedTracks
+    : storedTracks.filter((track) => track.matchedTripId);
+  const latestTelemetry = Math.max(...Object.values(state.streams || {}).map((stream) => Number(stream?.time?.at?.(-1))).filter(finite));
+  const pendingBoundary = finite(latestTelemetry) ? latestTelemetry - GPS_PENDING_RETENTION_SECONDS : -Infinity;
+  const pendingTracks = storedTracks.filter((track) => {
+    if (track.matchedTripId) return false;
+    const endedAt = Number(track.time?.at?.(-1));
+    return finite(endedAt) && endedAt >= pendingBoundary;
+  });
+  const unique = new Map();
+  for (const track of [...selectedTracks, ...pendingTracks]) if (track?.trackId && !unique.has(track.trackId)) unique.set(track.trackId, track);
+  return [...unique.values()];
+}
+
 export async function exportHistory(state, report = () => {}) {
-  const chunks = [], streams = {}, gpsTracks = [], selectedGpsTracks = state.gpsSelectedTracks || state.gpsTracks || []; let offset = 0, completed = 0;
-  const total = Object.values(state.streams).reduce((n, stream) => n + 1 + Object.keys(stream.columns).length, 0) + selectedGpsTracks.length * 6;
+  const chunks = [], streams = {}, gpsTracks = [], historyGpsTracks = gpsTracksForHistory(state); let offset = 0, completed = 0;
+  const total = Object.values(state.streams).reduce((n, stream) => n + 1 + Object.keys(stream.columns).length, 0) + historyGpsTracks.length * 6;
   const add = async (name, array) => { const raw = new Uint8Array(array.buffer, array.byteOffset, array.byteLength), compressed = await gzip(raw); const record = { name, offset, bytes: compressed.byteLength, rawBytes: raw.byteLength, sha256: await hash(compressed) }; chunks.push(compressed); offset += compressed.byteLength; report(10 + (++completed / total) * 82, "history_export", name); return record; };
   for (const [family, stream] of Object.entries(state.streams)) { const record = { stats: stream.stats, model: stream.model, time: await add(`${family}/time`, stream.time), columns: {} }; for (const [name, column] of Object.entries(stream.columns)) record.columns[name] = await add(`${family}/${name}`, column); streams[family] = record; }
-  for (const track of selectedGpsTracks) {
+  for (const track of historyGpsTracks) {
     const base = `gps/${track.trackId}`;
     gpsTracks.push({
       trackId: track.trackId,

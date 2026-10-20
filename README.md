@@ -83,8 +83,9 @@ storage destination controlled by the user.
 - Optional GPX route import from Android or iPhone, automatic trip-level
   timestamp matching, duplicate selection, and an OpenStreetMap journey map. Moving
   across any journey chart also highlights the corresponding route position.
-- Optional local route traces in PDF reports. GPS tracks are preserved in the
-  portable `.xpeng` history so one file can restore the full session.
+- Optional local route traces in PDF reports. Matched routes and recent GPX
+  recordings awaiting delayed XPENG data are preserved in the portable
+  `.xpeng` history, then matched automatically after a later import.
 - A local journey replay with a lightweight chase-camera view, synchronized
   speed, pedals, steering, brake indication, available door and boot signals,
   compact live telemetry, and the current GPX position.
@@ -162,6 +163,7 @@ Read the full [privacy notes](PRIVACY.md), [security guidance](SECURITY.md), and
 | [Security](SECURITY.md) | Safe reporting and importer security boundaries |
 | [Architecture](docs/ARCHITECTURE.md) | Browser engine, data flow, and portable-history design |
 | [`.xpeng` v5 format](docs/XPENG_HISTORY_V5_SPEC.md) | Technical format specification for telemetry, optional GPS tracks, and saved personal charts |
+| [v2.1.2 release notes](docs/RELEASE_NOTES_2.1.2.md) | Retention and later matching of recent GPX recordings |
 | [v2.1.1 release notes](docs/RELEASE_NOTES_2.1.1.md) | Journey timeline and compact-layout corrections |
 | [v2.1.0 release notes](docs/RELEASE_NOTES_2.1.0.md) | Complete summary of the 2.1 release |
 | [Google Drive setup](docs/GOOGLE_DRIVE_SETUP.md) | OAuth configuration and release validation |

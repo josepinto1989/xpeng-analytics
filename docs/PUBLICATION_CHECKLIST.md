@@ -1,5 +1,17 @@
 # Publication checklist
 
+## v2.1.2 patch release — 2026-10-20
+
+- [x] Complete recent GPX recordings without a matching XPENG journey remain
+  available in portable histories for delayed vehicle data.
+- [x] Retained recordings are matched automatically after a later XPENG ZIP is
+  imported, with no manual route selection.
+- [x] Old unmatched coordinates are pruned after vehicle telemetry advances
+  more than five days beyond them, while lightweight provenance remains.
+- [x] Existing matched route slices and `.xpeng` v5 histories remain compatible.
+- [x] Python tests, browser tests, public-tree audit, production build, and
+  release documentation pass for version 2.1.2.
+
 ## v2.1.1 patch release — 2026-10-19
 
 - [x] Journey chart axes and tooltips show the recorded local clock time.

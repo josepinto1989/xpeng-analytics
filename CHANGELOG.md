@@ -2,6 +2,18 @@
 
 All notable public changes are documented here.
 
+## 2.1.2 — 2026-10-20
+
+- Keep complete GPX recordings that do not yet match an XPENG journey when
+  they end within five days of the newest imported vehicle telemetry, including
+  recordings newer than the available XPENG export.
+- Automatically retry those retained recordings whenever newer XPENG ZIPs are
+  added, so a route recorded today can be matched after the delayed vehicle
+  data becomes available.
+- Remove old unmatched coordinates from new `.xpeng` exports once vehicle
+  telemetry has advanced more than five days beyond them, while preserving
+  lightweight import provenance.
+
 ## 2.1.1 — 2026-10-19
 
 - Changed journey telemetry axes and tooltip headings from elapsed minutes to

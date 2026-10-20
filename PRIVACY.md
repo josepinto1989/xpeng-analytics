@@ -39,10 +39,13 @@ reports or commit them to Git.
 Version 5 portable histories contain normalised telemetry, model information
 when available, import provenance such as source filenames and archive hashes,
 and validated personal-chart definitions. If the user imports GPX data, the
-same history also contains precise timestamps and coordinates for the route
-slices automatically matched to XPENG trips; unmatched recordings and rejected
-duplicates are not exported. Histories do not contain the original VIN and are
-not encrypted; possession of the file grants access to its processed data. The
+same history also contains precise timestamps and coordinates for route slices
+automatically matched to XPENG trips. Complete unmatched recordings are also
+retained while they end within five days of the latest imported vehicle
+telemetry, or are newer than it, so delayed XPENG data can be matched after a
+later import. Older unmatched recordings and rejected duplicates are not
+exported. Histories do not contain the original VIN and are not encrypted;
+possession of the file grants access to its processed data. The
 `.xpeng` extension and compression reduce size but do not provide encryption or
 access control.
 

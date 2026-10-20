@@ -71,8 +71,16 @@ Before importing, you can optionally remove the first and last 100, 250, or
 clips recordings to exact XPENG trip timestamps and compares time coverage,
 distance, speed, and recording quality. This means one all-day GPX can cover
 several car trips while parked intervals, walks, and other movement are
-discarded. If two phones recorded the same trip, the stronger route is selected
-automatically; no manual file management is required.
+excluded from the route shown for each journey. If two phones recorded the same
+trip, the stronger route is selected automatically; no manual file management
+is required.
+
+XPENG exports can be delayed by a day. A complete GPX recording that does not
+yet match a journey is therefore kept in the `.xpeng` history while its end is
+within five days of the newest imported vehicle telemetry, or when it is newer
+than that telemetry. Adding a later XPENG ZIP automatically retries the match.
+Once vehicle telemetry has moved more than five days beyond an unmatched
+recording, its coordinates are left out of the next history export.
 
 GPS processing stays on the device. Coordinates are sensitive and become part
 of the unencrypted `.xpeng` history. Protect that file accordingly.
@@ -263,7 +271,8 @@ The file:
 - remains on your computer unless you move or upload it;
 - supports adding future XPENG ZIP exports after restoration;
 - contains checksums for corruption detection;
-- preserves the automatically matched optional GPS route slices;
+- preserves automatically matched GPS route slices and recent complete GPX
+  recordings that are still waiting for delayed XPENG data;
 - preserves validated personal chart definitions;
 - is compressed but **not encrypted**.
 
