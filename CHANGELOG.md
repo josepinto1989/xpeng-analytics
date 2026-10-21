@@ -2,6 +2,12 @@
 
 All notable public changes are documented here.
 
+## 2.1.3 — 2026-10-21
+
+- Added the complete vehicle-telemetry date range beneath the XPENG Analytics
+  logo, so the current history coverage remains visible throughout the app.
+- Added the same compact, localized date range to mobile navigation.
+
 ## 2.1.2 — 2026-10-20
 
 - Keep complete GPX recordings that do not yet match an XPENG journey when

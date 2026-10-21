@@ -661,7 +661,9 @@ body { color: var(--ink); background: var(--panel-soft); transition: background 
 .dashboard-brand { width: 100%; min-height: 58px; padding: 0 8px 16px; gap: 10px; color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid var(--line); text-align: left; cursor: pointer; }
 .dashboard-brand .brand-mark { width: 38px; height: 38px; flex: 0 0 auto; }
 .dashboard-brand .brand-mark img { width: 30px; height: 30px; }
+.dashboard-brand-copy { min-width: 0; display: grid; line-height: 1.1; }
 .dashboard-brand strong { font-size: 12px; }.dashboard-brand small { margin-top: 3px; font-size: 8px; }
+.brand-data-range { margin-top: 7px; color: var(--muted); font-size: 7px; font-weight: 650; letter-spacing: .015em; line-height: 1.25; white-space: nowrap; }
 .dashboard-sidebar nav { min-height: 0; padding: 11px 1px 8px; display: block; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 .nav-group { margin-top: 11px; }.nav-group:first-child, .nav-group-primary { margin-top: 0; }
 .nav-group + .nav-group { padding-top: 10px; border-top: 1px solid color-mix(in srgb,var(--line) 68%,transparent); }
@@ -727,9 +729,10 @@ body { color: var(--ink); background: var(--panel-soft); transition: background 
 }
 @media (max-width: 850px) {
   .dashboard-shell { display: block; }.dashboard-sidebar { display: none; }
-  .mobile-nav { min-height: 54px; padding: 8px clamp(16px,4vw,26px); display: grid; grid-template-columns: auto minmax(0,240px); align-items: center; gap: 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  .mobile-nav { min-height: 64px; padding: 8px clamp(16px,4vw,26px); display: grid; grid-template-columns: auto minmax(0,240px); align-items: center; column-gap: 12px; row-gap: 2px; border-bottom: 1px solid var(--line); background: var(--panel); }
   .mobile-nav > span { color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
   .mobile-nav select { width: 100%; height: 36px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--panel-soft); font: inherit; font-size: 10px; }
+  .mobile-data-range { grid-column: 2; color: var(--muted); font-size: 7px; font-weight: 650; line-height: 1.2; }
 }
 @media (max-width: 560px) {
   .dashboard-topbar { min-height: 96px; padding: 16px; gap: 12px; }.dashboard-topbar h1 { margin-block: 4px; font-size: 27px; }.dashboard-topbar p { display: none; }.dashboard-eyebrow { font-size: 8px; }

@@ -1,5 +1,16 @@
 # Publication checklist
 
+## v2.1.3 patch release — 2026-10-21
+
+- [x] The sidebar shows the earliest and latest timestamps across all available
+  vehicle telemetry families beneath the XPENG Analytics logo.
+- [x] Dates use compact Portuguese or unambiguous English formatting and update
+  immediately when the language or imported data changes.
+- [x] Mobile navigation displays the same coverage range without hiding the
+  section selector.
+- [x] Browser tests, translation parity, Python tests, public-tree audit, and
+  the production build pass for version 2.1.3.
+
 ## v2.1.2 patch release — 2026-10-20
 
 - [x] Complete recent GPX recordings without a matching XPENG journey remain
