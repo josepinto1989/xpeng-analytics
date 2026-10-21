@@ -10,6 +10,10 @@
   section selector.
 - [x] Browser tests, translation parity, Python tests, public-tree audit, and
   the production build pass for version 2.1.3.
+- [x] The reviewed commit and annotated `v2.1.3` tag are published on the
+  public repository.
+- [x] Public Quality and GitHub Pages workflows completed successfully, and the
+  deployed site displays version 2.1.3 on 2026-10-21.
 
 ## v2.1.2 patch release — 2026-10-20
 
