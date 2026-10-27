@@ -15,8 +15,8 @@
   explicitly unavailable records; 0–100 is never inferred from an incomplete run.
 - [x] Translation parity, browser tests, production build, public-tree audit,
   and documentation were reviewed before publication.
-- [ ] GitHub Quality and Pages workflows, deployed version, and `v2.3.0` tag
-  verified after publication.
+- [x] GitHub Quality and Pages workflows, deployed version, and `v2.3.0` tag
+  verified after publication on 2026-10-27.
 
 ## v2.2.2 — 2026-10-27
 
