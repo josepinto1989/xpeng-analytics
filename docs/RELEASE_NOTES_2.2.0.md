@@ -1,8 +1,9 @@
-# XPENG Analytics 2.2.0 beta 1
+# XPENG Analytics 2.2.0
 
-This public beta combines the recent long-history, insight, journey, and Google
-Drive work so it can be tested with a wider variety of vehicles, browsers, and
-real export histories.
+This release combines the recent long-history, insight, journey, and Google
+Drive work. Some of the newest functionality is still being validated with a
+wider variety of vehicles, browsers, and real export histories; bug reports are
+welcome.
 
 ## Long histories without loading everything
 
@@ -23,7 +24,7 @@ than being permanently deleted.
 The original ZIP contents are never consolidated or rewritten. Exports without
 reliable coverage metadata are retained automatically.
 
-## Other beta features
+## Other new features
 
 - personal Insights, monthly summaries, seasonal comparisons, and data coverage;
 - battery trends and confidence information;
@@ -34,8 +35,9 @@ reliable coverage metadata are retained automatically.
 - original GPX preservation as a separate opt-in option;
 - `.xpeng` version 7 with lazy monthly detail loading.
 
-## Beta note
+## Testing note
 
-Please keep a separate copy of important source exports while testing this beta.
-The Raw Files feature moves redundant files to Google Drive trash, so they can
-still be recovered if the retained coverage is not what you expected.
+Please keep a separate copy of important source exports while the newest
+functionality is being validated. The Raw Files feature moves redundant files
+to Google Drive trash, so they can still be recovered if the retained coverage
+is not what you expected. Please report any unexpected behaviour.

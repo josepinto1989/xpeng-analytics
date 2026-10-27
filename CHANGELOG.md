@@ -2,7 +2,7 @@
 
 All notable public changes are documented here.
 
-## 2.2.0-beta.1 — 2026-10-27
+## 2.2.0 — 2026-10-27
 
 - Added an automatic original-export retention registry. Each imported XPENG
   ZIP is recorded in the portable `.xpeng` history with its SHA-256 digest,
@@ -65,7 +65,8 @@ All notable public changes are documented here.
 - Added synthetic tests for coverage, battery history, anomalies, monthly
   summaries, seasonal comparisons, global search, and insight-card privacy.
 - These changes passed the complete browser and Python test suites, public-tree
-  audit, and production build before the public beta release.
+  audit, and production build before the public release. Some of the newest
+  functionality remains under wider real-world validation.
 
 ## 2.1.3 — 2026-10-21
 

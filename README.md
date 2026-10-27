@@ -181,7 +181,7 @@ Read the full [privacy notes](PRIVACY.md), [security guidance](SECURITY.md), and
 | [Security](SECURITY.md) | Safe reporting and importer security boundaries |
 | [Architecture](docs/ARCHITECTURE.md) | Browser engine, data flow, and portable-history design |
 | [`.xpeng` v7 format](docs/XPENG_HISTORY_V7_SPEC.md) | Segmented long-history format, lazy detail loading, compatibility, and integrity checks |
-| [v2.2.0 beta 1 release notes](docs/RELEASE_NOTES_2.2.0-beta.1.md) | Public beta, long histories, Insights, Drive recovery, and Raw Files retention |
+| [v2.2.0 release notes](docs/RELEASE_NOTES_2.2.0.md) | Long histories, Insights, Drive recovery, and Raw Files retention |
 | [v2.1.3 release notes](docs/RELEASE_NOTES_2.1.3.md) | Always-visible vehicle-data coverage dates |
 | [v2.1.2 release notes](docs/RELEASE_NOTES_2.1.2.md) | Retention and later matching of recent GPX recordings |
 | [v2.1.1 release notes](docs/RELEASE_NOTES_2.1.1.md) | Journey timeline and compact-layout corrections |

@@ -1,6 +1,6 @@
 # Publication checklist
 
-## v2.2.0-beta.1 — 2026-10-27
+## v2.2.0 — 2026-10-27
 
 - [x] Data-coverage calendar passed owner testing with real history.
 - [x] Battery-history confidence, personal-baseline anomaly observations,
@@ -13,14 +13,15 @@
 - [x] Original XPENG ZIPs remain byte-identical in `Raw Files`; duplicate,
   overlap-selection, conservative unknown-coverage, trash, and `.xpeng`
   registry behaviour have automated tests.
-- [x] Version number and beta release notes are prepared.
+- [x] Version number and release notes are prepared.
 - [ ] Repeat Chrome, Firefox, Edge, mobile, large-history, import/export,
   Google Drive, PDF, GPX, replay, and `.xpeng` compatibility smoke tests.
 - [x] Public-tree privacy audit, Python tests, complete browser tests, and the
   production build pass locally.
-- [x] The owner explicitly approved direct public beta publication.
+- [x] The owner explicitly approved direct public publication.
 - [x] GitHub Quality and Pages workflows completed successfully; the public
-  bundle and `v2.2.0-beta.1` tag were verified on 2026-10-27.
+  bundle was verified on 2026-10-27. The final `v2.2.0` tag replaces the
+  short-lived prerelease tag.
 
 ## v2.1.3 patch release — 2026-10-21
 

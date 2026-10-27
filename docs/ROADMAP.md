@@ -480,7 +480,7 @@ phone is still required before publication.
   preserving continuous coverage with a preferred four-day overlap. Always
   retain sources whose coverage cannot be verified, and never mix originals
   with the three processed-history recovery copies. **Implemented for the
-  2.2.0 beta.**
+  2.2.0.**
 - Keep GPX source archiving behind its own opt-in because it contains precise
   location history. Store recognised `.gpx` files and GPX ZIPs unchanged in a
   separate folder, deduplicate them by importer SHA-256, and never enable it

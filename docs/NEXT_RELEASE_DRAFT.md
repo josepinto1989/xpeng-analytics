@@ -1,7 +1,7 @@
-# XPENG Analytics 2.2.0 beta 1 — release scope
+# XPENG Analytics 2.2.0 — release scope
 
-This document records the combined scope selected for the public beta. Detailed
-public notes live in `RELEASE_NOTES_2.2.0-beta.1.md`.
+This document records the combined scope selected for the public release.
+Detailed public notes live in `RELEASE_NOTES_2.2.0.md`.
 
 ## Completed and owner-validated
 
@@ -21,20 +21,21 @@ public notes live in `RELEASE_NOTES_2.2.0-beta.1.md`.
 
 ## Drive and long-history phase
 
-Phase 17 is implemented and included for wider beta validation. Optional Google
+Phase 17 is implemented and included for wider real-world validation. Optional Google
 Drive backup now supports explicit automatic updates, visible account and
 backup metadata, likely-gap warnings, three recovery copies, transparent
 restore selection, and resumable-upload recovery while retaining the limited
 `drive.file` permission.
 
-The beta also preserves original XPENG ZIPs in `Raw Files`, records their
+Version 2.2 also preserves original XPENG ZIPs in `Raw Files`, records their
 coverage and retention status inside `.xpeng`, and automatically moves
 redundant originals to Drive trash while keeping a compact continuous source
 set with a preferred four-day overlap.
 
 ## Release policy
 
-- Publish this scope as an explicitly labelled beta for wider validation.
+- Publish this scope as version 2.2.0 while clearly identifying the newest
+  functionality as still undergoing wider real-world validation.
 - Add every completed feature to the Unreleased changelog as it is validated.
-- Promote the beta only after wider browser, mobile, Drive, and long-history
-  testing.
+- Continue browser, mobile, Drive, and long-history testing and correct reported
+  problems through patch releases.
