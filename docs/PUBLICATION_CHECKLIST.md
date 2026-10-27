@@ -11,8 +11,8 @@
 - [x] English and Portuguese UI text, user documentation, privacy notes,
   architecture notes, changelog, and release notes describe the new policy.
 - [x] Complete browser tests and the production build pass locally.
-- [ ] Public Quality and Pages workflows, displayed version, and `v2.2.1` tag
-  are verified after publication.
+- [x] Public Quality and Pages workflows, displayed version, and `v2.2.1` tag
+  were verified after publication on 2026-10-27.
 
 ## v2.2.0 — 2026-10-27
 
