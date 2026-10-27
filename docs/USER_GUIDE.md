@@ -389,7 +389,7 @@ This is not the same as the `.xpeng` backup. The `.xpeng` file is the compact
 working history used by the app; an original ZIP may contain the VIN and all raw
 telemetry supplied by XPENG. Original ZIPs are unencrypted and consume your
 Drive storage. The app keeps the smallest practical set spanning the complete
-observed period, preferring four days of overlap. A redundant original is moved
+observed period, preferring one day of overlap. A redundant original is moved
 to Drive trash only after its replacement has uploaded, and its provenance
 remains recorded in `.xpeng`. Files without reliable coverage are always kept.
 

@@ -115,7 +115,7 @@ GitHub Pages origin:
     unchanged file appears in `Original GPX files` and that disabling XPENG ZIP
     archiving does not alter the separate GPX preference.
 14. import overlapping XPENG ZIPs and confirm that the app retains a continuous
-    source set with approximately four days of preferred overlap, while
+    source set with approximately one day of preferred overlap, while
     redundant files appear in Drive trash and remain recoverable.
 15. export and restore `.xpeng`, then confirm its raw-file registry still lists
     retained and retired source digests without containing the ZIP payloads.

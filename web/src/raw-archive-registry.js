@@ -74,11 +74,11 @@ function coveredBySelected(entry, selected) {
 
 /**
  * Selects a small set of untouched source ZIPs that spans the same observed
- * time range. A four-day overlap is preferred, but continuity wins when the
+ * time range. A one-day overlap is preferred, but continuity wins when the
  * available exports do not provide it. Files without trustworthy coverage are
  * always retained.
  */
-export function planRawFileRetention(files, { overlapDays = 4 } = {}) {
+export function planRawFileRetention(files, { overlapDays = 1 } = {}) {
   const input = rows(files), covered = input.map(validCoverage).filter(Boolean);
   const unmeasured = input.filter((file) => !validCoverage(file));
   if (covered.length <= 1) return { retained: [...input], retired: [], overlapDays };

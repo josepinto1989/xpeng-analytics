@@ -18,9 +18,21 @@ const files = [
   file("raw-d", "d".repeat(64), "2026-02-10", "2026-03-11", "2026-03-12"),
 ];
 
-const plan = planRawFileRetention(files, { overlapDays: 4 });
+const plan = planRawFileRetention(files);
+assert.equal(plan.overlapDays, 1);
 assert.deepEqual(plan.retained.map((item) => item.id), ["raw-a", "raw-c", "raw-d"]);
 assert.deepEqual(plan.retired.map((item) => item.id), ["raw-b"]);
+
+const previousPolicyFiles = [
+  file("policy-a", "1".repeat(64), "2026-01-01", "2026-01-10", "2026-01-11"),
+  file("policy-b", "2".repeat(64), "2026-01-06", "2026-01-15", "2026-01-16"),
+  file("policy-c", "3".repeat(64), "2026-01-09", "2026-01-30", "2026-01-31"),
+];
+const previousPolicyPlan = planRawFileRetention(previousPolicyFiles, { overlapDays: 4 });
+assert.deepEqual(previousPolicyPlan.retained.map((item) => item.id), ["policy-a", "policy-b", "policy-c"]);
+const revisedPolicyPlan = planRawFileRetention(previousPolicyFiles);
+assert.deepEqual(revisedPolicyPlan.retained.map((item) => item.id), ["policy-a", "policy-c"]);
+assert.deepEqual(revisedPolicyPlan.retired.map((item) => item.id), ["policy-b"]);
 
 const replacement = file("raw-new", "e".repeat(64), "2026-01-01", "2026-03-20", "2026-03-21");
 const replacementPlan = planRawFileRetention([...files, replacement]);

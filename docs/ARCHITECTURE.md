@@ -131,7 +131,7 @@ Drive session is still authorised, the original `File` is streamed unchanged
 to a **Raw Files** subfolder before the normal processed-history backup runs.
 The archive uses the SHA-256 digest already produced by the native importer to
 skip duplicates. A coverage-based selector keeps a small set of untouched ZIPs
-spanning the complete observed period, preferring four days of overlap. Files
+spanning the complete observed period, preferring one day of overlap. Files
 that become redundant are moved to Drive trash. They are never consolidated or
 rewritten. The `.xpeng` manifest stores lightweight provenance and retention
 records for every imported ZIP, including files no longer retained in Drive.

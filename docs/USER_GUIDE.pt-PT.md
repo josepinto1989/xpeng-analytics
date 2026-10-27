@@ -407,7 +407,7 @@ Isto não substitui a cópia `.xpeng`. O `.xpeng` é o histórico compacto usado
 pela aplicação; um ZIP original pode conter o VIN e toda a telemetria bruta
 fornecida pela XPENG. Os ZIPs originais não são encriptados e ocupam espaço no
 teu Drive. A aplicação mantém o menor conjunto prático que cobre todo o período
-observado, preferindo quatro dias de sobreposição. Um original redundante só é
+observado, preferindo um dia de sobreposição. Um original redundante só é
 enviado para o lixo do Drive depois de o substituto ser carregado, e o seu
 registo permanece no `.xpeng`. Ficheiros sem cobertura fiável são sempre
 mantidos.

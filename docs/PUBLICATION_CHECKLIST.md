@@ -1,5 +1,19 @@
 # Publication checklist
 
+## v2.2.1 — 2026-10-27
+
+- [x] Raw Files retention prefers one day of overlap while continuity remains
+  more important than the overlap target.
+- [x] The next successful original ZIP import re-evaluates existing managed
+  Drive files and records retained and retired states in `.xpeng`.
+- [x] Unknown-coverage originals remain preserved and redundant files still go
+  to Drive trash rather than being permanently deleted.
+- [x] English and Portuguese UI text, user documentation, privacy notes,
+  architecture notes, changelog, and release notes describe the new policy.
+- [x] Complete browser tests and the production build pass locally.
+- [ ] Public Quality and Pages workflows, displayed version, and `v2.2.1` tag
+  are verified after publication.
+
 ## v2.2.0 — 2026-10-27
 
 - [x] Data-coverage calendar passed owner testing with real history.

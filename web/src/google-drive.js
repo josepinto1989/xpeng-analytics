@@ -405,7 +405,7 @@ export function createGoogleDriveClient({
     const discovered = await listOriginalExports();
     const unique = new Map([...additionalFiles, ...discovered].filter(Boolean).map((file) => [file.id, originalMetadata(file)]));
     const allFiles = [...unique.values()];
-    const plan = planRawFileRetention(allFiles, { overlapDays: 4 });
+    const plan = planRawFileRetention(allFiles, { overlapDays: 1 });
     const updates = driveRegistryUpdates(allFiles, plan.retired);
     for (const file of plan.retired) {
       await request(`${DRIVE_API}/files/${encodeURIComponent(file.id)}?fields=id,trashed`, {

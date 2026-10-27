@@ -97,7 +97,7 @@ storage destination controlled by the user.
 - Optional preservation of untouched XPENG source ZIPs in the Drive
   `Raw Files` folder. The `.xpeng` history records every source while Drive
   keeps the smallest practical set of originals spanning the observed period,
-  with a preferred four-day overlap; replaced files are moved to Drive trash.
+  with a preferred one-day overlap; replaced files are moved to Drive trash.
 - Optional GPX route import from Android or iPhone, automatic trip-level
   timestamp matching, duplicate selection, and an OpenStreetMap journey map. Moving
   across any journey chart also highlights the corresponding route position.
@@ -181,6 +181,7 @@ Read the full [privacy notes](PRIVACY.md), [security guidance](SECURITY.md), and
 | [Security](SECURITY.md) | Safe reporting and importer security boundaries |
 | [Architecture](docs/ARCHITECTURE.md) | Browser engine, data flow, and portable-history design |
 | [`.xpeng` v7 format](docs/XPENG_HISTORY_V7_SPEC.md) | Segmented long-history format, lazy detail loading, compatibility, and integrity checks |
+| [v2.2.1 release notes](docs/RELEASE_NOTES_2.2.1.md) | One-day Raw Files overlap and automatic re-evaluation on the next ZIP import |
 | [v2.2.0 release notes](docs/RELEASE_NOTES_2.2.0.md) | Long histories, Insights, Drive recovery, and Raw Files retention |
 | [v2.1.3 release notes](docs/RELEASE_NOTES_2.1.3.md) | Always-visible vehicle-data coverage dates |
 | [v2.1.2 release notes](docs/RELEASE_NOTES_2.1.2.md) | Retention and later matching of recent GPX recordings |

@@ -2,6 +2,17 @@
 
 All notable public changes are documented here.
 
+## 2.2.1 — 2026-10-27
+
+- Reduced the preferred overlap between retained original XPENG ZIP exports
+  from four days to one day, reducing Google Drive storage while continuing to
+  prioritise complete observed coverage.
+- Existing `Raw Files` archives are evaluated again after the next successful
+  original ZIP import. Redundant files are moved to Drive trash, and the
+  updated retention state is preserved in the portable `.xpeng` registry.
+- Updated the Drive settings text, privacy information, user guides,
+  architecture notes, and automated retention tests for the new policy.
+
 ## 2.2.0 — 2026-10-27
 
 - Added an automatic original-export retention registry. Each imported XPENG

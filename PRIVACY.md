@@ -37,7 +37,7 @@ When explicitly enabled, each successfully recognised XPENG ZIP is uploaded
 unchanged to a **Raw Files** subfolder in the user's Drive. A SHA-256 digest
 already calculated during local import avoids duplicates. The app records the
 source coverage and retention state in `.xpeng`, then keeps the smallest
-practical set of originals spanning the observed period, preferring four days
+practical set of originals spanning the observed period, preferring one day
 of overlap. Redundant files are moved to Drive trash and remain recoverable;
 exports without trustworthy coverage are always retained. These originals may
 contain the VIN, complete raw telemetry, and other information omitted from the

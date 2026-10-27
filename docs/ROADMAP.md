@@ -477,7 +477,7 @@ phone is still required before publication.
 - List retained originals with clear download and deletion controls. Keep a
   lightweight registry for every imported ZIP inside `.xpeng`; automatically
   move redundant Drive originals to trash only after a replacement uploads,
-  preserving continuous coverage with a preferred four-day overlap. Always
+  preserving continuous coverage with a preferred one-day overlap. Always
   retain sources whose coverage cannot be verified, and never mix originals
   with the three processed-history recovery copies. **Implemented for the
   2.2.0.**
