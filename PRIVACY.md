@@ -24,13 +24,12 @@ opened with it. Google access tokens remain in tab memory and are not stored;
 the user may need to authorise again after closing the tab or when the token
 expires. Disconnecting does not delete the Drive copy.
 
-Before replacing the current Drive backup, the application may create up to
-three earlier recovery copies in the same folder. These are also unencrypted
-`.xpeng` files created and managed with the same limited permission. Backup
-coverage, size, format version, and timestamps are stored as Drive file
-metadata. The connected Google email address is read only to identify the
-active account in the interface and is not saved to local storage or included
-in a portable history.
+The application keeps only the latest processed `.xpeng` Drive backup. Older
+app-created recovery copies from previous versions are moved to Drive trash
+after the next successful save. Backup coverage, size, format version, and
+timestamps are stored as Drive file metadata. The connected Google email
+address is read only to identify the active account in the interface and is
+not saved to local storage or included in a portable history.
 
 The separate **Archive original XPENG ZIPs** option is disabled by default.
 When explicitly enabled, each successfully recognised XPENG ZIP is uploaded

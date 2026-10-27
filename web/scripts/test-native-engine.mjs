@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { buildSnapshot, emptyState, exportHistory, importArchive, importGps, importHistory, isNativeHistory, loadRecordDetails, setCustomCharts, setJourneyGroups, setRawArchives } from "../src/engine/native-engine.js";
+import { buildSnapshot, emptyState, exportHistory, importArchive, importGps, importHistory, isNativeHistory, loadRecordDetails, odometerCoverageGaps, setCustomCharts, setJourneyGroups, setRawArchives } from "../src/engine/native-engine.js";
 
 async function hydrateSnapshot(state, snapshot) {
   const details = await loadRecordDetails(state, { journeyIds: snapshot.journeys.map((row) => row.journeyId), chargeIds: snapshot.charges.map((row) => row.chargeId) });
@@ -72,6 +72,9 @@ assert.ok(snapshot.trips[0].replaySeries.length <= 300, "replay telemetry must s
 assert.ok(snapshot.trips[0].series.every((row) => snapshot.trips[0].replaySeries.includes(row)), "journey charts and replay must reuse the same telemetry objects");
 assert.deepEqual(snapshot.trips[0].replayEvents.map((row) => row.trunkState).filter((value) => value != null), [1, 2, 5, 6, 9, 1], "boot movement states must remain exact replay events");
 assert.ok(snapshot.quality.coverage.every((row) => Array.isArray(row.availableColumns) && Number.isInteger(row.totalColumns)), "expected signal availability metadata");
+const detectedCoverageGaps = odometerCoverageGaps({ time: new Uint32Array([100, 101, 180]), columns: { odometer_km: new Float32Array([1000, 1000.02, 1001.2]) } });
+assert.equal(detectedCoverageGaps.length, 1, "odometer movement across a telemetry interval must be flagged");
+assert.ok(detectedCoverageGaps[0].missingDistanceKm >= 1, "coverage warning must retain the observed odometer distance");
 
 const futureFixtureStart = 1_797_010_000;
 const futureGpxPoints = [];

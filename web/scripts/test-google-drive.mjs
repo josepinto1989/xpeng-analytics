@@ -150,11 +150,8 @@ assert.equal(JSON.parse(uploadStartCall.body).appProperties[googleDriveConstants
 assert.equal(JSON.parse(uploadStartCall.body).appProperties[googleDriveConstants.BACKUP_ROLE_PROPERTY], googleDriveConstants.BACKUP_ROLE_CURRENT);
 
 const updated = await client.uploadHistory(backupPayload, { ...metadata, coverageEndUtc: "2026-10-25T12:00:00.000Z", importCount: 4 });
-assert.equal(updated.backups.filter((file) => file.role === googleDriveConstants.BACKUP_ROLE_RECOVERY).length, 1);
+assert.equal(updated.backups.filter((file) => file.role === googleDriveConstants.BACKUP_ROLE_RECOVERY).length, 0);
 assert.equal(updated.backups.find((file) => file.role === googleDriveConstants.BACKUP_ROLE_CURRENT).coverageEndUtc, "2026-10-25T12:00:00.000Z");
-const recovery = updated.backups.find((file) => file.role === googleDriveConstants.BACKUP_ROLE_RECOVERY);
-const recovered = await client.downloadHistory(recovery.id);
-assert.equal(recovered.file.role, googleDriveConstants.BACKUP_ROLE_RECOVERY);
 for (let index = 0; index < 4; index += 1) await client.uploadHistory(backupPayload, { ...metadata, coverageEndUtc: `2026-10-${26 + index}T12:00:00.000Z`, importCount: 5 + index });
 assert.equal((await client.listBackups()).filter((file) => file.role === googleDriveConstants.BACKUP_ROLE_RECOVERY).length, googleDriveConstants.RECOVERY_LIMIT);
 failNextUpload = true;

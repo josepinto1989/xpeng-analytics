@@ -353,7 +353,8 @@ export function setRawArchives(state, updates) {
 async function importArchiveRaw(state, source, filename, report, processingProfile = {}, knownDigest = null) {
   const profile = typeof processingProfile === "number" ? { memoryBudgetBytes: processingProfile, mode: "desktop" } : processingProfile;
   const digest = knownDigest || await sourceDigest(source);
-  if (state.imports.some((item) => item.sha256 === digest)) return { state, skipped: true, archiveSha256: digest, totalRows: 0 };
+  const existing = state.imports.find((item) => item.sha256 === digest);
+  if (existing) return { state, skipped: true, archiveSha256: digest, totalRows: 0, sourceStartUtc: existing.sourceStartUtc || null, sourceEndUtc: existing.sourceEndUtc || null };
   const all = await listEntries(source), entries = all.filter((entry) => familyForName(entry.name));
   const families = new Set(entries.map((entry) => familyForName(entry.name)));
   if (!["operation", "energy", "status"].every((name) => families.has(name))) throw new Error("missing_families");
@@ -639,6 +640,24 @@ function buildCharges(operation, energy, local) {
   return charges;
 }
 
+export function odometerCoverageGaps(operation) {
+  const odometer = operation.columns.odometer_km || [];
+  const gaps = [];
+  for (let index = 1; index < operation.time.length; index++) {
+    const durationSeconds = operation.time[index] - operation.time[index - 1];
+    const before = Number(odometer[index - 1]), after = Number(odometer[index]);
+    const missingDistanceKm = after - before;
+    if (durationSeconds <= MAX_GAP || !finite(before) || !finite(after) || missingDistanceKm < .1) continue;
+    gaps.push({
+      family: "operation", field: "odometer_km", rule: "odometer_coverage_gap",
+      severity: missingDistanceKm >= 5 ? "high" : "medium", affectedRows: 1, totalRows: operation.time.length,
+      startedAtUtc: iso(operation.time[index - 1]), endedAtUtc: iso(operation.time[index]),
+      durationMinutes: rounded(durationSeconds / 60, 1), missingDistanceKm: rounded(missingDistanceKm, 1),
+    });
+  }
+  return gaps;
+}
+
 function advanced(operation, energy, status, local) {
   const speedBands = ["0–30", "30–50", "50–90", "90–120", "120–150", "150+"], pedalBands = ["0–10", "10–25", "25–50", "50–75", "75–100"];
   const band = (v, limits, labels) => labels[limits.findIndex((x) => v < x)] ?? labels.at(-1), speed = new Map(), pedal = new Map(), heat = new Map(), gg = new Map(), events = new Map();
@@ -693,8 +712,8 @@ export function buildSnapshot(state, report = () => {}) {
   const monthly = new Map(), weekday = Array.from({ length: 7 }, (_, index) => ({ weekday: index, trips: 0, distanceKm: 0 })), hours = Array.from({ length: 24 }, (_, hour) => ({ hour, trips: 0 }));
   daily.forEach((row) => { const key = row.date.slice(0, 7), target = monthly.get(key) || { month: key, distanceKm: 0, netEnergyKwh: 0, trips: 0, journeys: 0, charges: 0 }; target.distanceKm += row.distanceKm || 0; target.netEnergyKwh += row.netEnergyKwh || 0; target.trips += row.trips; target.journeys += row.journeys; target.charges += row.charges; monthly.set(key, target); });
   trips.forEach((row) => { const context = local(new Date(row.startedAtUtc) / 1000); weekday[context.weekday].trips++; weekday[context.weekday].distanceKm += row.distanceKm || 0; hours[context.hour].trips++; });
-  const qualityEvents = [];
-  for (const [family, stream] of Object.entries(state.streams)) { if (stream.stats.duplicates) qualityEvents.push({ family, field: null, rule: "duplicate_timestamp", severity: "low", affectedRows: stream.stats.duplicates, totalRows: stream.stats.inputRows }); if (stream.stats.invalidTimers) qualityEvents.push({ family, field: "timer", rule: "invalid_timer", severity: "high", affectedRows: stream.stats.invalidTimers, totalRows: stream.stats.inputRows }); if (stream.stats.wasUnsorted) qualityEvents.push({ family, field: "timer", rule: "unsorted_rows", severity: "medium", affectedRows: 1, totalRows: stream.stats.inputRows }); for (const [field, count] of Object.entries(stream.stats.invalidFields || {})) qualityEvents.push({ family, field, rule: "invalid_values", severity: "medium", affectedRows: count, totalRows: stream.stats.inputRows }); }
+  const qualityEvents = odometerCoverageGaps(operation);
+  for (const [family, stream] of Object.entries(state.streams)) { if (stream.stats.duplicates) qualityEvents.push({ family, field: null, rule: "duplicate_timestamp", severity: "low", affectedRows: stream.stats.duplicates, totalRows: stream.stats.inputRows }); if (stream.stats.invalidTimers) qualityEvents.push({ family, field: "timer", rule: "invalid_timer", severity: "high", affectedRows: stream.stats.invalidTimers, totalRows: stream.stats.inputRows }); if (stream.stats.wasUnsorted) qualityEvents.push({ family, field: "timer", rule: "unsorted_rows", severity: "low", affectedRows: 1, totalRows: stream.stats.inputRows }); for (const [field, count] of Object.entries(stream.stats.invalidFields || {})) qualityEvents.push({ family, field, rule: "invalid_values", severity: "low", affectedRows: count, totalRows: stream.stats.inputRows }); }
   const distance = sum(trips, "distanceKm"), net = sum(trips, "netEnergyKwh"), wall = sum(charges, "wallEnergyKwh"), batteryEnergy = sum(charges, "batteryEnergyKwh");
   report(96, "native_snapshot", "Preparing dashboard");
   return { format: "xpeng-analytics-dashboard/v2", generatedAtUtc: new Date().toISOString(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "local", overview: { activeDays: daily.filter((row) => row.trips || row.charges).length, tripCount: trips.length, journeyCount: journeyRows.length, chargeCount: charges.length, distanceKm: rounded(distance), drivingHours: rounded(sum(trips, "durationMinutes") / 60, 1), netEnergyKwh: rounded(net), regeneratedKwh: rounded(sum(trips, "regeneratedKwh")), consumptionKwh100: rounded(distance ? net / distance * 100 : NaN), maxSpeedKmh: rounded(Math.max(...trips.map((row) => row.maxSpeedKmh || 0)), 1), wallEnergyKwh: rounded(wall), batteryEnergyKwh: rounded(batteryEnergy), chargeEfficiencyPct: rounded(wall ? batteryEnergy / wall * 100 : NaN, 1), maxChargePowerKw: rounded(Math.max(...charges.map((row) => row.maxPowerKw || 0)), 1), firstUtc: trips.at(0)?.startedAtUtc || null, lastUtc: trips.at(-1)?.endedAtUtc || null }, daily, trips: trips.slice().reverse(), journeys: enrichedJourneyRows.slice().reverse(), journeyGroups: validateJourneyGroups(state.journeyGroups), charges: charges.slice().reverse(), driving: { speed: advancedData.speed, pedal: advancedData.pedal, gg: advancedData.gg, events: advancedData.events, contexts }, battery: { capacityKwh: rounded(median(health.map((row) => row.capacityKwh))), latestRelativeSohPct: health.at(-1)?.relativeSohPct ?? null, qualifiedCharges: health.length, history: health, parking: parking.reverse(), daily: advancedData.batteryDaily, rangeSamples: advancedData.rangeSamples, tyres: advancedData.tyres }, activity: { monthly: [...monthly.values()].map((row) => ({ ...row, distanceKm: rounded(row.distanceKm), netEnergyKwh: rounded(row.netEnergyKwh) })), weekday: weekday.map((row) => ({ ...row, distanceKm: rounded(row.distanceKm) })), hours, heatmap: advancedData.heatmap }, gps: gpsData.gps, customCharts: validateCustomCharts(state.customCharts), quality: { coverage: Object.entries(state.streams).map(([family, stream]) => { const emptyColumns = stream.stats?.emptyColumns || [], availableColumns = Object.keys(stream.columns).filter((column) => !emptyColumns.includes(column)); return { family, rows: stream.time.length, firstUtc: iso(stream.time[0]), lastUtc: iso(stream.time.at(-1)), totalColumns: Object.keys(stream.columns).length, availableColumns, emptyColumns, unknownColumns: stream.stats?.unknownColumns || [] }; }), events: qualityEvents }, imports: state.imports, rawArchives: normaliseRawArchiveRegistry(state.rawArchives, state.imports), gpsImports: state.gpsImports || [] };
@@ -903,6 +922,22 @@ function rawMonthKeys(state) {
   return [...keys].filter(Boolean).sort();
 }
 
+function coverageMonths(startUtc, endUtc) {
+  const start = Date.parse(startUtc || "") / 1000, end = Date.parse(endUtc || "") / 1000, keys = [];
+  if (!finite(start) || !finite(end) || end < start) return keys;
+  let cursor = start;
+  while (cursor <= end) { const key = monthKey(cursor); keys.push(key); cursor = monthRange(key).end; }
+  return [...new Set(keys)];
+}
+
+function archiveCoverageAlreadyAnalysed(state, archive) {
+  if (!state?.segmented) return false;
+  const keys = coverageMonths(archive?.sourceStartUtc, archive?.sourceEndUtc);
+  if (!keys.length) return false;
+  const shards = new Map((state.shards || []).map((shard) => [shard.key, shard]));
+  return keys.every((key) => Number(shards.get(key)?.summary?.quality?.analysisVersion || 0) >= 2);
+}
+
 function compactSnapshot(snapshot) {
   const detailedTelemetry = (snapshot.trips || []).flatMap((trip) => trip.series || []), telemetryLimit = 1_200, telemetry = [];
   if (detailedTelemetry.length <= telemetryLimit) telemetry.push(...detailedTelemetry);
@@ -921,6 +956,23 @@ function uniqueRows(rows, key) {
   const found = new Map();
   for (const row of rows) if (row?.[key] != null) found.set(row[key], row);
   return [...found.values()];
+}
+
+function combineQualityEvents(events) {
+  const output = [], summaries = new Map();
+  for (const source of events) {
+    const event = ["invalid_values", "unsorted_rows", "duplicate_timestamp"].includes(source.rule) ? { ...source, severity: "low" } : source;
+    if (event.rule === "odometer_coverage_gap") {
+      const duplicate = output.some((row) => row.rule === event.rule && row.startedAtUtc === event.startedAtUtc && row.endedAtUtc === event.endedAtUtc);
+      if (!duplicate) output.push(event);
+      continue;
+    }
+    const key = `${event.family}|${event.field || ""}|${event.rule}|${event.severity}`;
+    const current = summaries.get(key);
+    if (!current) summaries.set(key, { ...event });
+    else summaries.set(key, { ...current, affectedRows: Math.max(Number(current.affectedRows || 0), Number(event.affectedRows || 0)), totalRows: Math.max(Number(current.totalRows || 0), Number(event.totalRows || 0)) });
+  }
+  return [...output, ...summaries.values()];
 }
 
 function combineSnapshots(shards, metadata = {}) {
@@ -954,12 +1006,13 @@ function combineSnapshots(shards, metadata = {}) {
     battery: { capacityKwh: rounded(median(health.map((row) => row.capacityKwh))), latestRelativeSohPct: health.at(-1)?.relativeSohPct ?? null, qualifiedCharges: health.length, history: health, parking: rows(["battery", "parking"]).sort((a, b) => String(b.startedAtUtc).localeCompare(String(a.startedAtUtc))), daily: uniqueRows(rows(["battery", "daily"]), "date").sort((a, b) => String(a.date).localeCompare(String(b.date))), rangeSamples: rows(["battery", "rangeSamples"]), tyres: uniqueRows(rows(["battery", "tyres"]), "date").sort((a, b) => String(a.date).localeCompare(String(b.date))) },
     activity: { monthly: [...monthly.values()].map((row) => ({ ...row, distanceKm: rounded(row.distanceKm), netEnergyKwh: rounded(row.netEnergyKwh) })), weekday: weekday.map((row) => ({ ...row, distanceKm: rounded(row.distanceKm) })), hours, heatmap: rows(["activity", "heatmap"]) },
     gps: { tracks: gpsTracks, matchedCount: journeys.filter((row) => row.gps).length, matchedTripCount: mappedTripIds.size, duplicateCount: snapshots.reduce((total, snapshot) => total + Number(snapshot.gps?.duplicateCount || 0), 0), ignoredTrackCount: snapshots.reduce((total, snapshot) => total + Number(snapshot.gps?.ignoredTrackCount || 0), 0) },
-    customCharts: validateCustomCharts(metadata.customCharts), quality: { coverage, events: rows(["quality", "events"]) }, imports: metadata.imports || [], rawArchives: normaliseRawArchiveRegistry(metadata.rawArchives, metadata.imports), gpsImports: metadata.gpsImports || [], storage: { segmented: true, months: shards.length },
+    customCharts: validateCustomCharts(metadata.customCharts), quality: { analysisVersion: shards.every((shard) => Number(shard.summary?.quality?.analysisVersion || 0) >= 2) ? 2 : 1, coverage, events: combineQualityEvents(rows(["quality", "events"])) }, imports: metadata.imports || [], rawArchives: normaliseRawArchiveRegistry(metadata.rawArchives, metadata.imports), gpsImports: metadata.gpsImports || [], storage: { segmented: true, months: shards.length },
   };
 }
 
 async function createShard(rawState, key, report = () => {}) {
   const shardState = sliceRawState(rawState, key), full = buildSnapshot(shardState, report), summary = compactSnapshot(full), payload = new Blob([await exportLegacyHistory(shardState)]);
+  summary.quality = { ...summary.quality, analysisVersion: 2 };
   return { key, summary, payload, rawBytes: Object.values(shardState.streams).reduce((total, stream) => total + stream.time.byteLength + Object.values(stream.columns).reduce((sumBytes, column) => sumBytes + column.byteLength, 0), 0) };
 }
 
@@ -1020,14 +1073,15 @@ async function updateSegmentedWithGps(state, gpsState, report = () => {}) {
 
 export async function importArchive(state, source, filename, report = () => {}, processingProfile = {}) {
   const digest = await sourceDigest(source);
-  if ((state.imports || []).some((item) => item.sha256 === digest)) return { state, skipped: true, archiveSha256: digest, totalRows: 0 };
+  const existing = (state.imports || []).find((item) => item.sha256 === digest);
+  if (existing && archiveCoverageAlreadyAnalysed(state, existing)) return { state, skipped: true, archiveSha256: digest, totalRows: 0, sourceStartUtc: existing.sourceStartUtc || null, sourceEndUtc: existing.sourceEndUtc || null };
   if (!state.segmented && Object.keys(state.streams || {}).length) state = await toSegmentedState(state, report);
   const freshResult = await importArchiveRaw(emptyState(), source, filename, report, processingProfile, digest);
   if (!state.segmented) {
     const segmented = await toSegmentedState(freshResult.state, report);
     return { ...freshResult, state: segmented };
   }
-  const imported = freshResult.state.imports[0], metadata = { imports: [imported, ...(state.imports || [])], rawArchives: mergeRawArchiveRegistry(state.rawArchives, freshResult.state.rawArchives), gpsImports: state.gpsImports || [], customCharts: state.customCharts || [], journeyGroups: state.journeyGroups || [] };
+  const imported = freshResult.state.imports[0], metadata = { imports: [imported, ...(state.imports || []).filter((item) => item.sha256 !== imported.sha256)], rawArchives: mergeRawArchiveRegistry(state.rawArchives, freshResult.state.rawArchives), gpsImports: state.gpsImports || [], customCharts: state.customCharts || [], journeyGroups: state.journeyGroups || [] };
   const base = { ...state, ...metadata };
   return { ...freshResult, state: await updateSegmentedWithRaw(base, freshResult.state, report) };
 }

@@ -115,9 +115,8 @@ Google Drive backup is an optional boundary layered on the same export path.
 After an explicit Google authorisation, React asks the worker for the current
 version 7 `.xpeng` Blob and uploads it directly to the Drive API using a
 resumable session. The static app requests only `drive.file`, creates one
-visible folder, one current backup, and up to three app-created recovery
-copies. Before replacing the current file, Drive copies the previous version;
-older recoveries are pruned after a successful upload. File app-properties
+visible folder and one current backup. Older recovery copies created by prior
+versions are pruned after a successful upload. File app-properties
 store only role, coverage, history version, and import count. The OAuth access
 token and connected account identity remain in memory. Restore downloads the
 selected Blob and passes it through the normal validated history importer. No
@@ -126,8 +125,8 @@ through an XPENG Analytics server.
 
 Original-source archiving is a separate opt-in path. After the native worker has
 successfully recognised and imported an XPENG ZIP, React retains that selected
-`File` only until the import batch completes. If the option is enabled and the
-Drive session is still authorised, the original `File` is streamed unchanged
+`File` for the active tab session. If the option is enabled later and the Drive
+session is authorised, the original `File` is streamed unchanged
 to a **Raw Files** subfolder before the normal processed-history backup runs.
 The archive uses the SHA-256 digest already produced by the native importer to
 skip duplicates. A coverage-based selector keeps a small set of untouched ZIPs

@@ -92,8 +92,7 @@ storage destination controlled by the user.
 - Optional Google Drive backup using Google's official sign-in and the limited
   `drive.file` permission. It creates one visible XPENG Analytics folder,
   supports restore on another computer, can update the backup while the
-  current tab remains connected, and retains up to three earlier recovery
-  copies before replacing the current history.
+  current tab remains connected, and keeps only the latest processed history.
 - Optional preservation of untouched XPENG source ZIPs in the Drive
   `Raw Files` folder. The `.xpeng` history records every source while Drive
   keeps the smallest practical set of originals spanning the observed period,
@@ -181,6 +180,7 @@ Read the full [privacy notes](PRIVACY.md), [security guidance](SECURITY.md), and
 | [Security](SECURITY.md) | Safe reporting and importer security boundaries |
 | [Architecture](docs/ARCHITECTURE.md) | Browser engine, data flow, and portable-history design |
 | [`.xpeng` v7 format](docs/XPENG_HISTORY_V7_SPEC.md) | Segmented long-history format, lazy detail loading, compatibility, and integrity checks |
+| [v2.2.2 release notes](docs/RELEASE_NOTES_2.2.2.md) | Session source cache, latest-only Drive backup, telemetry-gap detection, and quality/search corrections |
 | [v2.2.1 release notes](docs/RELEASE_NOTES_2.2.1.md) | One-day Raw Files overlap and automatic re-evaluation on the next ZIP import |
 | [v2.2.0 release notes](docs/RELEASE_NOTES_2.2.0.md) | Long histories, Insights, Drive recovery, and Raw Files retention |
 | [v2.1.3 release notes](docs/RELEASE_NOTES_2.1.3.md) | Always-visible vehicle-data coverage dates |

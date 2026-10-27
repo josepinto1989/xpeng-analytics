@@ -374,11 +374,11 @@ Podes ativar **Atualizar automaticamente enquanto estiver ligado**. As
 importações XPENG/GPX e os My Charts guardados passam a atualizar a cópia
 durante essa sessão do browser. A Google pode pedir nova autorização depois de
 fechares o separador ou quando o token expirar. Desligar termina a ligação atual
-mas não elimina os ficheiros do Drive. Antes de substituir a cópia atual com
-sucesso, a aplicação preserva a anterior e mantém as três recuperações mais
-recentes. A lista de restauro permite confirmar data, tamanho, cobertura e
-versão antes de abrir uma delas. Abrir uma recuperação antiga não substitui
-automaticamente a cópia atual no Drive.
+mas não elimina os ficheiros do Drive. A aplicação mantém apenas a cópia
+`.xpeng` processada mais recente. O painel de restauro permite confirmar data,
+tamanho, cobertura e versão antes de a abrir. Recuperações criadas por versões
+anteriores são enviadas para o lixo do Drive depois da próxima gravação com
+sucesso.
 
 Se um envio retomável for interrompido, a aplicação confirma a posição aceite
 pela Google e continua quando isso é possível. Falta de espaço, limite
@@ -388,6 +388,11 @@ mensagens claras em vez de uma falsa confirmação de sucesso.
 A página Dados também pode assinalar pausas longas entre os períodos cobertos
 pelos ficheiros XPENG importados. São **possíveis falhas de importação**, não
 uma prova de que faltam dados do veículo ou de que o carro esteve parado.
+
+A própria exportação oficial também pode omitir telemetria ou dividir uma
+viagem. A página Qualidade assinala casos prováveis em que o odómetro avançou
+durante uma falha de registo. Isto indica cobertura entregue incompleta, não
+uma avaria no veículo.
 
 A cópia no Drive é opcional. O processamento continua a ser local, mas o
 ficheiros `.xpeng` resultantes são enviados e armazenados pela Google quando
@@ -402,6 +407,10 @@ originais da XPENG**. Cada ZIP reconhecido e importado com sucesso é então
 copiado sem alterações para `XPENG Analytics/Raw Files`. A
 aplicação usa o SHA-256 do ZIP para ignorar um ficheiro idêntico que já esteja
 arquivado.
+
+Se importares ZIPs antes de ligares o Drive, os originais ficam em fila durante
+a sessão ativa do separador. Podes depois ligar o Drive e ativar o arquivo sem
+voltar a importá-los. Fechar ou atualizar o separador limpa essa fila temporária.
 
 Isto não substitui a cópia `.xpeng`. O `.xpeng` é o histórico compacto usado
 pela aplicação; um ZIP original pode conter o VIN e toda a telemetria bruta

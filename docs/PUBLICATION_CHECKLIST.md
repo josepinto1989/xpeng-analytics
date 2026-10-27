@@ -1,5 +1,22 @@
 # Publication checklist
 
+## v2.2.2 — 2026-10-27
+
+- [x] Imported XPENG ZIP and GPX originals remain available to Drive archiving
+  for the lifetime of the current browser tab, even when Drive is enabled later.
+- [x] Google Drive keeps one current processed `.xpeng` backup and moves older
+  app-created recovery copies to trash after a successful replacement.
+- [x] Raw Files retention, one-day overlap, conservative unknown-coverage
+  handling, and retirement of fully covered short exports have automated tests.
+- [x] Likely XPENG telemetry omissions are detected from odometer movement
+  across recording gaps and are clearly described as source-data warnings.
+- [x] Older histories are reanalysed once, routine parser cleanup no longer
+  overwhelms Quality, and manually combined journey names are searchable.
+- [x] Session and Drive lists remain bounded and scrollable, with observed date
+  ranges shown for imported sources.
+- [x] English and Portuguese text, documentation, tests, and production build
+  were reviewed locally before publication.
+
 ## v2.2.1 — 2026-10-27
 
 - [x] Raw Files retention prefers one day of overlap while continuity remains

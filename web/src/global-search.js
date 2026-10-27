@@ -1,4 +1,5 @@
 import { distanceUnit, distanceValue } from "./units.js";
+import { buildJourneyGroupView } from "./journey-groups.js";
 
 const rows = (value) => Array.isArray(value) ? value : [];
 const text = (value) => String(value ?? "").trim();
@@ -11,6 +12,7 @@ function dateLabel(value, locale) {
 
 export function buildGlobalSearchIndex(data, { locale = "en", t = (key) => key, units = { system: "metric" } } = {}) {
   const results = [];
+  buildJourneyGroupView(data || {}).groups.forEach((row) => results.push({ id: `journey-group-${row.groupId}`, type: "journey", section: "journeys", sourceId: row.groupId, date: text(row.date || row.startedAtUtc).slice(0, 10), title: row.name || t("unnamedJourneyGroup"), detail: `${Number(distanceValue(row.distanceKm || 0,units.system)).toLocaleString(locale, { maximumFractionDigits: 1 })} ${distanceUnit(units.system)} · ${Number(row.durationMinutes || 0).toLocaleString(locale, { maximumFractionDigits: 0 })} min`, keywords: `${row.name || ""} ${row.date || ""} ${row.sourceJourneyIds?.join(" ") || ""} ${t("manualJourneyGroup")}` }));
   rows(data?.journeys).forEach((row) => results.push({ id: `journey-${row.journeyId}`, type: "journey", section: "journeys", sourceId: row.journeyId, date: text(row.date || row.startedAtUtc).slice(0, 10), title: `${t("journey")} · ${dateLabel(row.date || row.startedAtUtc, locale)}`, detail: `${Number(distanceValue(row.distanceKm || 0,units.system)).toLocaleString(locale, { maximumFractionDigits: 1 })} ${distanceUnit(units.system)} · ${Number(row.durationMinutes || 0).toLocaleString(locale, { maximumFractionDigits: 0 })} min`, keywords: `${row.date || ""} ${row.distanceKm || ""} ${row.durationMinutes || ""} ${row.gps?.segments?.length ? "GPS" : ""}` }));
   rows(data?.charges).forEach((row) => results.push({ id: `charge-${row.chargeId}`, type: "charge", section: "charging", sourceId: row.chargeId, date: text(row.date || row.startedAtUtc).slice(0, 10), title: `${t("chargingSession")} · ${dateLabel(row.date || row.startedAtUtc, locale)}`, detail: `${row.chargeType || "—"} · ${Number(row.batteryEnergyKwh || 0).toLocaleString(locale, { maximumFractionDigits: 1 })} kWh`, keywords: `${row.date || ""} ${row.chargeType || ""} ${row.socStartPct || ""} ${row.socEndPct || ""}` }));
   rows(data?.daily).forEach((row) => results.push({ id: `date-${row.date}`, type: "date", section: "overview", date: text(row.date).slice(0, 10), title: `${t("date")} · ${dateLabel(row.date, locale)}`, detail: `${Number(distanceValue(row.distanceKm || 0,units.system)).toLocaleString(locale, { maximumFractionDigits: 1 })} ${distanceUnit(units.system)} · ${Number(row.journeys || 0)} ${t("journeysLower")}`, keywords: `${row.date || ""} ${row.distanceKm || ""} ${row.consumptionKwh100 || ""}` }));

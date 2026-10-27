@@ -26,7 +26,7 @@ const ORIGINAL_COVERAGE_END_PROPERTY = "sourceCoverageEnd";
 const GPS_FOLDER_NAME = "Original GPX files";
 const GPS_ARCHIVE_PROPERTY = "xpengOriginalGps";
 const GPS_ARCHIVE_PROPERTY_VALUE = "1";
-const RECOVERY_LIMIT = 3;
+const RECOVERY_LIMIT = 0;
 const SETTINGS_KEY = "xpeng-analytics.google-drive.v1";
 const GIS_SCRIPT = "https://accounts.google.com/gsi/client";
 
@@ -520,7 +520,7 @@ export function createGoogleDriveClient({
   const uploadHistory = async (blob, historyMetadata = {}) => {
     const folder = await ensureFolder();
     const current = await findBackup();
-    if (current) await preserveCurrent(current);
+    if (current && RECOVERY_LIMIT > 0) await preserveCurrent(current);
     const appProperties = backupProperties(BACKUP_ROLE_CURRENT, historyMetadata);
     const metadata = current
       ? { name: HISTORY_NAME, appProperties }

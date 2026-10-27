@@ -1,7 +1,7 @@
-# XPENG Analytics 2.2.1 — patch scope
+# XPENG Analytics 2.2.2 — patch scope
 
-This document records the Raw Files retention correction selected for the
-public patch. Detailed public notes live in `RELEASE_NOTES_2.2.1.md`.
+This document records the Drive, data-quality, and search corrections selected
+for the public patch. Detailed public notes live in `RELEASE_NOTES_2.2.2.md`.
 
 ## Completed and owner-validated
 
@@ -23,7 +23,7 @@ public patch. Detailed public notes live in `RELEASE_NOTES_2.2.1.md`.
 
 Phase 17 is implemented and included for wider real-world validation. Optional
 Google Drive backup now supports explicit automatic updates, visible account and
-backup metadata, likely-gap warnings, three recovery copies, transparent
+backup metadata, likely-gap warnings, one current processed copy, transparent
 restore selection, and resumable-upload recovery while retaining the limited
 `drive.file` permission.
 
@@ -35,8 +35,8 @@ again after the next successfully archived XPENG ZIP.
 
 ## Release policy
 
-- Publish this scope as version 2.2.1 while clearly identifying the newest
+- Publish this scope as version 2.2.2 while clearly identifying the newest
   functionality as still undergoing wider real-world validation.
-- Add every completed feature to the Unreleased changelog as it is validated.
+- Add every completed feature to the changelog as it is validated.
 - Continue browser, mobile, Drive, and long-history testing and correct reported
   problems through patch releases.

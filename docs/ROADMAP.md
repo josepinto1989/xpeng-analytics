@@ -428,12 +428,11 @@ Recommended implementation order:
 
 Strengthen the optional Google Drive workflow before the next combined public
 release. Keep one current consolidated `.xpeng` backup as the simple default,
-while making automatic updates, recovery, coverage, and restoration easier to
-understand.
+while making automatic updates, coverage, and restoration easier to understand.
 
 **Current status:** the core resilience work is implemented locally and awaiting
 owner validation. The current backup now carries coverage and format metadata;
-the app shows the connected account, retains up to three recovery copies,
+the app shows the connected account, keeps only the latest processed backup,
 allows an explicit restore choice, warns about likely import-period gaps, and
 retries interrupted resumable uploads. Separate, disabled-by-default archiving
 of original XPENG ZIPs and GPX sources is also implemented locally with
@@ -452,8 +451,8 @@ phone is still required before publication.
 - Detect likely gaps between imported XPENG periods and present them as
   coverage warnings, never as proof that the vehicle was inactive or that data
   is missing from the car.
-- Keep the latest three successful recovery copies so an accidental or
-  corrupted replacement does not immediately remove the last usable history.
+- Keep only the latest processed `.xpeng` backup to minimise Drive use and
+  remove older app-created recovery copies after a successful save.
 - Let the user inspect creation date, coverage, size, and format version before
   restoring a backup.
 - Handle cancellation, expired authorisation, quota failures, interrupted
@@ -479,7 +478,7 @@ phone is still required before publication.
   move redundant Drive originals to trash only after a replacement uploads,
   preserving continuous coverage with a preferred one-day overlap. Always
   retain sources whose coverage cannot be verified, and never mix originals
-  with the three processed-history recovery copies. **Implemented for the
+  with the processed-history backup. **Implemented for the
   2.2.0.**
 - Keep GPX source archiving behind its own opt-in because it contains precise
   location history. Store recognised `.gpx` files and GPX ZIPs unchanged in a

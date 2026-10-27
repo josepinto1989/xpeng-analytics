@@ -7,6 +7,7 @@ import { completeTutorialMode, nextTutorialMode, readTutorialState, shouldShowDa
 import { createGoogleDriveClient, googleDriveConfiguration, readGoogleDriveSettings } from "./google-drive.js";
 import { buildDriveBackupMetadata } from "./drive-backup-metadata.js";
 import { mergeRawArchiveRegistry } from "./raw-archive-registry.js";
+import { forgetUploadedSessionArchives, rememberSessionArchive, sessionArchivesToUpload } from "./session-archive-cache.js";
 import {
   deletePersistentHistory,
   importReminderDays,
@@ -74,6 +75,12 @@ const errorKeys = {
 
 function formatNumber(value, locale, options = {}) {
   return new Intl.NumberFormat(locale, options).format(Number(value ?? 0));
+}
+
+function formatDateRange(startUtc, endUtc, locale) {
+  if (!startUtc || !endUtc) return null;
+  const formatter = new Intl.DateTimeFormat(locale, { day: "2-digit", month: "short", year: "numeric" });
+  return `${formatter.format(new Date(startUtc))} — ${formatter.format(new Date(endUtc))}`;
 }
 
 function createWorker() {
@@ -301,8 +308,8 @@ export default function App() {
         }
       } else if (message.type === "imported") {
         const importedFile = activeFileRef.current;
-        if (driveArchiveOriginalsRef.current && driveConnectedRef.current && importedFile?.name?.toLowerCase().endsWith(".zip")) {
-          pendingOriginalArchivesRef.current.push({ kind: "xpeng", file: importedFile, sha256: message.result?.archiveSha256, coverageStartUtc: message.result?.sourceStartUtc, coverageEndUtc: message.result?.sourceEndUtc });
+        if (importedFile?.name?.toLowerCase().endsWith(".zip")) {
+          pendingOriginalArchivesRef.current = rememberSessionArchive(pendingOriginalArchivesRef.current, { kind: "xpeng", file: importedFile, sha256: message.result?.archiveSha256, coverageStartUtc: message.result?.sourceStartUtc, coverageEndUtc: message.result?.sourceEndUtc });
         }
         setDashboardTutorialEligible(true);
         snapshotRef.current = message.snapshot;
@@ -311,6 +318,8 @@ export default function App() {
           name: activeFileRef.current?.name ?? "—",
           status: message.result.skipped ? "alreadyImported" : "added",
           rows: message.result.totalRows ?? 0,
+          sourceStartUtc: message.result?.sourceStartUtc || null,
+          sourceEndUtc: message.result?.sourceEndUtc || null,
         }, ...current]);
         requestAnimationFrame(() => setTimeout(processNext, 0));
       } else if (message.type === "history_imported") {
@@ -340,14 +349,16 @@ export default function App() {
         }
       } else if (message.type === "additional_imported") {
         const importedFile = activeFileRef.current;
-        if (message.kind !== "gps" && driveArchiveOriginalsRef.current && driveConnectedRef.current && importedFile?.name?.toLowerCase().endsWith(".zip")) pendingOriginalArchivesRef.current.push({ kind: "xpeng", file: importedFile, sha256: message.result?.archiveSha256, coverageStartUtc: message.result?.sourceStartUtc, coverageEndUtc: message.result?.sourceEndUtc });
-        if (message.kind === "gps" && driveArchiveGpsRef.current && driveConnectedRef.current && /\.(gpx|zip)$/i.test(importedFile?.name || "")) pendingOriginalArchivesRef.current.push({ kind: "gps", file: importedFile, sha256: message.result?.sourceSha256 });
+        if (message.kind !== "gps" && importedFile?.name?.toLowerCase().endsWith(".zip")) pendingOriginalArchivesRef.current = rememberSessionArchive(pendingOriginalArchivesRef.current, { kind: "xpeng", file: importedFile, sha256: message.result?.archiveSha256, coverageStartUtc: message.result?.sourceStartUtc, coverageEndUtc: message.result?.sourceEndUtc });
+        if (message.kind === "gps" && /\.(gpx|zip)$/i.test(importedFile?.name || "")) pendingOriginalArchivesRef.current = rememberSessionArchive(pendingOriginalArchivesRef.current, { kind: "gps", file: importedFile, sha256: message.result?.sourceSha256 });
         snapshotRef.current = message.snapshot;
         setSnapshot(message.snapshot);
         setHistory((current) => [{
           name: activeFileRef.current?.name ?? "—",
           status: message.kind === "gps" ? "gpsAdded" : message.result.skipped ? "alreadyImported" : "added",
           rows: message.kind === "gps" ? message.result.pointCount ?? 0 : message.result.totalRows ?? 0,
+          sourceStartUtc: message.kind === "gps" ? null : message.result?.sourceStartUtc || null,
+          sourceEndUtc: message.kind === "gps" ? null : message.result?.sourceEndUtc || null,
         }, ...current]);
         requestAnimationFrame(() => setTimeout(processAdditionalNext, 0));
       } else if (message.type === "custom_charts_updated") {
@@ -554,9 +565,10 @@ export default function App() {
   };
 
   const completeDataChange = async () => {
-    const originals = pendingOriginalArchivesRef.current;
-    pendingOriginalArchivesRef.current = [];
-    if (originals.length && (driveArchiveOriginalsRef.current || driveArchiveGpsRef.current) && driveConnectedRef.current) {
+    const originals = sessionArchivesToUpload(pendingOriginalArchivesRef.current, { archiveOriginals: driveArchiveOriginalsRef.current, archiveGps: driveArchiveGpsRef.current });
+    const uploadedOriginals = [];
+    if (originals.length && driveConnectedRef.current) {
+      setBusy(true);
       if (!driveClientRef.current.isAuthorised()) {
         setDrive((current) => ({ ...current, connected: false, originalArchiveBusy: false, error: "driveReconnect" }));
         driveConnectedRef.current = false;
@@ -572,6 +584,7 @@ export default function App() {
               archived = await driveClientRef.current.uploadOriginalExport(original.file, original);
               registryUpdates.push(...(archived.registryUpdates || []));
             }
+            uploadedOriginals.push(original);
           }
           if (registryUpdates.length) {
             const rawArchives = mergeRawArchiveRegistry(snapshotRef.current?.rawArchives, registryUpdates);
@@ -589,6 +602,7 @@ export default function App() {
         }
       }
     }
+    if (uploadedOriginals.length) pendingOriginalArchivesRef.current = forgetUploadedSessionArchives(pendingOriginalArchivesRef.current, uploadedOriginals);
     const autoDrive = driveConnectedRef.current && driveAutoSyncRef.current;
     if (persistenceEnabledRef.current && snapshotRef.current) {
       driveAfterPersistenceRef.current = autoDrive;
@@ -848,7 +862,11 @@ export default function App() {
     }
   };
 
-  const connectGoogleDrive = () => authoriseGoogleDrive({ prompt: "select_account" });
+  const connectGoogleDrive = async () => {
+    const connected = await authoriseGoogleDrive({ prompt: "select_account" });
+    if (connected && sessionArchivesToUpload(pendingOriginalArchivesRef.current, { archiveOriginals: driveArchiveOriginalsRef.current, archiveGps: driveArchiveGpsRef.current }).length) await completeDataChange();
+    return connected;
+  };
 
   const saveGoogleDrive = async () => {
     if (!snapshotRef.current || busy || drive.busy) return;
@@ -899,7 +917,6 @@ export default function App() {
     driveAutoSyncRef.current = false;
     driveArchiveOriginalsRef.current = false;
     driveArchiveGpsRef.current = false;
-    pendingOriginalArchivesRef.current = [];
     setDrive((current) => ({ ...current, connected: false, busy: false, autoSync: false, archiveOriginals: false, archiveGps: false, account: null, backups: [], originals: [], gpsOriginals: [], originalArchiveBusy: false, originalArchiveError: null, error: null }));
   };
 
@@ -915,6 +932,7 @@ export default function App() {
     driveClientRef.current.setArchiveOriginals(next);
     driveArchiveOriginalsRef.current = next;
     setDrive((current) => ({ ...current, archiveOriginals: next, originalArchiveError: null, error: null }));
+    if (next && pendingOriginalArchivesRef.current.length) void completeDataChange();
   };
 
   const toggleGoogleDriveGpsArchive = (enabled) => {
@@ -922,6 +940,7 @@ export default function App() {
     driveClientRef.current.setArchiveGps(next);
     driveArchiveGpsRef.current = next;
     setDrive((current) => ({ ...current, archiveGps: next, originalArchiveError: null, error: null }));
+    if (next && pendingOriginalArchivesRef.current.length) void completeDataChange();
   };
 
   const downloadGoogleDriveOriginal = async (fileId) => {
@@ -1169,7 +1188,7 @@ export default function App() {
         <div className="history-table">
           <div className="history-row history-header"><span>{t("file")}</span><span>{t("rows")}</span><span>{t("result")}</span></div>
           {history.map((item, index) => <div className="history-row" key={`${item.name}-${index}`}>
-            <strong>{item.name}</strong>
+            <span className="history-file"><strong>{item.name}</strong>{item.sourceStartUtc&&item.sourceEndUtc?<small>{formatDateRange(item.sourceStartUtc,item.sourceEndUtc,locale)}</small>:null}</span>
             <span>{formatNumber(item.rows, locale)}</span>
             <span className={`result-tag result-${item.status}`}>{t(item.status)}</span>
           </div>)}

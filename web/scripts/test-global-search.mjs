@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { buildGlobalSearchIndex, normaliseSearchText, searchGlobalIndex } from "../src/global-search.js";
 const t=(key)=>({journey:"Journey",chargingSession:"Charging session",date:"Date",journeysLower:"journeys",myCharts:"My charts",nav_battery:"Battery",section_battery_help:"Battery health",settings:"Settings",settingsHelp:"Options",measurementUnits:"Units",metricUnits:"Metric",imperialUnits:"Imperial",tyrePressureUnit:"Pressure",language:"Language"}[key]||key);
-const index=buildGlobalSearchIndex({journeys:[{journeyId:"j1",date:"2026-10-03",distanceKm:42,durationMinutes:50,gps:{segments:[[1]]}}],charges:[{chargeId:"c1",date:"2026-10-04",chargeType:"AC",batteryEnergyKwh:21}],daily:[{date:"2026-10-03",distanceKm:42,journeys:1}],customCharts:[{id:"x",title:"Eficiência mensal",dataset:"daily",type:"line"}]},{locale:"en",t});
+const index=buildGlobalSearchIndex({journeys:[{journeyId:"j1",date:"2026-10-03",startedAtUtc:"2026-10-03T08:00:00Z",endedAtUtc:"2026-10-03T08:50:00Z",distanceKm:42,durationMinutes:50,tripIds:["t1"],gps:{segments:[[1]]}},{journeyId:"j2",date:"2026-10-03",startedAtUtc:"2026-10-03T12:00:00Z",endedAtUtc:"2026-10-03T12:20:00Z",distanceKm:12,durationMinutes:20,tripIds:["t2"]}],trips:[{tripId:"t1"},{tripId:"t2"}],journeyGroups:[{groupId:"g1",name:"Weekend escape",journeyIds:["j1","j2"]}],charges:[{chargeId:"c1",date:"2026-10-04",chargeType:"AC",batteryEnergyKwh:21}],daily:[{date:"2026-10-03",distanceKm:42,journeys:1}],customCharts:[{id:"x",title:"Eficiência mensal",dataset:"daily",type:"line"}]},{locale:"en",t});
 assert.equal(normaliseSearchText("Eficiência"),"eficiencia");
 assert.equal(searchGlobalIndex(index,"Journey 42")[0].type,"journey");
 assert.equal(searchGlobalIndex(index,"eficiencia")[0].type,"chart");
 assert.equal(searchGlobalIndex(index,"AC 21")[0].type,"charge");
+assert.equal(searchGlobalIndex(index,"Weekend escape")[0].sourceId,"g1");
 assert.deepEqual(searchGlobalIndex(index,"not-found"),[]);
 console.log("Global search passed.");

@@ -50,6 +50,6 @@ ID is public configuration; no OAuth client secret belongs in this static
 application. A Drive backup is the same unencrypted sensitive `.xpeng` payload,
 so users must protect their Google account and should disconnect on shared
 computers. Only official Google Identity and Drive API endpoints may be used.
-The application keeps one current backup and up to three app-created recovery
-copies. It never requests permission to read unrelated Drive files.
+The application keeps one current processed backup. It never requests
+permission to read unrelated Drive files.
 

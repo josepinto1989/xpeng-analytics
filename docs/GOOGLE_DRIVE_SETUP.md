@@ -1,8 +1,8 @@
 # Google Drive backup setup
 
-XPENG Analytics can optionally save one current portable `.xpeng` history and
-up to three recovery copies in a visible **XPENG Analytics** folder in the
-user's own Google Drive. The static site uses Google Identity Services
+XPENG Analytics can optionally save the latest portable `.xpeng` history in a
+visible **XPENG Analytics** folder in the user's own Google Drive. The static
+site uses Google Identity Services
 directly; there is no XPENG Analytics backend and no client secret.
 
 ## Google Cloud configuration
@@ -62,9 +62,10 @@ same browser client ID. The Pages workflow exposes it to Vite as
 - Tokens, Google email addresses, and passwords are never written to local
   storage or included in `.xpeng` files. The account name and email are read
   into tab memory only so the interface can identify the connected account.
-- The app creates/updates one current `xpeng-analytics-history.xpeng` file and
-  retains up to three app-created recovery copies. Each file exposes coverage,
-  size, save time, and history-format metadata in the restore interface.
+- The app creates/updates one current `xpeng-analytics-history.xpeng` file.
+  It exposes coverage, size, save time, and history-format metadata in the
+  restore interface. Recovery files created by older versions are cleaned up
+  after the next successful save.
 - If the user separately enables original-export archiving, the app creates a
   `Raw Files` subfolder and uploads only successfully recognised XPENG ZIPs.
   Each retained file is preserved byte for byte and marked with its SHA-256
@@ -79,9 +80,8 @@ same browser client ID. The Pages workflow exposes it to Vite as
   by SHA-256, and never enabled automatically with XPENG ZIP archiving.
 - Uploads use a resumable session. After a recoverable interruption, the app
   asks Google how many bytes were accepted and continues from that position.
-- Any current or recovery copy can be restored on another computer after a
-  fresh Google authorisation. Opening a recovery does not automatically
-  overwrite the current Drive backup.
+- The current copy can be restored on another computer after a fresh Google
+  authorisation.
 - Automatic updates operate only while the current tab remains authorised.
   A later visit may require the user to connect again.
 - Disconnecting revokes the current token when possible; it does not delete
@@ -97,10 +97,9 @@ GitHub Pages origin:
 1. connect and cancel once;
 2. connect and create the first backup;
 3. verify account, size, coverage, last-save, and format metadata;
-4. update the backup four times and confirm that only the latest three recovery
-   copies remain alongside the current file;
-5. restore a recovery and confirm that it does not overwrite the current file;
-6. restore the current copy in a fresh private window or another computer;
+4. update the backup several times and confirm that only the current file
+   remains (older app-created recovery files should be moved to trash);
+5. restore the current copy in a fresh private window or another computer;
 7. verify automatic updates after ZIP, GPX, and `.xpeng` imports while connected;
 8. interrupt an upload and confirm that it resumes or reports a clear error;
 9. disconnect, refresh, and confirm that a new authorisation is required;

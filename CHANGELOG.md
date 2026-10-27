@@ -2,6 +2,26 @@
 
 All notable public changes are documented here.
 
+## Unreleased
+
+## 2.2.2 — 2026-10-27
+
+- Keep only the latest processed `.xpeng` backup in Google Drive; obsolete
+  recovery copies are moved to Drive trash after the next successful save.
+- Preserve newly imported XPENG ZIP and GPX source files in the active browser
+  session so enabling Drive source archiving later can upload them without a
+  second import.
+- Show each imported ZIP's observed date range and keep long session/Drive
+  file lists inside scrollable panels.
+- Detect likely missing XPENG telemetry when the odometer advances across a
+  recording gap, and explain that official exports can omit or split journeys.
+- Reprocess an already-known ZIP once when an older `.xpeng` history needs the
+  new coverage analysis; later imports of that ZIP are skipped as before.
+- Reduce noise in Quality by consolidating repeated monthly parser notices and
+  treating safely removed values as informational rather than critical.
+- Include manually combined journey names in global search and compact the
+  four sidebar utility actions into an icon grid.
+
 ## 2.2.1 — 2026-10-27
 
 - Reduced the preferred overlap between retained original XPENG ZIP exports

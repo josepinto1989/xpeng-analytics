@@ -359,11 +359,10 @@ You can enable **Update automatically while connected**. Successful XPENG/GPX
 imports and saved My Charts then update the backup during that browser session.
 Google may require a new authorisation after the tab closes or the token
 expires. Disconnecting ends the current connection but does not delete the
-files from Drive. Before a successful replacement, the app preserves the
-previous current backup and retains the latest three recovery copies. The
-restore list lets you inspect their date, size, coverage, and format before
-opening one. Opening an older copy does not automatically replace the current
-Drive backup.
+files from Drive. The app keeps only the latest processed `.xpeng` backup. The
+restore panel lets you inspect its date, size, coverage, and format before
+opening it. Recovery copies created by earlier releases are moved to Drive
+trash after the next successful save.
 
 Interrupted resumable uploads are probed and continued when Google reports a
 recoverable position. Quota, rate-limit, expired-authorisation, and missing-file
@@ -372,6 +371,10 @@ errors remain explicit instead of being reported as a successful save.
 The Data page may also highlight long breaks between the coverage periods of
 imported XPENG files. These are **likely import gaps**, not proof that vehicle
 data is missing or that the car was inactive.
+
+The official export itself can also omit telemetry or split a journey. The
+Quality page flags likely cases where the odometer advanced across a recording
+gap. This is evidence of incomplete delivered coverage, not a vehicle fault.
 
 Drive backup is optional. Processing still happens locally, but the resulting
 `.xpeng` files are uploaded to and stored by Google when you enable it. They
@@ -384,6 +387,11 @@ After connecting Drive, you can separately enable **Archive original XPENG
 ZIPs**. Every ZIP that is successfully recognised as an XPENG export is then
 copied unchanged to `XPENG Analytics/Raw Files`. The app uses the ZIP's SHA-256
 digest to skip an identical file that is already archived.
+
+If you import ZIPs before connecting Drive, their original files remain queued
+for the active tab session. Connecting Drive and enabling source archiving can
+therefore upload them without a second import. Closing or refreshing the tab
+clears that temporary queue.
 
 This is not the same as the `.xpeng` backup. The `.xpeng` file is the compact
 working history used by the app; an original ZIP may contain the VIN and all raw
