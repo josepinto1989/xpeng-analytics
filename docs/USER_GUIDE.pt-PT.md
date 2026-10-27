@@ -114,6 +114,20 @@ consultar segmentos, consumo, velocidade, potência, SOC, autonomia indicada,
 temperatura, forças de condução, pedais, comportamento do motor e pneus, quando
 esses sinais existem na exportação.
 
+Escolhe **Agrupar jornadas** quando a XPENG tiver separado um único percurso em
+várias jornadas. Seleciona pelo menos duas e, se quiseres, atribui um nome. O
+grupo substitui essas jornadas apenas na lista principal: os separadores
+permitem analisar o conjunto ou qualquer jornada original individualmente.
+**Editar** altera o nome ou os membros e **Desagrupar** elimina apenas a
+definição, nunca a telemetria original.
+
+As paragens entre as jornadas escolhidas ficam incluídas na duração total. Um
+carregamento cujos timestamps coincidam com uma paragem intermédia é associado
+a essa paragem. O consumo e a energia de condução continuam a considerar
+apenas os segmentos originais, pelo que o carregamento não é tratado como
+consumo negativo. As definições são guardadas nos históricos `.xpeng`
+exportados, locais e do Google Drive.
+
 A jornada selecionada utiliza gráficos empilhados a toda a largura. A lista de
 jornadas continua disponível na área de detalhe para facilitar comparações.
 
@@ -177,6 +191,37 @@ pequenos blocos de telemetria. Apresenta distância, tempo, energia utilizada,
 energia regenerada, consumo e confiança. É uma estimativa do software baseada
 em velocidade, paragens, aceleração e travagem. Não usa GPS nem identifica a
 estrada real.
+
+### Insights
+
+Transforma um histórico mais longo em quatro vistas analíticas locais:
+
+- observações comparadas com o histórico do próprio carro para consumo,
+  perdas parado, eficiência de carregamento, temperatura da bateria, pressão
+  dos pneus ou comportamento das jornadas;
+- evolução da bateria com número de amostras elegíveis, período observado e
+  estado visível de confiança dos dados;
+- resumo mensal automático comparado com o mês anterior comparável; e
+- comparações sazonais com um estado explícito de dados insuficientes quando os
+  períodos disponíveis não são comparáveis.
+
+Estas observações são comparações do software, não diagnósticos de avaria nem
+leituras oficiais do BMS. É possível guardar resumos, comparações sazonais e
+anomalias selecionadas como imagens PNG preparadas para partilha. Por
+predefinição, a imagem não inclui coordenadas, percursos, nomes de ficheiros,
+horas exatas ou identificadores internos.
+
+### Calendário de cobertura e pesquisa global
+
+O calendário de cobertura indica que datas contêm jornadas, carregamentos,
+telemetria estacionada, observações dos pneus ou GPS associado. Um dia vazio ou
+parcial descreve apenas o histórico importado e não prova que o carro esteve
+inativo.
+
+Abre a pesquisa global na interface ou usa `Ctrl+K` (`Cmd+K` no macOS).
+Pesquisa jornadas, carregamentos, datas, gráficos guardados, secções ou
+definições. Usa as setas e Enter para abrir diretamente um resultado. A tecla
+`/` também abre a pesquisa quando o foco não está num campo de texto.
 
 ### Reprodução visual
 
@@ -288,6 +333,13 @@ O ficheiro:
 - preserva as definições validadas dos gráficos pessoais;
 - está comprimido, mas **não está encriptado**.
 
+Os históricos atuais usam blocos mensais internos. Os totais, tendências e
+índices de viagens/carregamentos abrem a partir de resumos compactos; os
+gráficos detalhados, mapas e telemetria do replay só são carregados quando
+selecionas o respetivo registo. As versões `.xpeng` anteriores são migradas
+localmente na primeira abertura e a exportação seguinte usa esta estrutura
+preparada para históricos longos.
+
 Trata-o com o mesmo cuidado que a exportação original da XPENG.
 
 ### Guardar o histórico neste browser
@@ -313,21 +365,59 @@ sistema operativo podem limpar o armazenamento local, mantém um ficheiro
 
 Abre **Dados → Cópia no Google Drive** e escolhe **Ligar ao Google Drive**. A
 janela da Google trata da escolha da conta; o XPENG Analytics nunca pede nem vê
-a tua palavra-passe. Escolhe **Guardar no Drive** para criar um único ficheiro
+a tua palavra-passe. Escolhe **Guardar no Drive** para criar o ficheiro atual
 `xpeng-analytics-history.xpeng` numa pasta visível **XPENG Analytics** do teu
-Drive. Mais tarde, **Abrir do Drive** restaura esse histórico, inclusive noutro
-computador.
+Drive. A página mostra a conta ligada, a última gravação bem-sucedida, o
+tamanho, o período de telemetria incluído e a versão do formato portátil.
 
 Podes ativar **Atualizar automaticamente enquanto estiver ligado**. As
 importações XPENG/GPX e os My Charts guardados passam a atualizar a cópia
 durante essa sessão do browser. A Google pode pedir nova autorização depois de
 fechares o separador ou quando o token expirar. Desligar termina a ligação atual
-mas não elimina o ficheiro do Drive.
+mas não elimina os ficheiros do Drive. Antes de substituir a cópia atual com
+sucesso, a aplicação preserva a anterior e mantém as três recuperações mais
+recentes. A lista de restauro permite confirmar data, tamanho, cobertura e
+versão antes de abrir uma delas. Abrir uma recuperação antiga não substitui
+automaticamente a cópia atual no Drive.
+
+Se um envio retomável for interrompido, a aplicação confirma a posição aceite
+pela Google e continua quando isso é possível. Falta de espaço, limite
+temporário, autorização expirada e ficheiro inexistente continuam a produzir
+mensagens claras em vez de uma falsa confirmação de sucesso.
+
+A página Dados também pode assinalar pausas longas entre os períodos cobertos
+pelos ficheiros XPENG importados. São **possíveis falhas de importação**, não
+uma prova de que faltam dados do veículo ou de que o carro esteve parado.
 
 A cópia no Drive é opcional. O processamento continua a ser local, mas o
-ficheiro `.xpeng` resultante é enviado e armazenado pela Google quando ativas
-esta opção. O ficheiro está comprimido, não encriptado, e pode conter telemetria
-com timestamps e coordenadas GPS. Protege-o como a exportação XPENG original.
+ficheiros `.xpeng` resultantes são enviados e armazenados pela Google quando
+ativas esta opção. Estão comprimidos, não encriptados, e podem conter
+telemetria com timestamps e coordenadas GPS. Protege-os como a exportação XPENG
+original.
+
+#### Arquivar os ZIPs XPENG originais
+
+Depois de ligares o Drive, podes ativar separadamente **Arquivar os ZIPs
+originais da XPENG**. Cada ZIP reconhecido e importado com sucesso é então
+copiado sem alterações para `XPENG Analytics/Raw Files`. A
+aplicação usa o SHA-256 do ZIP para ignorar um ficheiro idêntico que já esteja
+arquivado.
+
+Isto não substitui a cópia `.xpeng`. O `.xpeng` é o histórico compacto usado
+pela aplicação; um ZIP original pode conter o VIN e toda a telemetria bruta
+fornecida pela XPENG. Os ZIPs originais não são encriptados e ocupam espaço no
+teu Drive. A aplicação mantém o menor conjunto prático que cobre todo o período
+observado, preferindo quatro dias de sobreposição. Um original redundante só é
+enviado para o lixo do Drive depois de o substituto ser carregado, e o seu
+registo permanece no `.xpeng`. Ficheiros sem cobertura fiável são sempre
+mantidos.
+
+**Arquivar também os ficheiros GPX** é uma segunda opção independente. Guarda
+sem alterações os `.gpx` e ZIPs de GPX reconhecidos em
+`XPENG Analytics/Original GPX files`, com a mesma verificação de duplicados pelo
+hash. Os GPX originais podem conter localizações precisas fora das viagens
+associadas, por isso ativar os ZIPs XPENG nunca ativa automaticamente este
+arquivo de localização.
 
 ## 8. Resolução de problemas
 

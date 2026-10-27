@@ -1,4 +1,4 @@
-import { buildSnapshot, detectAdditionalFileKind, emptyState, exportHistory, importArchive, importGps, importHistory, setCustomCharts } from "./native-engine.js";
+import { buildSnapshot, clearDetailCache, detectAdditionalFileKind, emptyState, exportHistory, importArchive, importGps, importHistory, loadRecordDetails, setCustomCharts, setJourneyGroups, setRawArchives } from "./native-engine.js";
 
 let state = emptyState();
 let queue = Promise.resolve();
@@ -33,6 +33,7 @@ async function handle(message) {
     return;
   }
   if (message?.type === "reset") {
+    clearDetailCache();
     state = emptyState();
     self.postMessage({ type: "reset_complete" });
     return;
@@ -40,6 +41,22 @@ async function handle(message) {
   if (message?.type === "set_custom_charts") {
     state = setCustomCharts(state, message.charts);
     self.postMessage({ type: "custom_charts_updated", charts: state.customCharts });
+    return;
+  }
+  if (message?.type === "set_journey_groups") {
+    state = setJourneyGroups(state, message.groups);
+    const snapshot = buildSnapshot(state, guardedProgress);
+    self.postMessage({ type: "journey_groups_updated", groups: state.journeyGroups, snapshot });
+    return;
+  }
+  if (message?.type === "set_raw_archives") {
+    state = setRawArchives(state, message.updates);
+    self.postMessage({ type: "raw_archives_updated", rawArchives: state.rawArchives });
+    return;
+  }
+  if (message?.type === "load_details") {
+    const details = await loadRecordDetails(state, message.request || {}, guardedProgress);
+    self.postMessage({ type: "details_loaded", requestId: message.requestId, details });
     return;
   }
   if (message?.type === "import") {
@@ -73,11 +90,12 @@ async function handle(message) {
     const payload = await exportHistory(state, guardedProgress);
     const date = new Date().toISOString().slice(0, 10);
     progress(100, "history_export_complete", "Done");
-    self.postMessage({ type: "history_exported", purpose: message.purpose || "download", filename: `xpeng-analytics-history-${date}.xpeng`, metadata: { format: state.format, version: state.version }, payload }, [payload]);
+    self.postMessage({ type: "history_exported", purpose: message.purpose || "download", filename: `xpeng-analytics-history-${date}.xpeng`, metadata: { format: state.format, version: state.version }, payload });
     return;
   }
   if (message?.type === "import_history") {
     cancelRequested = false;
+    clearDetailCache();
     const restored = await importHistory(message.file ?? message.archive, guardedProgress);
     const snapshot = buildSnapshot(restored, guardedProgress);
     state = restored;
@@ -116,7 +134,7 @@ async function handle(message) {
     }
     const snapshot = buildSnapshot(state, guardedProgress);
     progress(100, "complete", "Done");
-    self.postMessage({ type: "additional_imported", kind, result: kind === "gps" ? { skipped: result.skipped, trackCount: result.trackCount, pointCount: result.pointCount } : { skipped: result.skipped, archiveSha256: result.archiveSha256, totalRows: result.totalRows }, snapshot });
+    self.postMessage({ type: "additional_imported", kind, result: kind === "gps" ? { skipped: result.skipped, sourceSha256: result.sourceSha256, trackCount: result.trackCount, pointCount: result.pointCount } : { skipped: result.skipped, archiveSha256: result.archiveSha256, totalRows: result.totalRows, sourceStartUtc: result.sourceStartUtc, sourceEndUtc: result.sourceEndUtc }, snapshot });
     return;
   }
 }

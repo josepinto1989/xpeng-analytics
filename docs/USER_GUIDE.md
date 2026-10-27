@@ -108,6 +108,20 @@ Lists journeys from newest to oldest. Select one to inspect its segments,
 consumption, speed, power, SOC, displayed range, temperature, driving forces,
 pedal inputs, motor behaviour, and tyre signals when present in the export.
 
+Choose **Combine journeys** when XPENG has split one outing into separate
+journeys. Select at least two journeys and optionally name the group. The new
+group replaces those journeys only in the top-level list: use its tabs to
+analyse the combined outing or any original journey individually. **Edit** can
+change its name or members, and **Ungroup** removes only the definition, never
+the underlying telemetry.
+
+Stops between the selected journeys remain visible in the combined duration.
+Any charging session whose timestamps overlap an intermediate stop is attached
+to that stop. Consumption and driving energy still use only the original
+driving segments, so charging is not treated as negative consumption. Group
+definitions are retained in exported, locally saved, and Google Drive `.xpeng`
+histories.
+
 The selected journey uses stacked full-width charts. Its journey list remains
 available while the detail area is open, making it quicker to compare records.
 
@@ -169,6 +183,36 @@ The same page estimates urban-, road-, and motorway-style driving from short
 telemetry blocks. It displays distance, time, energy used, regenerated energy,
 consumption, and confidence. This is a software estimate based on speed, stops,
 acceleration, and braking. It does not use GPS or identify the actual road.
+
+### Insights
+
+Turns a longer history into four local analytical views:
+
+- personal-baseline observations for unusual consumption, parked loss,
+  charging efficiency, battery temperature, tyre pressure, or journey
+  behaviour;
+- battery-history trends with the eligible sample count, observation period,
+  and a visible data-confidence state;
+- an automatic monthly summary with comparisons against the preceding
+  comparable month; and
+- seasonal comparisons that show an explicit insufficient-data state when the
+  available periods are not comparable.
+
+These observations are software comparisons, not fault diagnoses or official
+BMS health readings. Selected summaries, seasonal comparisons, and anomaly
+observations can be saved as privacy-safe PNG cards. The default image excludes
+coordinates, route shapes, filenames, exact timestamps, and internal IDs.
+
+### Coverage calendar and global search
+
+The coverage calendar shows which dates contain journeys, charging, parked
+telemetry, tyre observations, or matched GPS. A blank or partial day describes
+only the imported history and does not prove that the vehicle was inactive.
+
+Open global search from the interface or press `Ctrl+K` (`Cmd+K` on macOS).
+Search for journeys, charging sessions, dates, saved charts, sections, or
+settings. Use the arrow keys and Enter to open a result directly. Press `/` to
+open search when focus is not inside a text field.
 
 ### Visual replay
 
@@ -276,6 +320,12 @@ The file:
 - preserves validated personal chart definitions;
 - is compressed but **not encrypted**.
 
+Current histories use monthly internal blocks. Dashboard totals, trends, and
+the journey/charging indexes open from compact summaries; detailed charts,
+maps, and replay telemetry are loaded only when you select the corresponding
+record. Older `.xpeng` versions are migrated locally the first time they are
+opened and the next export uses this long-history layout.
+
 Treat it with the same care as the original XPENG export.
 
 ### Remember the history in this browser
@@ -300,21 +350,54 @@ portable backup.
 
 Open **Data → Google Drive backup** and choose **Connect Google Drive**. The
 Google window handles account selection; XPENG Analytics never asks for or sees
-your password. Choose **Save to Drive** to create one
+your password. Choose **Save to Drive** to create the current
 `xpeng-analytics-history.xpeng` file in a visible **XPENG Analytics** folder in
-your Drive. Later, **Open from Drive** can restore that history, including on a
-different computer.
+your Drive. The page shows the connected account, last successful save, file
+size, included telemetry period, and portable-history format.
 
 You can enable **Update automatically while connected**. Successful XPENG/GPX
 imports and saved My Charts then update the backup during that browser session.
 Google may require a new authorisation after the tab closes or the token
 expires. Disconnecting ends the current connection but does not delete the
-file from Drive.
+files from Drive. Before a successful replacement, the app preserves the
+previous current backup and retains the latest three recovery copies. The
+restore list lets you inspect their date, size, coverage, and format before
+opening one. Opening an older copy does not automatically replace the current
+Drive backup.
+
+Interrupted resumable uploads are probed and continued when Google reports a
+recoverable position. Quota, rate-limit, expired-authorisation, and missing-file
+errors remain explicit instead of being reported as a successful save.
+
+The Data page may also highlight long breaks between the coverage periods of
+imported XPENG files. These are **likely import gaps**, not proof that vehicle
+data is missing or that the car was inactive.
 
 Drive backup is optional. Processing still happens locally, but the resulting
-`.xpeng` file is uploaded to and stored by Google when you enable it. The file
-is compressed, not encrypted, and can contain timestamped telemetry and GPS
-coordinates. Protect it like the original XPENG export.
+`.xpeng` files are uploaded to and stored by Google when you enable it. They
+are compressed, not encrypted, and can contain timestamped telemetry and GPS
+coordinates. Protect them like the original XPENG export.
+
+#### Archive the original XPENG ZIPs
+
+After connecting Drive, you can separately enable **Archive original XPENG
+ZIPs**. Every ZIP that is successfully recognised as an XPENG export is then
+copied unchanged to `XPENG Analytics/Raw Files`. The app uses the ZIP's SHA-256
+digest to skip an identical file that is already archived.
+
+This is not the same as the `.xpeng` backup. The `.xpeng` file is the compact
+working history used by the app; an original ZIP may contain the VIN and all raw
+telemetry supplied by XPENG. Original ZIPs are unencrypted and consume your
+Drive storage. The app keeps the smallest practical set spanning the complete
+observed period, preferring four days of overlap. A redundant original is moved
+to Drive trash only after its replacement has uploaded, and its provenance
+remains recorded in `.xpeng`. Files without reliable coverage are always kept.
+
+**Also archive GPX source files** is a second, independent option. It preserves
+successfully recognised `.gpx` files and GPX ZIPs unchanged in
+`XPENG Analytics/Original GPX files`, with the same hash-based duplicate check.
+GPX originals may include precise locations outside matched journeys, so
+enabling the XPENG ZIP option never enables this location archive automatically.
 
 ## 8. Troubleshooting
 

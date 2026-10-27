@@ -112,7 +112,7 @@ export function validateCustomCharts(input) {
 
 export function datasetRows(data, dataset) {
   const source = CHART_DATASETS[dataset];
-  if (dataset === "telemetry") return Array.isArray(data?.trips) ? data.trips.flatMap((trip) => Array.isArray(trip.series) ? trip.series : []) : [];
+  if (dataset === "telemetry") return Array.isArray(data?.telemetry) ? data.telemetry : Array.isArray(data?.trips) ? data.trips.flatMap((trip) => Array.isArray(trip.series) ? trip.series : []) : [];
   return source?.path.reduce((value, key) => value?.[key], data) || [];
 }
 

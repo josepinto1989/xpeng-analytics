@@ -271,13 +271,14 @@ function ReplayStage({ journey, trips, locale, t, units, onBack }) {
   </div><ReplayEventTimeline timeline={timeline} elapsedMs={elapsedMs} totalMs={totalMs} playing={playing} rate={rate} setRate={setRate} setPlaying={setPlaying} setElapsedMs={setElapsedMs} t={t} /><ReplayAnalysisCharts timeline={timeline} elapsedMs={elapsedMs} locale={locale} t={t} units={units} /><p className="replay-reconstruction-note">{point?.skippedGap ? t("replayGapCompressed") : t("replayReconstructionNotice")}</p></div>;
 }
 
-export default function Replay({ data, locale, t, units }) {
+export default function Replay({ data, locale, t, units, onRequestRecordDetails }) {
   const journeys = useMemo(() => safe(data.journeys).slice().sort((left, right) => String(right.startedAtUtc).localeCompare(String(left.startedAtUtc))), [data.journeys]);
   const initialDate = dateKey(journeys[0]?.startedAtUtc || journeys[0]?.date);
   const [selectedDate, setSelectedDate] = useState(initialDate), [selectedId, setSelectedId] = useState(journeys[0]?.journeyId || null), [started, setStarted] = useState(false);
   const stageRef = useRef(null);
   const dayJourneys = journeys.filter((journey) => dateKey(journey.startedAtUtc || journey.date) === selectedDate);
   const selected = dayJourneys.find((journey) => journey.journeyId === selectedId) || dayJourneys[0] || null;
+  useEffect(()=>{if(selected&&!selected.detailLoaded)onRequestRecordDetails?.({journeyIds:[selected.journeyId]});},[onRequestRecordDetails,selected]);
   const chooseDate = (date) => { const first = journeys.find((journey) => dateKey(journey.startedAtUtc || journey.date) === date); setSelectedDate(date); setSelectedId(first?.journeyId || null); setStarted(false); };
   const start = () => { if (!selected) return; setStarted(true); requestAnimationFrame(() => stageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })); };
   if (!journeys.length) return <div className="replay-empty"><strong>{t("replayNoJourneys")}</strong><p>{t("replayNoJourneysHelp")}</p></div>;

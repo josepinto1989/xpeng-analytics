@@ -339,10 +339,189 @@ preserving local processing and avoiding an XPENG Analytics backend.
 - Validate cancellation, expired authorisation, missing files, quota errors,
   large resumable uploads, and cross-device restore before release.
 
-Status: implemented for the 2.1 release candidate; real OAuth validation is
-pending owner testing.
+Status: implemented, owner-validated with multiple Google accounts, and
+published in v2.1. The following resilience improvements are planned for the
+next iteration:
 
-### Phase 16 — Native local and offline applications
+- Automatically refresh the user's Drive backup after a successful XPENG ZIP,
+  GPX, or portable-history import when automatic backup is explicitly enabled.
+- Show the Google account in use, the last successful backup time, file size,
+  and the complete data-coverage period included in the backup.
+- Detect likely gaps between imported XPENG periods and warn that data outside
+  XPENG's available export window may no longer be recoverable. Treat this as a
+  coverage warning, not proof that vehicle data is missing.
+- Keep a small, clearly labelled recovery history, initially limited to the
+  latest three successful backups, so an accidental or corrupted replacement
+  does not immediately remove the last usable copy.
+- Make restoration transparent: show each available backup's creation date,
+  coverage, size, and history-format version before the user opens it.
+- Investigate optional calendar-month `.xpeng` archives for long histories,
+  while retaining one current consolidated backup as the simplest default.
+- Preserve original XPENG ZIP source files in the user's Drive as an optional,
+  separate archive after the core Phase 17 backup-resilience work has been
+  validated. This must remain separate from the processed history, explain its
+  additional storage and privacy cost, and never be enabled silently.
+- Keep Drive support optional and limited to files created by XPENG Analytics;
+  do not request access to the rest of the user's Drive or introduce an
+  XPENG Analytics storage backend.
+
+### Phase 16 — Insights and history (v2.2)
+
+Turn a growing multi-month history into useful, understandable observations
+without presenting software estimates as official vehicle diagnoses. This
+phase combines the selected roadmap ideas: anomaly detection, a coverage
+calendar, battery-health history, seasonal comparisons, monthly summaries,
+shareable cards, and global search.
+
+**Current status:** complete and owner-validated locally on 2026-10-26. The
+data-coverage calendar, battery-health confidence view, personal-baseline
+anomaly detection, automatic monthly summary, seasonal comparison, global
+search, and privacy-safe shareable cards have passed local automated testing
+and production build. Nothing from this phase has been published yet; it will
+remain part of the combined next release while further features are developed.
+
+Recommended implementation order:
+
+1. Data-coverage calendar.
+2. Battery-health history and confidence.
+3. Personal-baseline anomaly detection.
+4. Automatic monthly summary.
+5. Seasonal comparison.
+6. Global search.
+7. Privacy-safe shareable cards.
+
+- Add a calendar that shows which days contain journeys, charging, parked
+  telemetry, tyre observations, and matched GPS, and makes gaps or partial
+  coverage visible without implying that the vehicle was necessarily inactive.
+- Add battery-history trends for estimated capacity, relative SOH, charging
+  efficiency, temperature, and usable range. Always show the eligible sample
+  count, observation period, confidence or data-sufficiency state, and the fact
+  that these are software estimates rather than BMS health readings.
+- Detect unusual consumption, parked loss, charging efficiency, battery
+  temperature, tyre pressure, and journey behaviour primarily against the same
+  vehicle's own historical baseline. Explain the comparison and never label an
+  observation as a fault or diagnosis.
+- Generate a concise monthly summary covering distance, journeys, consumption,
+  charging, regeneration, costs when configured, parked use, battery estimates,
+  GPS coverage, and notable changes from the preceding comparable period.
+- Compare seasons or comparable multi-month periods while accounting for
+  distance, temperature availability, driving context, and sample size. Show an
+  explicit insufficient-data state instead of forcing a conclusion.
+- Add global search across journeys, charging sessions, dates, labels, saved
+  charts, reports, and relevant settings, with keyboard access and no external
+  indexing or uploaded search data.
+- Allow selected insights to be exported as polished image cards. Default cards
+  must omit coordinates, route shapes, filenames, exact timestamps, identifiers,
+  and other sensitive details unless the user deliberately includes them.
+- Create one dedicated **Insights** area for anomaly observations, battery
+  history, monthly summaries, and seasonal comparisons. Keep the coverage
+  calendar close to Data or Quality, and make cards exportable from the insight
+  that generated them.
+- Store only compact preferences and generated definitions in `.xpeng`; derive
+  observations again from the underlying history so newer imports automatically
+  update the results.
+- Validate all calculations with synthetic histories containing sparse months,
+  missing signals, outliers, different climates, short ownership periods, and
+  multiple unit systems before presenting them to users.
+
+### Phase 17 — Backup resilience and long-term data protection
+
+Strengthen the optional Google Drive workflow before the next combined public
+release. Keep one current consolidated `.xpeng` backup as the simple default,
+while making automatic updates, recovery, coverage, and restoration easier to
+understand.
+
+**Current status:** the core resilience work is implemented locally and awaiting
+owner validation. The current backup now carries coverage and format metadata;
+the app shows the connected account, retains up to three recovery copies,
+allows an explicit restore choice, warns about likely import-period gaps, and
+retries interrupted resumable uploads. Separate, disabled-by-default archiving
+of original XPENG ZIPs and GPX sources is also implemented locally with
+hash-based deduplication, download, and deletion controls. Live owner validation
+of both Drive source archives is still required. Long-history storage is now
+implemented locally in `.xpeng` v7: telemetry is divided into calendar-month
+shards, compact summaries remain loaded, and record details are restored only
+when requested. Large-history validation in Chrome, Edge, Firefox, and on a
+phone is still required before publication.
+
+- Automatically update the Drive backup after a successful XPENG ZIP, GPX, or
+  portable-history import only when the user has explicitly enabled automatic
+  backup and the current Google session is authorised.
+- Show the Google account in use, last successful backup time, file size,
+  history-format version, and complete telemetry-coverage period.
+- Detect likely gaps between imported XPENG periods and present them as
+  coverage warnings, never as proof that the vehicle was inactive or that data
+  is missing from the car.
+- Keep the latest three successful recovery copies so an accidental or
+  corrupted replacement does not immediately remove the last usable history.
+- Let the user inspect creation date, coverage, size, and format version before
+  restoring a backup.
+- Handle cancellation, expired authorisation, quota failures, interrupted
+  resumable uploads, missing files, and cross-device restoration with clear
+  recoverable states.
+- Keep one portable `.xpeng` file while internally indexing independently
+  compressed calendar-month shards, so long histories do not require all raw
+  telemetry to remain in RAM.
+- Add a separate, disabled-by-default **Archive original XPENG exports** option.
+  It must never be implied by enabling the normal `.xpeng` backup.
+- Upload each selected XPENG ZIP byte for byte to a visible
+  `XPENG Analytics/Raw Files` folder. Do not consolidate or rewrite source ZIPs:
+  every retained file stays exactly as XPENG supplied it, while `.xpeng`
+  remains the compact working history used by the app.
+- Calculate a SHA-256 digest locally and use it to skip an original ZIP that is
+  already archived. Preserve the original filename and record only the minimum
+  app metadata needed to show size, upload date, digest, and known coverage.
+- Explain before opt-in that original exports may contain the VIN, complete raw
+  telemetry, and other personal vehicle data; that the files are not encrypted
+  by XPENG Analytics; and that they consume the user's Google Drive storage.
+- List retained originals with clear download and deletion controls. Keep a
+  lightweight registry for every imported ZIP inside `.xpeng`; automatically
+  move redundant Drive originals to trash only after a replacement uploads,
+  preserving continuous coverage with a preferred four-day overlap. Always
+  retain sources whose coverage cannot be verified, and never mix originals
+  with the three processed-history recovery copies. **Implemented for the
+  2.2.0 beta.**
+- Keep GPX source archiving behind its own opt-in because it contains precise
+  location history. Store recognised `.gpx` files and GPX ZIPs unchanged in a
+  separate folder, deduplicate them by importer SHA-256, and never enable it
+  silently when the user enables XPENG ZIP preservation. **Implemented
+  locally; awaiting owner validation.**
+- Preserve the limited `drive.file` permission and access only files created by
+  XPENG Analytics. Do not add an application storage backend.
+
+### Phase 18 — Advanced data portability and encrypted history
+
+Add optional power-user tools without complicating the normal ZIP-to-dashboard
+workflow. The existing standalone CSV consolidator is a design reference only;
+its VDB format and version 3 `.xpeng` writer will not be integrated directly.
+
+- Add a local **Export consolidated CSVs** action in an Advanced tools area for
+  users who deliberately want the recognised operation, energy, and status
+  streams in a portable tabular form.
+- Reuse the current production importer, signal aliases, validation, ordering,
+  and deduplication rules rather than maintaining a second parser copied from
+  the standalone consolidator.
+- Clearly warn that consolidated CSVs can contain VIN and raw telemetry, are
+  more sensitive than the normal processed `.xpeng` history, and are intended
+  for personal analysis rather than routine application backup.
+- Preserve newly encountered columns where safe, report conflicts and skipped
+  inputs, and include a small manifest describing the export and its checksums.
+- Keep the operation local and worker-based, with bounded-memory or streaming
+  generation so large histories remain practical in Firefox and on lower-memory
+  devices.
+- Research an optional password-encrypted `.xpeng` container using versioned,
+  authenticated Web Crypto primitives. Encrypt the current `.xpeng` payload
+  itself instead of introducing the separate VDB format.
+- Support validation and local restoration of the encrypted container, explain
+  that a forgotten password cannot be recovered, and never send or store the
+  password, derived key, or plaintext history remotely.
+- Treat encrypted Google Drive backup as a later explicit choice. Do not change
+  or invalidate existing unencrypted `.xpeng` files or Drive backups.
+- Validate round trips, corruption detection, wrong-password handling, large
+  histories, and cross-browser compatibility before exposing encryption as a
+  stable feature.
+
+### Phase 19 — Native local and offline applications
 
 Package the existing interface as lightweight native desktop applications for
 Windows, macOS, and Linux while keeping the browser version available.

@@ -2,6 +2,8 @@
 // See THIRD_PARTY_NOTICES.md for attribution and the MIT licence notice.
 import { GPX_LIMITS, gpsSnapshot, parseGpxText } from "./gpx.js";
 import { validateCustomCharts } from "../custom-charts.js";
+import { validateJourneyGroups } from "../journey-groups.js";
+import { mergeRawArchiveRegistry, normaliseRawArchiveRegistry, rawArchiveRecord } from "../raw-archive-registry.js";
 
 const FAMILY_MARKERS = {
   operation: "driving_operation",
@@ -52,7 +54,9 @@ const CENTRAL = 0x02014b50, END = 0x06054b50, LOCAL = 0x04034b50;
 const MOVING = 1, TRIP_BREAK = 300, JOURNEY_BREAK = 3600, CHARGE_POWER = 0.2, CHARGE_BREAK = 600, MAX_GAP = 10;
 const REPLAY_CONTEXT_SECONDS = 60, REPLAY_SERIES_LIMIT = 300;
 const HISTORY_MAGIC_PREFIX = new Uint8Array([88, 80, 69, 78, 71, 65, 0]);
-const HISTORY_VERSION = 5;
+const HISTORY_VERSION = 7;
+const LEGACY_HISTORY_VERSION = 6;
+const SUPPORTED_HISTORY_VERSIONS = [3, 4, 5, 6, 7];
 const HISTORY_MAGIC = new Uint8Array([...HISTORY_MAGIC_PREFIX, HISTORY_VERSION]);
 const HISTORY_FORMAT = "xpeng-analytics-columnar-history";
 const GPS_PENDING_RETENTION_SECONDS = 5 * 24 * 60 * 60;
@@ -326,15 +330,29 @@ function mergeStream(oldStream, fresh) {
   return { family: fresh.family, time, columns, model: fresh.model || oldStream.model, stats: { ...fresh.stats, uniqueRows: n, mergedRows: n, emptyColumns, unknownColumns } };
 }
 
-export function emptyState() { return { format: HISTORY_FORMAT, version: HISTORY_VERSION, streams: {}, imports: [], model: "", gpsTracks: [], gpsSelectedTracks: [], gpsImports: [], customCharts: [] }; }
+export function emptyState() { return { format: HISTORY_FORMAT, version: HISTORY_VERSION, streams: {}, imports: [], rawArchives: [], model: "", gpsTracks: [], gpsSelectedTracks: [], gpsImports: [], customCharts: [], journeyGroups: [] }; }
 
 export function setCustomCharts(state, charts) {
-  return { ...state, version: HISTORY_VERSION, customCharts: validateCustomCharts(charts) };
+  const customCharts = validateCustomCharts(charts);
+  if (state.segmented) return { ...state, version: HISTORY_VERSION, customCharts, snapshot: { ...state.snapshot, customCharts } };
+  return { ...state, version: HISTORY_VERSION, customCharts };
 }
 
-export async function importArchive(state, source, filename, report, processingProfile = {}) {
+export function setJourneyGroups(state, groups) {
+  const journeyGroups = validateJourneyGroups(groups);
+  if (state.segmented) return { ...state, version: HISTORY_VERSION, journeyGroups, snapshot: { ...state.snapshot, journeyGroups } };
+  return { ...state, version: HISTORY_VERSION, journeyGroups };
+}
+
+export function setRawArchives(state, updates) {
+  const rawArchives = mergeRawArchiveRegistry(state.rawArchives, updates);
+  if (state.segmented) return { ...state, rawArchives, snapshot: { ...state.snapshot, rawArchives } };
+  return { ...state, rawArchives };
+}
+
+async function importArchiveRaw(state, source, filename, report, processingProfile = {}, knownDigest = null) {
   const profile = typeof processingProfile === "number" ? { memoryBudgetBytes: processingProfile, mode: "desktop" } : processingProfile;
-  const digest = await sourceDigest(source);
+  const digest = knownDigest || await sourceDigest(source);
   if (state.imports.some((item) => item.sha256 === digest)) return { state, skipped: true, archiveSha256: digest, totalRows: 0 };
   const all = await listEntries(source), entries = all.filter((entry) => familyForName(entry.name));
   const families = new Set(entries.map((entry) => familyForName(entry.name)));
@@ -347,15 +365,16 @@ export async function importArchive(state, source, filename, report, processingP
   const streams = {};
   for (const family of ["operation", "energy", "status"]) streams[family] = mergeStream(state.streams[family], fresh[family]);
   const sourceStartUtc = Math.min(...Object.values(fresh).map((stream) => stream.time[0])), sourceEndUtc = Math.max(...Object.values(fresh).map((stream) => stream.time.at(-1)));
-  const imported = { name: filename, sha256: digest, rows: Object.values(fresh).reduce((n, stream) => n + stream.stats.inputRows, 0), completedAtUtc: new Date().toISOString(), sourceStartUtc: iso(sourceStartUtc), sourceEndUtc: iso(sourceEndUtc) };
-  return { state: { ...state, streams, model: Object.values(fresh).find((stream) => stream.model)?.model || state.model, imports: [imported, ...state.imports] }, skipped: false, archiveSha256: digest, totalRows: imported.rows, sourceStartUtc, sourceEndUtc };
+  const imported = { name: filename, sha256: digest, byteLength: sourceLength(source), rows: Object.values(fresh).reduce((n, stream) => n + stream.stats.inputRows, 0), completedAtUtc: new Date().toISOString(), sourceStartUtc: iso(sourceStartUtc), sourceEndUtc: iso(sourceEndUtc) };
+  const rawArchive = rawArchiveRecord(imported, { driveStatus: "not_archived" });
+  return { state: { ...state, streams, model: Object.values(fresh).find((stream) => stream.model)?.model || state.model, imports: [imported, ...state.imports], rawArchives: rawArchive ? [rawArchive, ...(state.rawArchives || [])] : (state.rawArchives || []) }, skipped: false, archiveSha256: digest, totalRows: imported.rows, sourceStartUtc: imported.sourceStartUtc, sourceEndUtc: imported.sourceEndUtc };
 }
 
 async function streamText(stream) {
   return new Response(stream).text();
 }
 
-export async function importGps(state, source, filename, options = {}, report = () => {}) {
+async function importGpsRaw(state, source, filename, options = {}, report = () => {}) {
   const digest = await sourceDigest(source);
   const lower = String(filename || "").toLowerCase();
   const tracks = [];
@@ -385,6 +404,7 @@ export async function importGps(state, source, filename, options = {}, report = 
   return {
     state: { ...state, version: HISTORY_VERSION, gpsTracks: [...(state.gpsTracks || []).filter((track) => !existingTrackIds.has(track.sourceTrackId || track.trackId)), ...tracks], gpsSelectedTracks: [], gpsImports: [imported, ...(state.gpsImports || []).filter((item) => item.sha256 !== digest)] },
     skipped: false,
+    sourceSha256: digest,
     trackCount: tracks.length,
     pointCount: imported.pointCount,
   };
@@ -651,6 +671,7 @@ function advanced(operation, energy, status, local) {
 }
 
 export function buildSnapshot(state, report = () => {}) {
+  if (state?.segmented && state.snapshot) return state.snapshot;
   const { operation, energy, status } = state.streams; if (!operation || !energy || !status) throw new Error("missing_families");
   const local = timeContext(); report(74, "native_analytics", "Trips and charging sessions");
   const tripBuild = buildTrips(operation, energy, status, local), trips = tripBuild.trips, contexts = tripBuild.contexts, charges = buildCharges(operation, energy, local);
@@ -676,7 +697,7 @@ export function buildSnapshot(state, report = () => {}) {
   for (const [family, stream] of Object.entries(state.streams)) { if (stream.stats.duplicates) qualityEvents.push({ family, field: null, rule: "duplicate_timestamp", severity: "low", affectedRows: stream.stats.duplicates, totalRows: stream.stats.inputRows }); if (stream.stats.invalidTimers) qualityEvents.push({ family, field: "timer", rule: "invalid_timer", severity: "high", affectedRows: stream.stats.invalidTimers, totalRows: stream.stats.inputRows }); if (stream.stats.wasUnsorted) qualityEvents.push({ family, field: "timer", rule: "unsorted_rows", severity: "medium", affectedRows: 1, totalRows: stream.stats.inputRows }); for (const [field, count] of Object.entries(stream.stats.invalidFields || {})) qualityEvents.push({ family, field, rule: "invalid_values", severity: "medium", affectedRows: count, totalRows: stream.stats.inputRows }); }
   const distance = sum(trips, "distanceKm"), net = sum(trips, "netEnergyKwh"), wall = sum(charges, "wallEnergyKwh"), batteryEnergy = sum(charges, "batteryEnergyKwh");
   report(96, "native_snapshot", "Preparing dashboard");
-  return { format: "xpeng-analytics-dashboard/v2", generatedAtUtc: new Date().toISOString(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "local", overview: { activeDays: daily.filter((row) => row.trips || row.charges).length, tripCount: trips.length, journeyCount: journeyRows.length, chargeCount: charges.length, distanceKm: rounded(distance), drivingHours: rounded(sum(trips, "durationMinutes") / 60, 1), netEnergyKwh: rounded(net), regeneratedKwh: rounded(sum(trips, "regeneratedKwh")), consumptionKwh100: rounded(distance ? net / distance * 100 : NaN), maxSpeedKmh: rounded(Math.max(...trips.map((row) => row.maxSpeedKmh || 0)), 1), wallEnergyKwh: rounded(wall), batteryEnergyKwh: rounded(batteryEnergy), chargeEfficiencyPct: rounded(wall ? batteryEnergy / wall * 100 : NaN, 1), maxChargePowerKw: rounded(Math.max(...charges.map((row) => row.maxPowerKw || 0)), 1), firstUtc: trips.at(0)?.startedAtUtc || null, lastUtc: trips.at(-1)?.endedAtUtc || null }, daily, trips: trips.slice().reverse(), journeys: enrichedJourneyRows.slice().reverse(), charges: charges.slice().reverse(), driving: { speed: advancedData.speed, pedal: advancedData.pedal, gg: advancedData.gg, events: advancedData.events, contexts }, battery: { capacityKwh: rounded(median(health.map((row) => row.capacityKwh))), latestRelativeSohPct: health.at(-1)?.relativeSohPct ?? null, qualifiedCharges: health.length, history: health, parking: parking.reverse(), daily: advancedData.batteryDaily, rangeSamples: advancedData.rangeSamples, tyres: advancedData.tyres }, activity: { monthly: [...monthly.values()].map((row) => ({ ...row, distanceKm: rounded(row.distanceKm), netEnergyKwh: rounded(row.netEnergyKwh) })), weekday: weekday.map((row) => ({ ...row, distanceKm: rounded(row.distanceKm) })), hours, heatmap: advancedData.heatmap }, gps: gpsData.gps, customCharts: validateCustomCharts(state.customCharts), quality: { coverage: Object.entries(state.streams).map(([family, stream]) => { const emptyColumns = stream.stats?.emptyColumns || [], availableColumns = Object.keys(stream.columns).filter((column) => !emptyColumns.includes(column)); return { family, rows: stream.time.length, firstUtc: iso(stream.time[0]), lastUtc: iso(stream.time.at(-1)), totalColumns: Object.keys(stream.columns).length, availableColumns, emptyColumns, unknownColumns: stream.stats?.unknownColumns || [] }; }), events: qualityEvents }, imports: state.imports, gpsImports: state.gpsImports || [] };
+  return { format: "xpeng-analytics-dashboard/v2", generatedAtUtc: new Date().toISOString(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "local", overview: { activeDays: daily.filter((row) => row.trips || row.charges).length, tripCount: trips.length, journeyCount: journeyRows.length, chargeCount: charges.length, distanceKm: rounded(distance), drivingHours: rounded(sum(trips, "durationMinutes") / 60, 1), netEnergyKwh: rounded(net), regeneratedKwh: rounded(sum(trips, "regeneratedKwh")), consumptionKwh100: rounded(distance ? net / distance * 100 : NaN), maxSpeedKmh: rounded(Math.max(...trips.map((row) => row.maxSpeedKmh || 0)), 1), wallEnergyKwh: rounded(wall), batteryEnergyKwh: rounded(batteryEnergy), chargeEfficiencyPct: rounded(wall ? batteryEnergy / wall * 100 : NaN, 1), maxChargePowerKw: rounded(Math.max(...charges.map((row) => row.maxPowerKw || 0)), 1), firstUtc: trips.at(0)?.startedAtUtc || null, lastUtc: trips.at(-1)?.endedAtUtc || null }, daily, trips: trips.slice().reverse(), journeys: enrichedJourneyRows.slice().reverse(), journeyGroups: validateJourneyGroups(state.journeyGroups), charges: charges.slice().reverse(), driving: { speed: advancedData.speed, pedal: advancedData.pedal, gg: advancedData.gg, events: advancedData.events, contexts }, battery: { capacityKwh: rounded(median(health.map((row) => row.capacityKwh))), latestRelativeSohPct: health.at(-1)?.relativeSohPct ?? null, qualifiedCharges: health.length, history: health, parking: parking.reverse(), daily: advancedData.batteryDaily, rangeSamples: advancedData.rangeSamples, tyres: advancedData.tyres }, activity: { monthly: [...monthly.values()].map((row) => ({ ...row, distanceKm: rounded(row.distanceKm), netEnergyKwh: rounded(row.netEnergyKwh) })), weekday: weekday.map((row) => ({ ...row, distanceKm: rounded(row.distanceKm) })), hours, heatmap: advancedData.heatmap }, gps: gpsData.gps, customCharts: validateCustomCharts(state.customCharts), quality: { coverage: Object.entries(state.streams).map(([family, stream]) => { const emptyColumns = stream.stats?.emptyColumns || [], availableColumns = Object.keys(stream.columns).filter((column) => !emptyColumns.includes(column)); return { family, rows: stream.time.length, firstUtc: iso(stream.time[0]), lastUtc: iso(stream.time.at(-1)), totalColumns: Object.keys(stream.columns).length, availableColumns, emptyColumns, unknownColumns: stream.stats?.unknownColumns || [] }; }), events: qualityEvents }, imports: state.imports, rawArchives: normaliseRawArchiveRegistry(state.rawArchives, state.imports), gpsImports: state.gpsImports || [] };
 }
 
 async function gzip(buffer) { const stream = new Blob([buffer]).stream().pipeThrough(new CompressionStream("gzip")); return new Uint8Array(await new Response(stream).arrayBuffer()); }
@@ -700,7 +721,7 @@ function gpsTracksForHistory(state) {
   return [...unique.values()];
 }
 
-export async function exportHistory(state, report = () => {}) {
+async function exportLegacyHistory(state, report = () => {}) {
   const chunks = [], streams = {}, gpsTracks = [], historyGpsTracks = gpsTracksForHistory(state); let offset = 0, completed = 0;
   const total = Object.values(state.streams).reduce((n, stream) => n + 1 + Object.keys(stream.columns).length, 0) + historyGpsTracks.length * 6;
   const add = async (name, array) => { const raw = new Uint8Array(array.buffer, array.byteOffset, array.byteLength), compressed = await gzip(raw); const record = { name, offset, bytes: compressed.byteLength, rawBytes: raw.byteLength, sha256: await hash(compressed) }; chunks.push(compressed); offset += compressed.byteLength; report(10 + (++completed / total) * 82, "history_export", name); return record; };
@@ -729,15 +750,16 @@ export async function exportHistory(state, report = () => {}) {
       segment: await add(`${base}/segment`, track.segment),
     });
   }
-  const manifest = new TextEncoder().encode(JSON.stringify({ format: HISTORY_FORMAT, version: HISTORY_VERSION, exportedAtUtc: new Date().toISOString(), model: state.model, imports: state.imports, streams, gps: { imports: state.gpsImports || [], tracks: gpsTracks }, customCharts: validateCustomCharts(state.customCharts) }));
+  const legacyMagic = new Uint8Array([...HISTORY_MAGIC_PREFIX, LEGACY_HISTORY_VERSION]);
+  const manifest = new TextEncoder().encode(JSON.stringify({ format: HISTORY_FORMAT, version: LEGACY_HISTORY_VERSION, exportedAtUtc: new Date().toISOString(), model: state.model, imports: state.imports, rawArchives: normaliseRawArchiveRegistry(state.rawArchives, state.imports), streams, gps: { imports: state.gpsImports || [], tracks: gpsTracks }, customCharts: validateCustomCharts(state.customCharts), journeyGroups: validateJourneyGroups(state.journeyGroups) }));
   const length = new Uint8Array(4); new DataView(length.buffer).setUint32(0, manifest.byteLength, false);
-  return new Blob([HISTORY_MAGIC, length, manifest, ...chunks]).arrayBuffer();
+  return new Blob([legacyMagic, length, manifest, ...chunks]).arrayBuffer();
 }
 
-export async function importHistory(source, report = () => {}) {
+async function importLegacyHistory(source, report = () => {}) {
   const sourceSize = sourceLength(source), header = await readSourceRange(source, 0, Math.min(12, sourceSize));
   const magicVersion = header[7];
-  if (header.length < 12 || !HISTORY_MAGIC_PREFIX.every((value, i) => header[i] === value) || ![3, 4, 5].includes(magicVersion)) throw new Error("history_version");
+  if (header.length < 12 || !HISTORY_MAGIC_PREFIX.every((value, i) => header[i] === value) || ![3, 4, 5, 6].includes(magicVersion)) throw new Error("history_version");
   const manifestLength = new DataView(header.buffer, header.byteOffset + 8, 4).getUint32(0, false);
   if (manifestLength > 2_000_000 || 12 + manifestLength > sourceSize) throw new Error("history_integrity");
   const manifestBytes = await readSourceRange(source, 12, 12 + manifestLength);
@@ -747,7 +769,7 @@ export async function importHistory(source, report = () => {}) {
   } catch {
     throw new Error("history_integrity");
   }
-  if (manifest.format !== HISTORY_FORMAT || manifest.version !== magicVersion || ![3, 4, 5].includes(manifest.version)) throw new Error("history_version");
+  if (manifest.format !== HISTORY_FORMAT || manifest.version !== magicVersion || !SUPPORTED_HISTORY_VERSIONS.includes(manifest.version)) throw new Error("history_version");
   if (!manifest.streams || !["operation", "energy", "status"].every((family) => manifest.streams[family])) throw new Error("history_integrity");
   const gpsRecords = manifest.version >= 4 && Array.isArray(manifest.gps?.tracks) ? manifest.gps.tracks : [];
   const payloadStart = 12 + manifestLength, streams = {}; let completed = 0;
@@ -804,7 +826,292 @@ export async function importHistory(source, report = () => {}) {
     }
     gpsTracks.push(track);
   }
-  return { format: HISTORY_FORMAT, version: HISTORY_VERSION, sourceHistoryVersion: manifest.version, model: manifest.model || "", imports: Array.isArray(manifest.imports) ? manifest.imports : [], streams, gpsTracks, gpsSelectedTracks: [], gpsImports: Array.isArray(manifest.gps?.imports) ? manifest.gps.imports : [], customCharts: validateCustomCharts(manifest.version >= 5 ? manifest.customCharts : []) };
+  const imports = Array.isArray(manifest.imports) ? manifest.imports : [];
+  return { format: HISTORY_FORMAT, version: HISTORY_VERSION, sourceHistoryVersion: manifest.version, model: manifest.model || "", imports, rawArchives: normaliseRawArchiveRegistry(manifest.rawArchives, imports), streams, gpsTracks, gpsSelectedTracks: [], gpsImports: Array.isArray(manifest.gps?.imports) ? manifest.gps.imports : [], customCharts: validateCustomCharts(manifest.version >= 5 ? manifest.customCharts : []), journeyGroups: validateJourneyGroups(manifest.version >= 6 ? manifest.journeyGroups : []) };
 }
 
-export function isNativeHistory(bytes) { return bytes.length >= HISTORY_MAGIC.length && HISTORY_MAGIC_PREFIX.every((value, index) => bytes[index] === value) && [3, 4, 5].includes(bytes[7]); }
+const SEGMENTED_HISTORY_FORMAT = "xpeng-analytics-segmented-history";
+const detailSnapshotCache = [];
+
+export function clearDetailCache() { detailSnapshotCache.length = 0; }
+
+function monthKey(timestamp) {
+  return finite(timestamp) ? new Date(timestamp * 1000).toISOString().slice(0, 7) : null;
+}
+
+function monthRange(key) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(key || ""));
+  if (!match) throw new Error("history_integrity");
+  const start = Date.UTC(Number(match[1]), Number(match[2]) - 1, 1) / 1000;
+  const end = Date.UTC(Number(match[1]), Number(match[2]), 1) / 1000;
+  return { start, end };
+}
+
+function copyRange(array, start, end) {
+  return new array.constructor(array.subarray(start, end));
+}
+
+function sliceTrack(track, startTime, endTime, key) {
+  const start = lowerBound(track.time, startTime), end = lowerBound(track.time, endTime);
+  if (end - start < 2) return null;
+  return {
+    ...track,
+    trackId: `${track.trackId}@${key}`,
+    sourceTrackId: track.sourceTrackId || track.trackId,
+    matchedTripId: null,
+    time: copyRange(track.time, start, end),
+    lat: copyRange(track.lat, start, end),
+    lon: copyRange(track.lon, start, end),
+    elevation: copyRange(track.elevation, start, end),
+    speedMps: copyRange(track.speedMps, start, end),
+    segment: copyRange(track.segment, start, end),
+  };
+}
+
+function sliceRawState(state, key) {
+  const { start, end } = monthRange(key), streams = {};
+  for (const family of ["operation", "energy", "status"]) {
+    const stream = state.streams[family], from = lowerBound(stream.time, start), to = lowerBound(stream.time, end), columns = {};
+    for (const [, name] of SPECS[family]) columns[name] = stream.columns[name] ? copyRange(stream.columns[name], from, to) : new Float32Array(to - from).fill(NaN);
+    streams[family] = { ...stream, time: copyRange(stream.time, from, to), columns, stats: { ...(stream.stats || {}), uniqueRows: to - from, mergedRows: to - from } };
+  }
+  const gpsTracks = (state.gpsTracks || []).map((track) => sliceTrack(track, start, end, key)).filter(Boolean);
+  return { format: HISTORY_FORMAT, version: HISTORY_VERSION, streams, imports: [], rawArchives: [], model: state.model || "", gpsTracks, gpsSelectedTracks: [], gpsImports: [], customCharts: [], journeyGroups: [] };
+}
+
+function emptyRawMonthState(model = "") {
+  const streams = {};
+  for (const family of ["operation", "energy", "status"]) streams[family] = { family, model, time: new Uint32Array(0), columns: Object.fromEntries(SPECS[family].map(([, target]) => [target, new Float32Array(0)])), stats: { inputRows: 0, uniqueRows: 0, mergedRows: 0, emptyColumns: SPECS[family].map(([, target]) => target), unknownColumns: [] } };
+  return { format: HISTORY_FORMAT, version: HISTORY_VERSION, streams, imports: [], rawArchives: [], model, gpsTracks: [], gpsSelectedTracks: [], gpsImports: [], customCharts: [], journeyGroups: [] };
+}
+
+function rawMonthKeys(state) {
+  const keys = new Set();
+  for (const stream of Object.values(state.streams || {})) {
+    if (!stream?.time?.length) continue;
+    let cursor = Number(stream.time[0]), last = Number(stream.time.at(-1));
+    while (cursor <= last) {
+      const key = monthKey(cursor); keys.add(key);
+      cursor = monthRange(key).end;
+    }
+  }
+  for (const track of state.gpsTracks || []) {
+    if (!track.time?.length) continue;
+    let cursor = Number(track.time[0]), last = Number(track.time.at(-1));
+    while (cursor <= last) { const key = monthKey(cursor); keys.add(key); cursor = monthRange(key).end; }
+  }
+  return [...keys].filter(Boolean).sort();
+}
+
+function compactSnapshot(snapshot) {
+  const detailedTelemetry = (snapshot.trips || []).flatMap((trip) => trip.series || []), telemetryLimit = 1_200, telemetry = [];
+  if (detailedTelemetry.length <= telemetryLimit) telemetry.push(...detailedTelemetry);
+  else { const step = (detailedTelemetry.length - 1) / (telemetryLimit - 1); for (let index = 0; index < telemetryLimit; index++) telemetry.push(detailedTelemetry[Math.round(index * step)]); }
+  const trips = (snapshot.trips || []).map(({ series, replaySeries, replayEvents, ...trip }) => ({ ...trip, detailLoaded: false }));
+  const journeys = (snapshot.journeys || []).map((journey) => ({
+    ...journey,
+    detailLoaded: false,
+    gps: journey.gps ? { ...journey.gps, segments: undefined, available: true } : null,
+  }));
+  const charges = (snapshot.charges || []).map(({ series, ...charge }) => ({ ...charge, detailLoaded: false }));
+  return { ...snapshot, telemetry, trips, journeys, charges };
+}
+
+function uniqueRows(rows, key) {
+  const found = new Map();
+  for (const row of rows) if (row?.[key] != null) found.set(row[key], row);
+  return [...found.values()];
+}
+
+function combineSnapshots(shards, metadata = {}) {
+  const snapshots = shards.map((shard) => shard.summary).filter(Boolean), rows = (path) => snapshots.flatMap((snapshot) => path.reduce((value, name) => value?.[name], snapshot) || []);
+  const trips = uniqueRows(rows(["trips"]), "tripId").sort((a, b) => String(b.startedAtUtc).localeCompare(String(a.startedAtUtc)));
+  const journeys = uniqueRows(rows(["journeys"]), "journeyId").sort((a, b) => String(b.startedAtUtc).localeCompare(String(a.startedAtUtc)));
+  const charges = uniqueRows(rows(["charges"]), "chargeId").sort((a, b) => String(b.startedAtUtc).localeCompare(String(a.startedAtUtc)));
+  const daily = uniqueRows(rows(["daily"]), "date").sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const distance = sum(trips, "distanceKm"), net = sum(trips, "netEnergyKwh"), regenerated = sum(trips, "regeneratedKwh"), wall = sum(charges, "wallEnergyKwh"), batteryEnergy = sum(charges, "batteryEnergyKwh");
+  const health = charges.map((row) => ({ row, gain: Number(row.socEndPct || 0) - Number(row.socStartPct || 0) })).filter(({ row, gain }) => gain >= 20 && row.batteryEnergyKwh).map(({ row, gain }) => ({ date: row.date, capacityKwh: row.batteryEnergyKwh / gain * 100, socGainPct: gain })).filter((row) => row.capacityKwh >= 45 && row.capacityKwh <= 100).sort((a, b) => a.date.localeCompare(b.date));
+  const baseline = median(health.slice(0, 3).map((row) => row.capacityKwh));
+  health.forEach((row, index) => { row.capacityKwh = rounded(row.capacityKwh); row.rollingCapacityKwh = rounded(median(health.slice(Math.max(0, index - 2), index + 1).map((item) => item.capacityKwh))); row.relativeSohPct = rounded(finite(baseline) ? row.rollingCapacityKwh / baseline * 100 : NaN, 1); });
+  const monthly = new Map();
+  for (const row of daily) { const key = String(row.date).slice(0, 7), target = monthly.get(key) || { month: key, distanceKm: 0, netEnergyKwh: 0, trips: 0, journeys: 0, charges: 0 }; target.distanceKm += Number(row.distanceKm || 0); target.netEnergyKwh += Number(row.netEnergyKwh || 0); target.trips += Number(row.trips || 0); target.journeys += Number(row.journeys || 0); target.charges += Number(row.charges || 0); monthly.set(key, target); }
+  const weekday = Array.from({ length: 7 }, (_, index) => ({ weekday: index, trips: 0, distanceKm: 0 })), hours = Array.from({ length: 24 }, (_, hour) => ({ hour, trips: 0 }));
+  for (const snapshot of snapshots) {
+    for (const row of snapshot.activity?.weekday || []) { const target = weekday[Number(row.weekday)]; if (target) { target.trips += Number(row.trips || 0); target.distanceKm += Number(row.distanceKm || 0); } }
+    for (const row of snapshot.activity?.hours || []) { const target = hours[Number(row.hour)]; if (target) target.trips += Number(row.trips || 0); }
+  }
+  const coverage = ["operation", "energy", "status"].map((family) => {
+    const parts = rows(["quality", "coverage"]).filter((row) => row.family === family), available = new Set(parts.flatMap((row) => row.availableColumns || [])), empty = new Set(parts.flatMap((row) => row.emptyColumns || [])), unknown = new Set(parts.flatMap((row) => row.unknownColumns || []));
+    return { family, rows: parts.reduce((total, row) => total + Number(row.rows || 0), 0), firstUtc: parts.map((row) => row.firstUtc).filter(Boolean).sort().at(0) || null, lastUtc: parts.map((row) => row.lastUtc).filter(Boolean).sort().at(-1) || null, totalColumns: Math.max(0, ...parts.map((row) => Number(row.totalColumns || 0))), availableColumns: [...available], emptyColumns: [...empty].filter((name) => !available.has(name)), unknownColumns: [...unknown] };
+  });
+  const gpsTracks = uniqueRows(rows(["gps", "tracks"]), "trackId");
+  const mappedTripIds = new Set(journeys.filter((journey) => journey.gps).flatMap((journey) => journey.tripIds || []));
+  return {
+    format: "xpeng-analytics-dashboard/v3", generatedAtUtc: new Date().toISOString(), timezone: snapshots[0]?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "local",
+    overview: { activeDays: daily.filter((row) => row.trips || row.charges).length, tripCount: trips.length, journeyCount: journeys.length, chargeCount: charges.length, distanceKm: rounded(distance), drivingHours: rounded(sum(trips, "durationMinutes") / 60, 1), netEnergyKwh: rounded(net), regeneratedKwh: rounded(regenerated), consumptionKwh100: rounded(distance ? net / distance * 100 : NaN), maxSpeedKmh: rounded(Math.max(0, ...trips.map((row) => Number(row.maxSpeedKmh || 0))), 1), wallEnergyKwh: rounded(wall), batteryEnergyKwh: rounded(batteryEnergy), chargeEfficiencyPct: rounded(wall ? batteryEnergy / wall * 100 : NaN, 1), maxChargePowerKw: rounded(Math.max(0, ...charges.map((row) => Number(row.maxPowerKw || 0))), 1), firstUtc: trips.at(-1)?.startedAtUtc || null, lastUtc: trips[0]?.endedAtUtc || null },
+    daily, telemetry: rows(["telemetry"]), trips, journeys, journeyGroups: validateJourneyGroups(metadata.journeyGroups), charges,
+    driving: { speed: rows(["driving", "speed"]), pedal: rows(["driving", "pedal"]), gg: rows(["driving", "gg"]), events: rows(["driving", "events"]), contexts: rows(["driving", "contexts"]) },
+    battery: { capacityKwh: rounded(median(health.map((row) => row.capacityKwh))), latestRelativeSohPct: health.at(-1)?.relativeSohPct ?? null, qualifiedCharges: health.length, history: health, parking: rows(["battery", "parking"]).sort((a, b) => String(b.startedAtUtc).localeCompare(String(a.startedAtUtc))), daily: uniqueRows(rows(["battery", "daily"]), "date").sort((a, b) => String(a.date).localeCompare(String(b.date))), rangeSamples: rows(["battery", "rangeSamples"]), tyres: uniqueRows(rows(["battery", "tyres"]), "date").sort((a, b) => String(a.date).localeCompare(String(b.date))) },
+    activity: { monthly: [...monthly.values()].map((row) => ({ ...row, distanceKm: rounded(row.distanceKm), netEnergyKwh: rounded(row.netEnergyKwh) })), weekday: weekday.map((row) => ({ ...row, distanceKm: rounded(row.distanceKm) })), hours, heatmap: rows(["activity", "heatmap"]) },
+    gps: { tracks: gpsTracks, matchedCount: journeys.filter((row) => row.gps).length, matchedTripCount: mappedTripIds.size, duplicateCount: snapshots.reduce((total, snapshot) => total + Number(snapshot.gps?.duplicateCount || 0), 0), ignoredTrackCount: snapshots.reduce((total, snapshot) => total + Number(snapshot.gps?.ignoredTrackCount || 0), 0) },
+    customCharts: validateCustomCharts(metadata.customCharts), quality: { coverage, events: rows(["quality", "events"]) }, imports: metadata.imports || [], rawArchives: normaliseRawArchiveRegistry(metadata.rawArchives, metadata.imports), gpsImports: metadata.gpsImports || [], storage: { segmented: true, months: shards.length },
+  };
+}
+
+async function createShard(rawState, key, report = () => {}) {
+  const shardState = sliceRawState(rawState, key), full = buildSnapshot(shardState, report), summary = compactSnapshot(full), payload = new Blob([await exportLegacyHistory(shardState)]);
+  return { key, summary, payload, rawBytes: Object.values(shardState.streams).reduce((total, stream) => total + stream.time.byteLength + Object.values(stream.columns).reduce((sumBytes, column) => sumBytes + column.byteLength, 0), 0) };
+}
+
+async function toSegmentedState(rawState, report = () => {}) {
+  const keys = rawMonthKeys(rawState), shards = [];
+  for (let index = 0; index < keys.length; index++) { report(70 + index / Math.max(1, keys.length) * 24, "history_segment", keys[index]); shards.push(await createShard(rawState, keys[index], report)); }
+  const metadata = { imports: rawState.imports || [], rawArchives: normaliseRawArchiveRegistry(rawState.rawArchives, rawState.imports), gpsImports: rawState.gpsImports || [], customCharts: rawState.customCharts || [], journeyGroups: rawState.journeyGroups || [] };
+  return { format: HISTORY_FORMAT, version: HISTORY_VERSION, sourceHistoryVersion: rawState.sourceHistoryVersion || rawState.version || LEGACY_HISTORY_VERSION, segmented: true, model: rawState.model || "", shards, ...metadata, snapshot: combineSnapshots(shards, metadata) };
+}
+
+async function loadShard(shard, report = () => {}) {
+  return importLegacyHistory(shard.payload, report);
+}
+
+async function loadShardSnapshot(shard, report = () => {}) {
+  const cachedIndex = detailSnapshotCache.findIndex((entry) => entry.payload === shard.payload);
+  if (cachedIndex >= 0) {
+    const [cached] = detailSnapshotCache.splice(cachedIndex, 1); detailSnapshotCache.push(cached); return cached.snapshot;
+  }
+  const snapshot = buildSnapshot(await loadShard(shard, report));
+  detailSnapshotCache.push({ payload: shard.payload, snapshot });
+  while (detailSnapshotCache.length > 2) detailSnapshotCache.shift();
+  return snapshot;
+}
+
+function mergeRawStates(existing, fresh) {
+  const streams = {};
+  for (const family of ["operation", "energy", "status"]) streams[family] = mergeStream(existing.streams[family], fresh.streams[family]);
+  const gps = new Map();
+  for (const track of [...(existing.gpsTracks || []), ...(fresh.gpsTracks || [])]) gps.set(track.trackId, track);
+  return { ...existing, version: HISTORY_VERSION, streams, model: fresh.model || existing.model, gpsTracks: [...gps.values()], gpsSelectedTracks: [] };
+}
+
+async function updateSegmentedWithRaw(state, fresh, report = () => {}) {
+  const freshKeys = rawMonthKeys(fresh), byKey = new Map(state.shards.map((shard) => [shard.key, shard]));
+  for (let index = 0; index < freshKeys.length; index++) {
+    const key = freshKeys[index], freshMonth = sliceRawState(fresh, key), oldShard = byKey.get(key), merged = oldShard ? mergeRawStates(await loadShard(oldShard, report), freshMonth) : freshMonth;
+    report(72 + index / Math.max(1, freshKeys.length) * 23, "history_segment", key);
+    byKey.set(key, await createShard(merged, key, report));
+  }
+  const metadata = { imports: state.imports, rawArchives: state.rawArchives, gpsImports: state.gpsImports, customCharts: state.customCharts, journeyGroups: state.journeyGroups }, shards = [...byKey.values()].sort((a, b) => a.key.localeCompare(b.key));
+  return { ...state, shards, snapshot: combineSnapshots(shards, metadata) };
+}
+
+async function updateSegmentedWithGps(state, gpsState, report = () => {}) {
+  const keys = rawMonthKeys(gpsState), byKey = new Map(state.shards.map((shard) => [shard.key, shard]));
+  for (let index = 0; index < keys.length; index++) {
+    const key = keys[index], { start, end } = monthRange(key), oldShard = byKey.get(key);
+    const raw = oldShard ? await loadShard(oldShard, report) : emptyRawMonthState(state.model), incoming = (gpsState.gpsTracks || []).map((track) => sliceTrack(track, start, end, key)).filter(Boolean), tracks = new Map((raw.gpsTracks || []).map((track) => [track.sourceTrackId || track.trackId, track]));
+    for (const track of incoming) tracks.set(track.sourceTrackId || track.trackId, track);
+    raw.gpsTracks = [...tracks.values()]; raw.gpsSelectedTracks = [];
+    report(72 + index / Math.max(1, keys.length) * 23, "history_segment", key);
+    byKey.set(key, await createShard(raw, key, report));
+  }
+  const metadata = { imports: state.imports, rawArchives: state.rawArchives, gpsImports: state.gpsImports, customCharts: state.customCharts, journeyGroups: state.journeyGroups }, shards = [...byKey.values()].sort((a, b) => a.key.localeCompare(b.key));
+  return { ...state, shards, snapshot: combineSnapshots(shards, metadata) };
+}
+
+export async function importArchive(state, source, filename, report = () => {}, processingProfile = {}) {
+  const digest = await sourceDigest(source);
+  if ((state.imports || []).some((item) => item.sha256 === digest)) return { state, skipped: true, archiveSha256: digest, totalRows: 0 };
+  if (!state.segmented && Object.keys(state.streams || {}).length) state = await toSegmentedState(state, report);
+  const freshResult = await importArchiveRaw(emptyState(), source, filename, report, processingProfile, digest);
+  if (!state.segmented) {
+    const segmented = await toSegmentedState(freshResult.state, report);
+    return { ...freshResult, state: segmented };
+  }
+  const imported = freshResult.state.imports[0], metadata = { imports: [imported, ...(state.imports || [])], rawArchives: mergeRawArchiveRegistry(state.rawArchives, freshResult.state.rawArchives), gpsImports: state.gpsImports || [], customCharts: state.customCharts || [], journeyGroups: state.journeyGroups || [] };
+  const base = { ...state, ...metadata };
+  return { ...freshResult, state: await updateSegmentedWithRaw(base, freshResult.state, report) };
+}
+
+export async function importGps(state, source, filename, options = {}, report = () => {}) {
+  if (!state.segmented && Object.keys(state.streams || {}).length) state = await toSegmentedState(state, report);
+  if (!state.segmented) return importGpsRaw(state, source, filename, options, report);
+  const gpsResult = await importGpsRaw(emptyState(), source, filename, options, report), imported = gpsResult.state.gpsImports[0];
+  const latestTelemetry = Date.parse(state.snapshot?.overview?.lastUtc || "") / 1000, pendingBoundary = finite(latestTelemetry) ? latestTelemetry - GPS_PENDING_RETENTION_SECONDS : -Infinity;
+  gpsResult.state.gpsTracks = (gpsResult.state.gpsTracks || []).filter((track) => {
+    const start = Number(track.time?.[0]), end = Number(track.time?.at?.(-1));
+    const overlapsJourney = (state.snapshot?.journeys || []).some((journey) => Date.parse(journey.endedAtUtc) / 1000 >= start && Date.parse(journey.startedAtUtc) / 1000 <= end);
+    return overlapsJourney || end >= pendingBoundary;
+  });
+  const base = { ...state, gpsImports: [imported, ...(state.gpsImports || []).filter((item) => item.sha256 !== imported.sha256)] };
+  const updated = await updateSegmentedWithGps(base, gpsResult.state, report);
+  return { ...gpsResult, state: updated };
+}
+
+async function exportSegmentedHistory(state, report = () => {}) {
+  const chunks = [], shardRecords = []; let offset = 0;
+  for (let index = 0; index < state.shards.length; index++) {
+    const shard = state.shards[index], summaryRaw = new TextEncoder().encode(JSON.stringify(shard.summary)), summary = await gzip(summaryRaw), payload = shard.payload;
+    const summaryRecord = { offset, bytes: summary.byteLength, rawBytes: summaryRaw.byteLength, sha256: await hash(summary) }; chunks.push(summary); offset += summary.byteLength;
+    const payloadBytes = new Uint8Array(await payload.arrayBuffer()), payloadRecord = { offset, bytes: payloadBytes.byteLength, sha256: await hash(payloadBytes) }; chunks.push(payload); offset += payloadBytes.byteLength;
+    shardRecords.push({ key: shard.key, rawBytes: shard.rawBytes || 0, summary: summaryRecord, payload: payloadRecord });
+    report(8 + (index + 1) / Math.max(1, state.shards.length) * 88, "history_export", shard.key);
+  }
+  const manifest = new TextEncoder().encode(JSON.stringify({ format: SEGMENTED_HISTORY_FORMAT, version: HISTORY_VERSION, exportedAtUtc: new Date().toISOString(), model: state.model, imports: state.imports || [], rawArchives: normaliseRawArchiveRegistry(state.rawArchives, state.imports), gpsImports: state.gpsImports || [], customCharts: validateCustomCharts(state.customCharts), journeyGroups: validateJourneyGroups(state.journeyGroups), shards: shardRecords }));
+  const length = new Uint8Array(4); new DataView(length.buffer).setUint32(0, manifest.byteLength, false);
+  return new Blob([HISTORY_MAGIC, length, manifest, ...chunks], { type: "application/octet-stream" });
+}
+
+async function importSegmentedHistory(source, manifest, manifestLength, report = () => {}) {
+  if (!Array.isArray(manifest.shards) || !manifest.shards.length) throw new Error("history_integrity");
+  const sourceSize = sourceLength(source), payloadStart = 12 + manifestLength, shards = [];
+  for (let index = 0; index < manifest.shards.length; index++) {
+    const record = manifest.shards[index], summaryRecord = record.summary, payloadRecord = record.payload;
+    for (const item of [summaryRecord, payloadRecord]) if (!item || !Number.isSafeInteger(item.offset) || !Number.isSafeInteger(item.bytes) || item.offset < 0 || item.bytes < 0 || payloadStart + item.offset + item.bytes > sourceSize) throw new Error("history_integrity");
+    const summaryCompressed = await readSourceRange(source, payloadStart + summaryRecord.offset, payloadStart + summaryRecord.offset + summaryRecord.bytes);
+    if (await hash(summaryCompressed) !== summaryRecord.sha256) throw new Error("history_integrity");
+    let summary;
+    try { summary = JSON.parse(new TextDecoder().decode(await gunzip(summaryCompressed))); } catch { throw new Error("history_integrity"); }
+    const payload = typeof Blob !== "undefined" && source instanceof Blob ? source.slice(payloadStart + payloadRecord.offset, payloadStart + payloadRecord.offset + payloadRecord.bytes) : new Blob([await readSourceRange(source, payloadStart + payloadRecord.offset, payloadStart + payloadRecord.offset + payloadRecord.bytes)]);
+    shards.push({ key: record.key, rawBytes: Number(record.rawBytes || 0), summary, payload });
+    report(8 + (index + 1) / manifest.shards.length * 86, "history_read", record.key);
+  }
+  const imports = Array.isArray(manifest.imports) ? manifest.imports : [];
+  const metadata = { imports, rawArchives: normaliseRawArchiveRegistry(manifest.rawArchives, imports), gpsImports: Array.isArray(manifest.gpsImports) ? manifest.gpsImports : [], customCharts: validateCustomCharts(manifest.customCharts), journeyGroups: validateJourneyGroups(manifest.journeyGroups) };
+  return { format: HISTORY_FORMAT, version: HISTORY_VERSION, sourceHistoryVersion: HISTORY_VERSION, segmented: true, model: manifest.model || "", shards, ...metadata, snapshot: combineSnapshots(shards, metadata) };
+}
+
+export async function exportHistory(state, report = () => {}) {
+  const segmented = state.segmented ? state : await toSegmentedState(state, report);
+  return exportSegmentedHistory(segmented, report);
+}
+
+export async function importHistory(source, report = () => {}) {
+  const sourceSize = sourceLength(source), header = await readSourceRange(source, 0, Math.min(12, sourceSize));
+  if (header.length < 12 || !HISTORY_MAGIC_PREFIX.every((value, index) => header[index] === value) || !SUPPORTED_HISTORY_VERSIONS.includes(header[7])) throw new Error("history_version");
+  const manifestLength = new DataView(header.buffer, header.byteOffset + 8, 4).getUint32(0, false);
+  if (manifestLength > 64_000_000 || 12 + manifestLength > sourceSize) throw new Error("history_integrity");
+  let manifest;
+  try { manifest = JSON.parse(new TextDecoder().decode(await readSourceRange(source, 12, 12 + manifestLength))); } catch { throw new Error("history_integrity"); }
+  if (header[7] === HISTORY_VERSION && manifest.format === SEGMENTED_HISTORY_FORMAT) return importSegmentedHistory(source, manifest, manifestLength, report);
+  const legacy = await importLegacyHistory(source, report);
+  return toSegmentedState(legacy, report);
+}
+
+export async function loadRecordDetails(state, request = {}, report = () => {}) {
+  if (!state?.segmented) return { trips: state?.snapshot?.trips || [], journeys: state?.snapshot?.journeys || [], charges: state?.snapshot?.charges || [] };
+  const journeyIds = new Set(request.journeyIds || []), tripIds = new Set(request.tripIds || []), chargeIds = new Set(request.chargeIds || []), keys = new Set();
+  for (const journey of state.snapshot.journeys || []) if (journeyIds.has(journey.journeyId)) keys.add(String(journey.date).slice(0, 7));
+  for (const trip of state.snapshot.trips || []) if (tripIds.has(trip.tripId) || [...journeyIds].some((journeyId) => state.snapshot.journeys.find((journey) => journey.journeyId === journeyId)?.tripIds?.includes(trip.tripId))) keys.add(String(trip.date).slice(0, 7));
+  for (const charge of state.snapshot.charges || []) if (chargeIds.has(charge.chargeId)) keys.add(String(charge.date).slice(0, 7));
+  const details = { trips: [], journeys: [], charges: [] };
+  for (const key of keys) {
+    const shard = state.shards.find((candidate) => candidate.key === key); if (!shard) continue;
+    const full = await loadShardSnapshot(shard, report);
+    details.trips.push(...full.trips.filter((trip) => tripIds.has(trip.tripId) || [...journeyIds].some((journeyId) => full.journeys.find((journey) => journey.journeyId === journeyId)?.tripIds?.includes(trip.tripId))).map((trip) => ({ ...trip, detailLoaded: true })));
+    details.journeys.push(...full.journeys.filter((journey) => journeyIds.has(journey.journeyId)).map((journey) => ({ ...journey, detailLoaded: true })));
+    details.charges.push(...full.charges.filter((charge) => chargeIds.has(charge.chargeId)).map((charge) => ({ ...charge, detailLoaded: true })));
+  }
+  return details;
+}
+
+export function isNativeHistory(bytes) { return bytes.length >= HISTORY_MAGIC.length && HISTORY_MAGIC_PREFIX.every((value, index) => bytes[index] === value) && SUPPORTED_HISTORY_VERSIONS.includes(bytes[7]); }

@@ -24,6 +24,33 @@ opened with it. Google access tokens remain in tab memory and are not stored;
 the user may need to authorise again after closing the tab or when the token
 expires. Disconnecting does not delete the Drive copy.
 
+Before replacing the current Drive backup, the application may create up to
+three earlier recovery copies in the same folder. These are also unencrypted
+`.xpeng` files created and managed with the same limited permission. Backup
+coverage, size, format version, and timestamps are stored as Drive file
+metadata. The connected Google email address is read only to identify the
+active account in the interface and is not saved to local storage or included
+in a portable history.
+
+The separate **Archive original XPENG ZIPs** option is disabled by default.
+When explicitly enabled, each successfully recognised XPENG ZIP is uploaded
+unchanged to a **Raw Files** subfolder in the user's Drive. A SHA-256 digest
+already calculated during local import avoids duplicates. The app records the
+source coverage and retention state in `.xpeng`, then keeps the smallest
+practical set of originals spanning the observed period, preferring four days
+of overlap. Redundant files are moved to Drive trash and remain recoverable;
+exports without trustworthy coverage are always retained. These originals may
+contain the VIN, complete raw telemetry, and other information omitted from the
+processed `.xpeng` history. They are not encrypted and use the user's quota.
+
+GPX source archiving has its own disabled-by-default option. When enabled,
+successfully parsed `.gpx` files and ZIPs containing GPX are copied unchanged to
+an **Original GPX files** subfolder and deduplicated by SHA-256. These files may
+contain precise locations outside matched XPENG journeys, including walks,
+parked periods, and complete all-day recordings. Enabling XPENG ZIP archiving
+does not enable GPX archiving. GPX originals are also unencrypted, use the
+user's Drive quota, and remain until explicitly deleted.
+
 Static hosting still receives ordinary web requests for the application files
 and therefore may receive standard connection metadata such as an IP address
 and user agent. No vehicle export or processed vehicle history is intentionally
@@ -36,7 +63,7 @@ patterns, charging behaviour, and other personal information. Users should
 store exported histories as sensitive files and should not attach them to bug
 reports or commit them to Git.
 
-Version 5 portable histories contain normalised telemetry, model information
+Version 6 portable histories contain normalised telemetry, model information
 when available, import provenance such as source filenames and archive hashes,
 and validated personal-chart definitions. If the user imports GPX data, the
 same history also contains precise timestamps and coordinates for route slices
@@ -47,7 +74,9 @@ later import. Older unmatched recordings and rejected duplicates are not
 exported. Histories do not contain the original VIN and are not encrypted;
 possession of the file grants access to its processed data. The
 `.xpeng` extension and compression reduce size but do not provide encryption or
-access control.
+access control. Manual journey groups add only a user-provided group name and
+references to existing journey and trip identifiers; they do not duplicate
+telemetry or create new location samples.
 
 The application must never add telemetry, advertising, remote fonts, crash
 uploads, or analytics without a separate public design review and an explicit

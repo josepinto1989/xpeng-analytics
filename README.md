@@ -48,6 +48,9 @@ storage destination controlled by the user.
 - Journey-level driving forces, steering, pedal, rear-motor, rotor-temperature,
   and four-tyre telemetry where the export provides those signals. Journey
   charts share a synchronized time cursor for direct comparison.
+- Non-destructive manual journey groups for outings that XPENG split into
+  separate journeys. Analyse the complete group or each original segment, with
+  charging sessions detected during intermediate stops.
 - Synchronized charging telemetry: hovering any technical charging chart shows
   power, peak power, SOC, voltage, current, and battery temperature for the
   same moment.
@@ -64,6 +67,16 @@ storage destination controlled by the user.
 - Daily and monthly activity patterns with custom date ranges.
 - Long-term monthly trends for consumption, range, estimated battery health,
   parked use, charging, and tyre pressure.
+- A data-coverage calendar that distinguishes days containing journeys,
+  charging, parked telemetry, tyre observations, and matched GPS.
+- A dedicated Insights area with personal-baseline anomaly observations,
+  battery-history confidence, automatic monthly summaries, and seasonal
+  comparisons. Calculated observations remain clearly separate from official
+  XPENG or BMS readings.
+- Local global search across journeys, charging sessions, dates, saved charts,
+  sections, and settings, with keyboard access and direct navigation.
+- Privacy-safe PNG cards for selected insights. Default cards omit route
+  coordinates, filenames, exact timestamps, and internal identifiers.
 - Estimated urban-, road-, and motorway-style driving with distance, time,
   energy, regeneration, consumption, and confidence. These categories are
   software estimates and do not identify the actual road.
@@ -78,8 +91,13 @@ storage destination controlled by the user.
   show an on-device reminder when it is time to add a newer XPENG export.
 - Optional Google Drive backup using Google's official sign-in and the limited
   `drive.file` permission. It creates one visible XPENG Analytics folder,
-  supports restore on another computer, and can update the backup while the
-  current tab remains connected.
+  supports restore on another computer, can update the backup while the
+  current tab remains connected, and retains up to three earlier recovery
+  copies before replacing the current history.
+- Optional preservation of untouched XPENG source ZIPs in the Drive
+  `Raw Files` folder. The `.xpeng` history records every source while Drive
+  keeps the smallest practical set of originals spanning the observed period,
+  with a preferred four-day overlap; replaced files are moved to Drive trash.
 - Optional GPX route import from Android or iPhone, automatic trip-level
   timestamp matching, duplicate selection, and an OpenStreetMap journey map. Moving
   across any journey chart also highlights the corresponding route position.
@@ -162,7 +180,8 @@ Read the full [privacy notes](PRIVACY.md), [security guidance](SECURITY.md), and
 | [Privacy](PRIVACY.md) | What stays local and how to handle sensitive files |
 | [Security](SECURITY.md) | Safe reporting and importer security boundaries |
 | [Architecture](docs/ARCHITECTURE.md) | Browser engine, data flow, and portable-history design |
-| [`.xpeng` v5 format](docs/XPENG_HISTORY_V5_SPEC.md) | Technical format specification for telemetry, optional GPS tracks, and saved personal charts |
+| [`.xpeng` v7 format](docs/XPENG_HISTORY_V7_SPEC.md) | Segmented long-history format, lazy detail loading, compatibility, and integrity checks |
+| [v2.2.0 beta 1 release notes](docs/RELEASE_NOTES_2.2.0-beta.1.md) | Public beta, long histories, Insights, Drive recovery, and Raw Files retention |
 | [v2.1.3 release notes](docs/RELEASE_NOTES_2.1.3.md) | Always-visible vehicle-data coverage dates |
 | [v2.1.2 release notes](docs/RELEASE_NOTES_2.1.2.md) | Retention and later matching of recent GPX recordings |
 | [v2.1.1 release notes](docs/RELEASE_NOTES_2.1.1.md) | Journey timeline and compact-layout corrections |
@@ -192,7 +211,7 @@ The normal import path is a dedicated JavaScript Web Worker that streams the
 ZIP, keeps the required signals in typed columns, and computes the dashboard in
 memory. The earlier Python/WebAssembly processor remains bundled only so that
 existing version 1 and 2 history files can still be opened. The native reader
-accepts version 3, 4, and 5 histories; new exports use version 5.
+accepts versions 3 through 7; new exports use segmented version 7.
 
 ## Open-source acknowledgement
 

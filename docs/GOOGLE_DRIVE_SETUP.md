@@ -1,9 +1,9 @@
 # Google Drive backup setup
 
-XPENG Analytics 2.1 can optionally save one portable `.xpeng` history in a
-visible **XPENG Analytics** folder in the user's own Google Drive. The static
-site uses Google Identity Services directly; there is no XPENG Analytics
-backend and no client secret.
+XPENG Analytics can optionally save one current portable `.xpeng` history and
+up to three recovery copies in a visible **XPENG Analytics** folder in the
+user's own Google Drive. The static site uses Google Identity Services
+directly; there is no XPENG Analytics backend and no client secret.
 
 ## Google Cloud configuration
 
@@ -60,10 +60,28 @@ same browser client ID. The Pages workflow exposes it to Vite as
 
 - Access tokens stay in JavaScript memory and disappear when the tab closes.
 - Tokens, Google email addresses, and passwords are never written to local
-  storage or included in `.xpeng` files.
-- The app creates/updates one `xpeng-analytics-history.xpeng` file using a
-  resumable upload and can restore it on another computer after a fresh Google
-  authorisation.
+  storage or included in `.xpeng` files. The account name and email are read
+  into tab memory only so the interface can identify the connected account.
+- The app creates/updates one current `xpeng-analytics-history.xpeng` file and
+  retains up to three app-created recovery copies. Each file exposes coverage,
+  size, save time, and history-format metadata in the restore interface.
+- If the user separately enables original-export archiving, the app creates a
+  `Raw Files` subfolder and uploads only successfully recognised XPENG ZIPs.
+  Each retained file is preserved byte for byte and marked with its SHA-256
+  digest so duplicates can be skipped. Redundant originals are moved to Drive
+  trash only after a replacement has uploaded successfully; their registry
+  entries remain inside the `.xpeng` history.
+- Original ZIP archiving is disabled by default and independent of automatic
+  `.xpeng` updates. Originals may contain VIN and complete raw telemetry and use
+  the user's Google Drive quota.
+- GPX source archiving is a second disabled-by-default preference. Recognised
+  `.gpx` files and GPX ZIPs are preserved in `Original GPX files`, deduplicated
+  by SHA-256, and never enabled automatically with XPENG ZIP archiving.
+- Uploads use a resumable session. After a recoverable interruption, the app
+  asks Google how many bytes were accepted and continues from that position.
+- Any current or recovery copy can be restored on another computer after a
+  fresh Google authorisation. Opening a recovery does not automatically
+  overwrite the current Drive backup.
 - Automatic updates operate only while the current tab remains authorised.
   A later visit may require the user to connect again.
 - Disconnecting revokes the current token when possible; it does not delete
@@ -78,8 +96,26 @@ GitHub Pages origin:
 
 1. connect and cancel once;
 2. connect and create the first backup;
-3. update it after importing another ZIP or GPX;
-4. restore it in a fresh private window or another computer;
-5. verify automatic updates while connected;
-6. disconnect, refresh, and confirm that a new authorisation is required;
-7. inspect Drive and confirm there is one visible folder and one backup file.
+3. verify account, size, coverage, last-save, and format metadata;
+4. update the backup four times and confirm that only the latest three recovery
+   copies remain alongside the current file;
+5. restore a recovery and confirm that it does not overwrite the current file;
+6. restore the current copy in a fresh private window or another computer;
+7. verify automatic updates after ZIP, GPX, and `.xpeng` imports while connected;
+8. interrupt an upload and confirm that it resumes or reports a clear error;
+9. disconnect, refresh, and confirm that a new authorisation is required;
+10. inspect Drive and confirm that every managed file is inside one visible
+    folder and was created by the application.
+11. enable original ZIP archiving, import the same valid ZIP twice, and confirm
+    that only one unchanged file appears in `Raw Files`;
+12. download that original and compare its SHA-256 digest with the selected
+    source, then delete it from the app and confirm that the `.xpeng` backup is
+    unaffected.
+13. enable GPX source archiving, import the same GPX twice, and confirm that one
+    unchanged file appears in `Original GPX files` and that disabling XPENG ZIP
+    archiving does not alter the separate GPX preference.
+14. import overlapping XPENG ZIPs and confirm that the app retains a continuous
+    source set with approximately four days of preferred overlap, while
+    redundant files appear in Drive trash and remain recoverable.
+15. export and restore `.xpeng`, then confirm its raw-file registry still lists
+    retained and retired source digests without containing the ZIP payloads.

@@ -2,6 +2,71 @@
 
 All notable public changes are documented here.
 
+## 2.2.0-beta.1 — 2026-10-27
+
+- Added an automatic original-export retention registry. Each imported XPENG
+  ZIP is recorded in the portable `.xpeng` history with its SHA-256 digest,
+  filename, byte size, observed coverage, row count, and Drive retention state.
+- Renamed the original XPENG export destination for new users to
+  `XPENG Analytics/Raw Files`. Existing `Original XPENG exports` folders remain
+  supported and are reused without moving user files.
+- Kept every retained ZIP byte for byte as supplied by XPENG. After a newer
+  original is safely uploaded, the app selects the smallest practical set of
+  source files that preserves the complete observed time range, preferring
+  four days of overlap between adjacent exports.
+- Added conservative handling for exports without trustworthy coverage: they
+  are always retained. Duplicate ZIPs continue to be skipped by SHA-256.
+- Replaced redundant originals by moving them to Google Drive trash, where
+  they remain recoverable, while preserving their registry entries and all
+  already imported telemetry in the `.xpeng` history.
+
+- Added portable-history version 7 with independently compressed monthly
+  telemetry shards. The dashboard keeps compact cross-month summaries and
+  record indexes in memory, then restores detailed journey, charging, replay,
+  and route data only for the selected month.
+- Added transparent migration of `.xpeng` versions 3–6 to the segmented v7
+  layout, continued import of new overlapping XPENG ZIPs, and preservation of
+  recent unmatched GPX recordings for later automatic matching.
+- Added a synthetic 24-month regression test plus a real v5 migration check.
+  The real 14.49 MiB test history opens as two lazy monthly shards; its compact
+  dashboard contains no detailed trip series until a record is requested.
+- Added a dedicated Insights area with personal-baseline anomaly observations,
+  automatic monthly summaries, and seasonal comparisons.
+- Added a data-coverage calendar for journeys, charging, parked telemetry,
+  tyre observations, and matched GPS, with partial coverage shown explicitly.
+- Added battery-history trends with sample counts, observation periods, and
+  confidence states for calculated capacity, relative SOH, efficiency,
+  temperature, and usable range.
+- Added local global search across journeys, charging sessions, dates, saved
+  charts, sections, and relevant settings, including keyboard navigation and
+  direct opening of matching records.
+- Added privacy-safe PNG cards for selected insights. Default exports omit
+  coordinates, route shapes, filenames, exact timestamps, and internal IDs.
+- Expanded optional Google Drive backup with the connected account, backup
+  time, size, telemetry coverage, and history-format version.
+- Added transparent restore selection for the current Drive backup and up to
+  three earlier recovery copies created before successful replacements.
+- Added explicit coverage-gap warnings, improved quota and rate-limit errors,
+  and resumable-upload recovery after an interrupted transfer.
+- Kept automatic Drive updates opt-in and limited to the authorised browser
+  session after successful XPENG ZIP, GPX, history, or saved-chart changes.
+- Added a separate, disabled-by-default option to archive successfully imported
+  original XPENG ZIPs byte for byte in Google Drive. Duplicate ZIPs are skipped
+  by their locally calculated SHA-256 digest and never mixed with `.xpeng`
+  recovery copies.
+- Added an original-export list with coverage, size, download, and explicit
+  deletion controls, plus a separate opt-in archive for recognised GPX files
+  and GPX ZIPs containing precise location data.
+- Added non-destructive manual journey groups. Users can combine two or more
+  XPENG journeys, analyse the complete outing or each original segment, and
+  see charging sessions detected during the stops between them.
+- Saved manual group definitions in portable-history version 6 and later so local,
+  persistent, exported, and Google Drive histories keep the same structure.
+- Added synthetic tests for coverage, battery history, anomalies, monthly
+  summaries, seasonal comparisons, global search, and insight-card privacy.
+- These changes passed the complete browser and Python test suites, public-tree
+  audit, and production build before the public beta release.
+
 ## 2.1.3 — 2026-10-21
 
 - Added the complete vehicle-telemetry date range beneath the XPENG Analytics

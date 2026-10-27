@@ -1,14 +1,14 @@
 {
   "name": "xpeng-analytics-web",
   "private": true,
-  "version": "2.1.3",
+  "version": "2.2.0-beta.1",
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "scripts": {
     "dev": "vite",
     "prepare:browser": "node scripts/prepare-browser-assets.mjs",
     "build": "node scripts/prepare-browser-assets.mjs && vite build",
-    "test": "node scripts/prepare-browser-assets.mjs && node scripts/test-i18n.mjs && node scripts/test-privacy-page.mjs && node scripts/test-file-selection.mjs && node scripts/test-persistent-history.mjs && node scripts/test-google-drive.mjs && node scripts/test-onboarding.mjs && node scripts/test-custom-charts.mjs && node scripts/test-data-coverage.mjs && node scripts/test-gpx.mjs && node scripts/test-route-sync.mjs && node scripts/test-replay.mjs && node scripts/test-driving-personality.mjs && node scripts/test-native-engine.mjs && node scripts/test-browser-runtime.mjs",
+    "test": "node scripts/prepare-browser-assets.mjs && node scripts/test-i18n.mjs && node scripts/test-privacy-page.mjs && node scripts/test-file-selection.mjs && node scripts/test-persistent-history.mjs && node scripts/test-raw-archive-registry.mjs && node scripts/test-google-drive.mjs && node scripts/test-onboarding.mjs && node scripts/test-custom-charts.mjs && node scripts/test-journey-groups.mjs && node scripts/test-data-coverage.mjs && node scripts/test-battery-health.mjs && node scripts/test-anomaly-detection.mjs && node scripts/test-monthly-summary.mjs && node scripts/test-seasonal-comparison.mjs && node scripts/test-global-search.mjs && node scripts/test-insight-card.mjs && node scripts/test-gpx.mjs && node scripts/test-route-sync.mjs && node scripts/test-replay.mjs && node scripts/test-driving-personality.mjs && node scripts/test-native-engine.mjs && node scripts/test-browser-runtime.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

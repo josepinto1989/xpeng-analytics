@@ -113,22 +113,52 @@ telemetry is not written to `localStorage`.
 
 Google Drive backup is an optional boundary layered on the same export path.
 After an explicit Google authorisation, React asks the worker for the current
-version 5 `.xpeng` Blob and uploads it directly to the Drive API using a
+version 7 `.xpeng` Blob and uploads it directly to the Drive API using a
 resumable session. The static app requests only `drive.file`, creates one
-visible folder and one replaceable backup, and keeps the OAuth access token in
-memory. Restore downloads the Blob and passes it through the normal validated
-history importer. No Google password, email address, refresh token, or vehicle
-payload passes through an XPENG Analytics server.
+visible folder, one current backup, and up to three app-created recovery
+copies. Before replacing the current file, Drive copies the previous version;
+older recoveries are pruned after a successful upload. File app-properties
+store only role, coverage, history version, and import count. The OAuth access
+token and connected account identity remain in memory. Restore downloads the
+selected Blob and passes it through the normal validated history importer. No
+Google password, refresh token, account identity, or vehicle payload passes
+through an XPENG Analytics server.
+
+Original-source archiving is a separate opt-in path. After the native worker has
+successfully recognised and imported an XPENG ZIP, React retains that selected
+`File` only until the import batch completes. If the option is enabled and the
+Drive session is still authorised, the original `File` is streamed unchanged
+to a **Raw Files** subfolder before the normal processed-history backup runs.
+The archive uses the SHA-256 digest already produced by the native importer to
+skip duplicates. A coverage-based selector keeps a small set of untouched ZIPs
+spanning the complete observed period, preferring four days of overlap. Files
+that become redundant are moved to Drive trash. They are never consolidated or
+rewritten. The `.xpeng` manifest stores lightweight provenance and retention
+records for every imported ZIP, including files no longer retained in Drive.
+
+GPX source preservation follows the same post-import queue but has its own
+consent preference, Drive marker, list, and **Original GPX files** subfolder.
+Only files successfully parsed as GPX sources are eligible. Their importer hash
+prevents repeated uploads, while keeping this preference separate ensures that
+permission to archive vehicle ZIPs is never treated as permission to archive
+complete location recordings.
 
 ## Portable history
 
-New exports use `xpeng-analytics-columnar-history` version 5 with the `.xpeng`
-extension. The file contains a small JSON manifest followed by individually
-gzip-compressed timeline and signal columns. Each block has its own SHA-256
-checksum, original size, and byte range. Restoring a history reads each block
-directly from its Blob range and validates the
-format, version, bounds, checksum, decompressed size, and required streams
-before rebuilding all derived analytics. Version 4 adds individually
+New exports use `xpeng-analytics-segmented-history` version 7 with the `.xpeng`
+extension. Its top-level manifest indexes independent calendar-month shards.
+Every shard contains the established compressed columnar history and a
+compressed compact dashboard summary. Opening v7 validates and loads those
+summaries while retaining monthly telemetry as Blob ranges. Detailed telemetry
+is decompressed only when a journey, charge, replay, or mapped route from that
+month is opened. Adding a ZIP rebuilds only its overlapping months.
+
+Versions 3–6 use `xpeng-analytics-columnar-history`: a small JSON manifest
+followed by individually gzip-compressed timeline and signal columns. Each
+block has its own SHA-256 checksum, original size, and byte range. Restoring an
+older history validates the format, version, bounds, checksum, decompressed
+size, and required streams before migrating it locally to monthly v7 shards.
+Version 4 adds individually
 compressed GPS time, latitude, longitude, elevation, speed, and segment blocks,
 plus GPX import provenance, the matched trip identifier, and discarded-source
 provenance. Version 5 continues to use those blocks for matched trip slices and
@@ -139,11 +169,17 @@ also adds an allow-listed `customCharts` manifest array containing only compact
 display definitions. Chart data and rendered images are never duplicated in
 the history.
 
+Version 6 adds validated manual journey-group definitions. These keep only a
+display name and stable references to existing journeys and trips. Combined
+metrics, charging stops, maps, and charts are derived again whenever the
+dashboard is rebuilt, so grouping never rewrites the original telemetry.
+
 Per-column compression avoids Base64 and SQLite overhead and lets the file stay
 close to the size of the original XPENG ZIP. Histories remain unencrypted and
 must be treated as sensitive personal files. Version 1 JSON.GZ and version 2
 SQLite/XZ histories remain importable through the compatibility processor; new
-exports always use version 5. The native reader accepts versions 3, 4, and 5.
+exports always use version 7. The native reader accepts versions 3, 4, 5, 6,
+and 7.
 
 ## Attribution
 
