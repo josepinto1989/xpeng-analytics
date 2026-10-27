@@ -63,10 +63,16 @@ export default function TutorialOverlay({ steps, onComplete, onSkip, t }) {
     return () => document.removeEventListener("keydown", keys);
   }, [index, steps.length, onComplete, onSkip]);
   const position = useMemo(() => cardPosition(rect), [rect]);
+  const spotlight = rect ? {
+    top: Math.max(6, rect.top - 6),
+    left: Math.max(6, rect.left - 6),
+    width: Math.max(0, Math.min(window.innerWidth - Math.max(6, rect.left - 6) - 6, rect.width + 12)),
+    height: Math.max(0, Math.min(window.innerHeight - Math.max(6, rect.top - 6) - 6, rect.height + 12)),
+  } : null;
   if (!step) return null;
   return <div className={`tutorial-layer ${rect ? "has-target" : "no-target"}`}>
     <div className="tutorial-blocker" aria-hidden="true" />
-    {rect ? <div className="tutorial-spotlight" style={{ top: Math.max(6, rect.top - 6), left: Math.max(6, rect.left - 6), width: Math.min(window.innerWidth - 12, rect.width + 12), height: Math.min(window.innerHeight - 12, rect.height + 12) }} aria-hidden="true" /> : null}
+    {spotlight ? <div className="tutorial-spotlight" style={spotlight} aria-hidden="true" /> : null}
     <section ref={dialogRef} className="tutorial-card" style={position} role="dialog" aria-modal="true" aria-labelledby="tutorial-title" tabIndex="-1">
       <header><span>{t("tutorialLabel")}</span><button type="button" onClick={onSkip} aria-label={t("tutorialClose")}>×</button></header>
       <div className="tutorial-step-count"><span style={{ width: `${(index + 1) / steps.length * 100}%` }} /><small>{index + 1} / {steps.length}</small></div>

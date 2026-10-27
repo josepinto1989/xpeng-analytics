@@ -152,7 +152,8 @@ nem uma avaliação de segurança.
 
 Mostra energia da bateria e da rede, eficiência, duração, potência, perdas
 estimadas, hábitos e totais AC/DC separados. Seleciona uma sessão para consultar
-a telemetria técnica.
+a telemetria técnica. A lista do histórico pode ser filtrada por Todos, AC ou
+DC; cores distintas identificam o tipo antes de abrir a sessão.
 
 A telemetria de carregamento também utiliza gráficos empilhados a toda a
 largura, mantendo a lista de sessões disponível para comparação rápida.
@@ -201,7 +202,8 @@ Transforma um histórico mais longo em quatro vistas analíticas locais:
   dos pneus ou comportamento das jornadas;
 - evolução da bateria com número de amostras elegíveis, período observado e
   estado visível de confiança dos dados;
-- resumo mensal automático comparado com o mês anterior comparável; e
+- resumo mensal automático comparado com o mês anterior comparável, com
+  gráficos de movimento diário e carregamentos AC/DC; e
 - comparações sazonais com um estado explícito de dados insuficientes quando os
   períodos disponíveis não são comparáveis.
 
@@ -210,6 +212,17 @@ leituras oficiais do BMS. É possível guardar resumos, comparações sazonais e
 anomalias selecionadas como imagens PNG preparadas para partilha. Por
 predefinição, a imagem não inclui coordenadas, percursos, nomes de ficheiros,
 horas exatas ou identificadores internos.
+Usa **OK** para esconder uma observação já revista. **Voltar a mostrar tudo**
+recupera as observações escondidas; esta preferência não remove dados.
+
+### Destaques de sempre
+
+Abre uma vista em ecrã inteiro com os melhores registos observados em todo o
+histórico disponível: velocidade máxima, potência máxima em kW e hp, jornada
+mais longa por distância e tempo, forças de aceleração/travagem/curva,
+potência de carga e energia regenerada. O tempo 0–100 km/h só aparece quando a
+telemetria contém uma aceleração contínua desde praticamente parado até 100
+km/h. **Guardar imagem** cria localmente um resumo PNG.
 
 ### Calendário de cobertura e pesquisa global
 
@@ -285,7 +298,10 @@ relatório oficial da XPENG.
 
 Explica que famílias e sinais estavam disponíveis nos ficheiros e identifica
 observações invulgares ou incompletas. Os avisos descrevem a qualidade dos
-dados; não diagnosticam o veículo.
+dados; não diagnosticam o veículo. Os alertas começam recolhidos. Os alertas
+de avanço do odómetro mostram data, intervalo e quilómetros afetados. Podem ser
+ignorados individualmente, limpos em conjunto e restaurados depois sem apagar
+nem alterar o histórico do carro.
 
 ### Dados
 

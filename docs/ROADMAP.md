@@ -65,6 +65,10 @@ remains open for real-world feedback and incremental operational improvements.
 Phase 7 has no fixed end date. It is the operating cycle for testing, feedback,
 maintenance, and incremental releases.
 
+Version 2.3 adds manageable Quality and Insights observations, richer monthly
+summary charts, charging-history filters, average consumption by estimated
+driving context, and exportable Lifetime Highlights.
+
 ### Phase 8 — Opt-in persistent local history
 
 Allow returning users to keep a working history on the same device without

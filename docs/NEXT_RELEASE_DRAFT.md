@@ -1,7 +1,8 @@
-# XPENG Analytics 2.2.2 — patch scope
+# XPENG Analytics 2.3.0 — release scope
 
-This document records the Drive, data-quality, and search corrections selected
-for the public patch. Detailed public notes live in `RELEASE_NOTES_2.2.2.md`.
+This document records the actionable observations, richer summaries, charging
+filters, and Lifetime Highlights selected for the public release. Detailed
+public notes live in `RELEASE_NOTES_2.3.0.md`.
 
 ## Completed and owner-validated
 
@@ -35,8 +36,7 @@ again after the next successfully archived XPENG ZIP.
 
 ## Release policy
 
-- Publish this scope as version 2.2.2 while clearly identifying the newest
-  functionality as still undergoing wider real-world validation.
+- Publish this scope as version 2.3.0.
 - Add every completed feature to the changelog as it is validated.
 - Continue browser, mobile, Drive, and long-history testing and correct reported
   problems through patch releases.

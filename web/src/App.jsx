@@ -205,15 +205,18 @@ export default function App() {
   const t = useMemo(() => translator(locale), [locale]);
   const tutorialSteps = useMemo(() => tutorialMode === "dashboard" ? [
     { target: [".dashboard-topbar"], title: t("tutorialDashboardTitle"), body: t("tutorialDashboardBody") },
-    { target: [".dashboard-sidebar nav", ".mobile-nav"], title: t("tutorialNavigationTitle"), body: t("tutorialNavigationBody") },
+    { target: [".period-bar", ".mobile-nav"], title: t("tutorialFiltersTitle"), body: t("tutorialFiltersBody") },
+    { target: ["[data-tutorial='driving']", ".mobile-nav"], title: t("tutorialNavigationTitle"), body: t("tutorialNavigationBody") },
+    { target: ["[data-tutorial='vehicle']", ".mobile-nav"], title: t("tutorialVehicleTitle"), body: t("tutorialVehicleBody") },
     { target: ["[data-tutorial='tools']", ".mobile-nav"], title: t("tutorialToolsTitle"), body: t("tutorialToolsBody") },
     { target: [".topbar-data-action"], title: t("tutorialMoreDataTitle"), body: t("tutorialMoreDataBody") },
+    { target: ["[data-tutorial='data']", ".mobile-nav"], title: t("tutorialDataTitle"), body: t("tutorialDataBody") },
     { target: [".settings-trigger"], title: t("tutorialSettingsTitle"), body: t("tutorialSettingsBody") },
-    { target: [".privacy-mini", ".settings-trigger"], title: t("tutorialHistoryTitle"), body: t("tutorialHistoryBody") },
   ] : [
     { target: [".hero-copy"], title: t("tutorialWelcomeTitle"), body: t("tutorialWelcomeBody") },
     { target: [".data-source-card"], title: t("tutorialGetDataTitle"), body: t("tutorialGetDataBody") },
     { target: [".landing-drop-zone"], title: t("tutorialImportTitle"), body: t("tutorialImportBody") },
+    { target: [".start-options"], title: t("tutorialContinueTitle"), body: t("tutorialContinueBody") },
     { target: [".gpx-next-step"], title: t("tutorialPortableTitle"), body: t("tutorialPortableBody") },
   ], [tutorialMode, t]);
 

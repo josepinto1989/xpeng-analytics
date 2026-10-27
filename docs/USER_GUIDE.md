@@ -146,7 +146,8 @@ safety assessment.
 
 Shows battery and grid energy, efficiency, duration, power, estimated losses,
 charging habits, and separate AC/DC totals. Select a session to inspect its
-technical telemetry.
+technical telemetry. The history list can be filtered to All, AC, or DC;
+distinct colours make the charging type visible before opening a session.
 
 Charging telemetry also uses stacked full-width charts while the session list
 remains available for quick comparison between charges.
@@ -194,7 +195,7 @@ Turns a longer history into four local analytical views:
 - battery-history trends with the eligible sample count, observation period,
   and a visible data-confidence state;
 - an automatic monthly summary with comparisons against the preceding
-  comparable month; and
+  comparable month, including daily movement and AC/DC charging charts; and
 - seasonal comparisons that show an explicit insufficient-data state when the
   available periods are not comparable.
 
@@ -202,6 +203,17 @@ These observations are software comparisons, not fault diagnoses or official
 BMS health readings. Selected summaries, seasonal comparisons, and anomaly
 observations can be saved as privacy-safe PNG cards. The default image excludes
 coordinates, route shapes, filenames, exact timestamps, and internal IDs.
+Use **OK** to hide an observation that has been reviewed. **Show everything
+again** restores hidden observations; this preference does not remove data.
+
+### Lifetime Highlights
+
+Opens a fullscreen view of the best records observed across the complete
+available history: top speed, peak drive power in kW and hp, longest journey
+by distance and time, acceleration/braking/cornering forces, charging power,
+and regenerated energy. An observed 0–100 km/h time is shown only when one
+continuous acceleration from almost stationary to 100 km/h exists in the
+telemetry. Use **Save image** to create a local PNG summary.
 
 ### Coverage calendar and global search
 
@@ -273,7 +285,10 @@ official XPENG report.
 
 Explains which signal families and fields were available in the imported files
 and flags unusual or incomplete observations. Warnings describe data quality;
-they do not diagnose the vehicle.
+they do not diagnose the vehicle. Quality alerts start collapsed. Odometer-gap
+alerts include their date, time interval, and affected distance. Alerts can be
+dismissed individually, cleared together, and restored later without deleting
+or changing the vehicle history.
 
 ### Data
 

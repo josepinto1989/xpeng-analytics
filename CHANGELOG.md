@@ -4,6 +4,23 @@ All notable public changes are documented here.
 
 ## Unreleased
 
+## 2.3.0 — 2026-10-27
+
+- Added a fullscreen Lifetime Highlights view with top speed, peak drive power
+  in kW and hp, longest journeys, strongest measured forces, highest charging
+  power, recovered energy, and a conservative observed 0–100 km/h result.
+- Added a locally generated PNG highlights card suitable for sharing.
+- Quality alerts now open collapsed, show the date and affected distance for
+  odometer gaps, and can be dismissed, cleared, or restored without changing
+  the underlying vehicle history.
+- Personal observations can be marked as seen and restored later.
+- Added daily movement and AC/DC charging charts to monthly summaries.
+- Added All, AC, and DC filters plus clearer colour labels to charging history.
+- Added average consumption to the driving-context comparison table.
+- Google Drive backup status now shows the exact save date and time.
+- Rebuilt the first-use guide around the current navigation, filters,
+  Highlights, Quality, Data, backup, and settings flows.
+
 ## 2.2.2 — 2026-10-27
 
 - Keep only the latest processed `.xpeng` backup in Google Drive; obsolete

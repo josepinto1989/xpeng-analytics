@@ -71,8 +71,14 @@ storage destination controlled by the user.
   charging, parked telemetry, tyre observations, and matched GPS.
 - A dedicated Insights area with personal-baseline anomaly observations,
   battery-history confidence, automatic monthly summaries, and seasonal
-  comparisons. Calculated observations remain clearly separate from official
-  XPENG or BMS readings.
+  comparisons. Monthly summaries include compact distance, consumption, and
+  AC/DC charging charts. Observations can be marked as seen and restored;
+  calculated observations remain separate from official XPENG or BMS readings.
+- A fullscreen Lifetime Highlights view with the strongest records found in
+  the available history, including top speed, peak drive power in kW and hp,
+  longest journeys, measured g-forces, and an observed 0–100 km/h result when
+  the telemetry contains one complete acceleration. The view exports a local
+  PNG card for sharing.
 - Local global search across journeys, charging sessions, dates, saved charts,
   sections, and settings, with keyboard access and direct navigation.
 - Privacy-safe PNG cards for selected insights. Default cards omit route
@@ -81,7 +87,8 @@ storage destination controlled by the user.
   energy, regeneration, consumption, and confidence. These categories are
   software estimates and do not identify the actual road.
 - Data-quality coverage, signal availability, and gaps in the exported
-  telemetry.
+  telemetry. Odometer-gap alerts include their date and affected distance and
+  can be dismissed, cleared, or restored without removing any vehicle data.
 - A bilingual PDF report for a selected period, including optional estimated
   electricity costs, AC/DC use, regeneration, peak charging power, and useful
   journey comparisons for company-car or expense reporting.
@@ -180,6 +187,7 @@ Read the full [privacy notes](PRIVACY.md), [security guidance](SECURITY.md), and
 | [Security](SECURITY.md) | Safe reporting and importer security boundaries |
 | [Architecture](docs/ARCHITECTURE.md) | Browser engine, data flow, and portable-history design |
 | [`.xpeng` v7 format](docs/XPENG_HISTORY_V7_SPEC.md) | Segmented long-history format, lazy detail loading, compatibility, and integrity checks |
+| [v2.3.0 release notes](docs/RELEASE_NOTES_2.3.0.md) | Lifetime highlights, manageable observations, monthly charts, and charging filters |
 | [v2.2.2 release notes](docs/RELEASE_NOTES_2.2.2.md) | Session source cache, latest-only Drive backup, telemetry-gap detection, and quality/search corrections |
 | [v2.2.1 release notes](docs/RELEASE_NOTES_2.2.1.md) | One-day Raw Files overlap and automatic re-evaluation on the next ZIP import |
 | [v2.2.0 release notes](docs/RELEASE_NOTES_2.2.0.md) | Long histories, Insights, Drive recovery, and Raw Files retention |

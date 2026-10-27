@@ -14,6 +14,11 @@ The **Data** page shows its size and dates and provides a permanent delete
 action. Browser or operating-system cleanup may also remove it, so a separately
 exported `.xpeng` file remains the recommended backup.
 
+Small interface preferences such as language, units, completed tutorial state,
+and dismissed Quality or Insights observations may be stored in browser local
+storage. Dismissal identifiers describe the observation, not the underlying
+telemetry; clearing them only restores the item in the interface.
+
 Google Drive backup is a separate, optional action. When the user connects
 Google Drive and chooses to save or enables session auto-update, the browser
 sends the generated `.xpeng` file directly to Google's Drive API and stores it
@@ -62,7 +67,7 @@ patterns, charging behaviour, and other personal information. Users should
 store exported histories as sensitive files and should not attach them to bug
 reports or commit them to Git.
 
-Version 6 portable histories contain normalised telemetry, model information
+Version 7 portable histories contain normalised telemetry, model information
 when available, import provenance such as source filenames and archive hashes,
 and validated personal-chart definitions. If the user imports GPX data, the
 same history also contains precise timestamps and coordinates for route slices

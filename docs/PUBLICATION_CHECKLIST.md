@@ -1,5 +1,23 @@
 # Publication checklist
 
+## v2.3.0 — 2026-10-27
+
+- [x] Odometer-gap alerts display date, interval, and affected distance.
+- [x] Quality alerts are collapsed initially and can be dismissed, cleared,
+  and restored without modifying imported telemetry.
+- [x] Personal observations can be marked as seen and restored.
+- [x] Monthly summaries include daily movement and AC/DC charging charts.
+- [x] Charging history supports All, AC, and DC filters with distinct colours.
+- [x] Driving-context rows include average consumption.
+- [x] Google Drive backup status includes date and time, and the revised guide
+  targets the current desktop and mobile interface.
+- [x] Lifetime Highlights and the local PNG export include only observed or
+  explicitly unavailable records; 0–100 is never inferred from an incomplete run.
+- [x] Translation parity, browser tests, production build, public-tree audit,
+  and documentation were reviewed before publication.
+- [ ] GitHub Quality and Pages workflows, deployed version, and `v2.3.0` tag
+  verified after publication.
+
 ## v2.2.2 — 2026-10-27
 
 - [x] Imported XPENG ZIP and GPX originals remain available to Drive archiving
