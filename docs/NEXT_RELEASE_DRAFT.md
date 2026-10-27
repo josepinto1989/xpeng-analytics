@@ -1,8 +1,9 @@
-# XPENG Analytics 2.3.0 — release scope
+# XPENG Analytics 2.4.0 — release scope
 
 This document records the actionable observations, richer summaries, charging
-filters, and Lifetime Highlights selected for the public release. Detailed
-public notes live in `RELEASE_NOTES_2.3.0.md`.
+filters, ownership metadata, report exports, GPS CSV, and Drive refresh selected
+for the public release. Detailed public notes live in
+`RELEASE_NOTES_2.4.0.md`.
 
 ## Completed and owner-validated
 
@@ -36,7 +37,7 @@ again after the next successfully archived XPENG ZIP.
 
 ## Release policy
 
-- Publish this scope as version 2.3.0.
+- Publish this scope as version 2.4.0.
 - Add every completed feature to the changelog as it is validated.
 - Continue browser, mobile, Drive, and long-history testing and correct reported
   problems through patch releases.

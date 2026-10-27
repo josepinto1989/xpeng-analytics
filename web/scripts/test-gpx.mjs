@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { detectAdditionalFileKind, emptyState, exportHistory, importGps, importHistory, isNativeHistory } from "../src/engine/native-engine.js";
-import { gpsSnapshot, parseGpxText } from "../src/engine/gpx.js";
+import { gpsSnapshot, looksLikeGpsCsv, parseGpsCsvText, parseGpxText } from "../src/engine/gpx.js";
+import { CURRENT_HISTORY_VERSION } from "../src/history-version.js";
 
 const start = Date.parse("2026-10-15T07:23:00Z") / 1000;
 function storedZip(files) {
@@ -30,12 +31,19 @@ function fixture({ creator = "BasicAirData GPS Logger", interval = 1, offset = 0
 
 const android = parseGpxText(fixture(), { sourceName: "android.gpx", sourceSha256: "a".repeat(64) });
 const iphone = parseGpxText(fixture({ creator: "Open GPX Tracker", interval: 4, offset: 2 }), { sourceName: "iphone.gpx", sourceSha256: "b".repeat(64) });
+const gpsCsv = ["timestamp,latitude,longitude,elevation,speed_kmh", ...Array.from({ length: 181 }, (_, index) => `${new Date((start + index) * 1000).toISOString()},38.${700000 + index},-9.${100000 + index},${100 + index / 10},36`)].join("\n");
+assert.equal(looksLikeGpsCsv(gpsCsv), true);
+const csvTrack = parseGpsCsvText(gpsCsv, { sourceName: "logger.csv", sourceSha256: "9".repeat(64) });
+assert.equal(csvTrack[0].stats.points, 181);
+assert.equal(Math.round(csvTrack[0].speedMps[0]), 10, "CSV speed in km/h must be converted to m/s");
 assert.equal(android.length, 1);
 assert.equal(android[0].stats.points, 181);
 assert.ok(Number.isNaN(android[0].speedMps[0]), "missing GPX speed must stay unavailable");
 assert.equal(iphone[0].creator, "Open GPX Tracker");
 assert.equal(await detectAdditionalFileKind(new Blob([fixture()]), "track.gpx"), "gps");
+assert.equal(await detectAdditionalFileKind(new Blob([gpsCsv]), "track.csv"), "gps");
 assert.equal(await detectAdditionalFileKind(new Blob([storedZip({ "routes/track.gpx": fixture() })]), "routes.zip"), "gps");
+assert.equal(await detectAdditionalFileKind(new Blob([storedZip({ "routes/track.csv": gpsCsv })]), "routes-csv.zip"), "gps");
 assert.equal(await detectAdditionalFileKind(new Blob([storedZip({ "driving_operation.csv": "x", "driving_power_energy.csv": "x", "driving_status.csv": "x" })]), "xpeng.zip"), "xpeng");
 
 const trips = [{ tripId: "trip-1", startedAtUtc: new Date(start * 1000).toISOString(), endedAtUtc: new Date((start + 180) * 1000).toISOString(), distanceKm: android[0].stats.distanceKm, avgSpeedKmh: android[0].stats.distanceKm / .05 }];
@@ -48,6 +56,22 @@ assert.equal(matched.selectedTracks.length, 1, "only the selected route slice sh
 const rebuiltMatch = gpsSnapshot(matched.selectedTracks, journeys, trips);
 assert.equal(rebuiltMatch.gps.duplicateCount, 1, "discarded duplicate provenance must survive dashboard rebuilds");
 assert.deepEqual(rebuiltMatch.selectedTracks[0].ignoredSourceIds, matched.selectedTracks[0].ignoredSourceIds);
+
+const clockShifted = parseGpxText(fixture({ offset: 3600 }), { sourceName: "clock-shifted.gpx", sourceSha256: "8".repeat(64) });
+const clockAdjustedMatch = gpsSnapshot(clockShifted, journeys, trips);
+assert.equal(clockAdjustedMatch.gps.matchedCount, 1, "whole-hour GPS clock drift should be corrected automatically");
+assert.equal(clockAdjustedMatch.journeys[0].gps.diagnostics.clockOffsetMinutes, -60);
+assert.equal(clockAdjustedMatch.gps.diagnosticCounts.clockAdjusted, 1);
+
+const sparseTrack = parseGpxText(fixture({ interval: 20 }), { sourceName: "sparse.gpx", sourceSha256: "7".repeat(64) });
+const sparseMatch = gpsSnapshot(sparseTrack, journeys, trips);
+assert.equal(sparseMatch.journeys[0].gps.diagnostics.sparse, true);
+assert.equal(sparseMatch.gps.diagnosticCounts.sparse, 1);
+
+const partialTrack = parseGpxText(fixture({ duration: 90 }), { sourceName: "partial.gpx", sourceSha256: "6".repeat(64) });
+const partialMatch = gpsSnapshot(partialTrack, journeys, trips);
+assert.equal(partialMatch.journeys[0].gps.diagnostics.partial, true);
+assert.equal(partialMatch.gps.diagnosticCounts.partial, 1);
 
 const incompleteDuplicate = parseGpxText(fixture({ creator: "Interrupted logger", interval: 4, duration: 60 }), { sourceName: "incomplete.gpx", sourceSha256: "f".repeat(64) });
 const withIncompleteDuplicate = gpsSnapshot([...android, ...incompleteDuplicate], journeys, trips);
@@ -80,11 +104,14 @@ const imported = await importGps(emptyState(), new Blob([fixture()]), "android.g
 assert.equal(imported.trackCount, 1);
 assert.equal(imported.state.gpsImports[0].trackCount, 1);
 assert.equal(imported.state.gpsImports[0].pointCount, 181);
+const importedCsv = await importGps(emptyState(), new Blob([gpsCsv]), "logger.csv", {}, () => {});
+assert.equal(importedCsv.trackCount, 1);
+assert.equal(importedCsv.state.gpsImports[0].pointCount, 181);
 const exportableState = { ...imported.state, gpsSelectedTracks: matched.selectedTracks, streams: Object.fromEntries(["operation", "energy", "status"].map((family) => [family, { time: new Uint32Array([start]), columns: {}, stats: { rows: 1 } }])) };
 const history = await exportHistory(exportableState, () => {});
 assert.ok(isNativeHistory(new Uint8Array(await history.slice(0, 8).arrayBuffer())));
 const restored = await importHistory(history, () => {});
-assert.equal(restored.version, 7);
+assert.equal(restored.version, CURRENT_HISTORY_VERSION);
 assert.equal(restored.gpsImports.length, 1, "GPX import provenance must survive segmented .xpeng export and restore");
 assert.equal(restored.shards.length, 1, "the GPX recording must remain in its monthly shard");
 

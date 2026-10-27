@@ -1,5 +1,20 @@
 # Publication checklist
 
+## v2.4.0 — 2026-10-27
+
+- [x] Journey/charging classifications and tariffs survive `.xpeng`, browser,
+  and Google Drive round trips.
+- [x] PDF chart selection and labelled CSV exports have automated coverage.
+- [x] GPS CSV, ZIP discovery, matching diagnostics, and context estimates pass.
+- [x] Older Drive histories can be refreshed only with continuous RAW coverage;
+  metadata and GPS are preserved and sources are processed sequentially.
+- [x] Resumable Drive uploads report progress and reject unacknowledged chunks.
+- [x] Translation parity, full browser tests, production build, real-history
+  import, console review, and documentation pass locally.
+- [x] Local Lighthouse audit: Accessibility 100, Best Practices 100, SEO 100.
+- [ ] GitHub Quality and Pages workflows, deployed version, and `v2.4.0` tag
+  verified after publication.
+
 ## v2.3.0 — 2026-10-27
 
 - [x] Odometer-gap alerts display date, interval, and affected distance.

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { buildSnapshot, emptyState, exportHistory, importArchive, importGps, importHistory, isNativeHistory, loadRecordDetails, odometerCoverageGaps, setCustomCharts, setJourneyGroups, setRawArchives } from "../src/engine/native-engine.js";
+import { buildSnapshot, emptyState, exportHistory, importArchive, importGps, importHistory, isNativeHistory, loadRecordDetails, odometerCoverageGaps, rebuildHistoryFromSources, setCustomCharts, setJourneyGroups, setRawArchives } from "../src/engine/native-engine.js";
+import { CURRENT_HISTORY_VERSION } from "../src/history-version.js";
 
 async function hydrateSnapshot(state, snapshot) {
   const details = await loadRecordDetails(state, { journeyIds: snapshot.journeys.map((row) => row.journeyId), chargeIds: snapshot.charges.map((row) => row.chargeId) });
@@ -92,6 +93,9 @@ const laterImport = await importArchive(pendingRestored, futureSource.buffer.sli
 const laterSnapshot = buildSnapshot(laterImport.state);
 assert.equal(laterSnapshot.gps.matchedTripCount, 1, "a retained route must be matched automatically when later XPENG telemetry arrives");
 assert.ok(laterSnapshot.journeys.some((journey) => journey.gps), "the later journey must expose its matched GPS route");
+const mappedHistory = await exportHistory(laterImport.state);
+const refreshedWithCarriedGps = await rebuildHistoryFromSources(mappedHistory, [new File([source], "fixture.zip", { type: "application/zip" }), new File([futureSource], "future-fixture.zip", { type: "application/zip" })], [], () => {}, { mode: "desktop", memoryBudgetBytes: 2_000_000_000 });
+assert.equal(buildSnapshot(refreshedWithCarriedGps).gps.matchedTripCount, 1, "RAW refresh must preserve GPS routes when the original GPX is not archived");
 
 const oldGpxStart = 1_797_000_000 - 6 * 24 * 60 * 60;
 const oldGpx = `<?xml version="1.0"?><gpx version="1.1" creator="Old test"><trk><trkseg><trkpt lat="38.70" lon="-9.10"><time>${new Date(oldGpxStart * 1000).toISOString()}</time></trkpt><trkpt lat="38.7001" lon="-9.1001"><time>${new Date((oldGpxStart + 60) * 1000).toISOString()}</time></trkpt></trkseg></trk></gpx>`;
@@ -110,8 +114,8 @@ assert.equal(buildSnapshot(stateWithPreferences).journeyGroups.length, 1, "manua
 const history = await exportHistory(stateWithRawArchive);
 assert.ok(isNativeHistory(new Uint8Array(await history.slice(0, 8).arrayBuffer())), "expected native history signature");
 const restored = await importHistory(history);
-assert.equal(restored.version, 7);
-assert.equal(restored.sourceHistoryVersion, 7, "the imported history source version must be preserved for migrations and onboarding");
+assert.equal(restored.version, CURRENT_HISTORY_VERSION);
+assert.equal(restored.sourceHistoryVersion, CURRENT_HISTORY_VERSION, "the imported history source version must be preserved for migrations and onboarding");
 assert.equal(restored.customCharts[0].id, "distance", "custom chart definitions must survive the .xpeng round trip");
 assert.equal(restored.journeyGroups[0].groupId, "manual-test", "manual journey groups must survive the .xpeng round trip");
 assert.equal(restored.rawArchives[0].driveStatus, "retained", "raw original retention state must survive the .xpeng round trip");
@@ -124,6 +128,20 @@ assert.equal(restoredSnapshot.trips[0].series[0].rearMotorTorqueNm, snapshot.tri
 const historyBytes = new Uint8Array(await history.arrayBuffer());
 const segmentedManifestLength = new DataView(historyBytes.buffer, historyBytes.byteOffset + 8, 4).getUint32(0, false);
 const segmentedManifest = JSON.parse(new TextDecoder().decode(historyBytes.subarray(12, 12 + segmentedManifestLength)));
+const versionSevenManifest = new TextEncoder().encode(JSON.stringify({ ...segmentedManifest, version: 7 }));
+const versionSevenHeader = historyBytes.slice(0, 8), versionSevenLength = new Uint8Array(4);
+versionSevenHeader[7] = 7;
+new DataView(versionSevenLength.buffer).setUint32(0, versionSevenManifest.byteLength, false);
+const versionSevenHistory = new Blob([versionSevenHeader, versionSevenLength, versionSevenManifest, historyBytes.subarray(12 + segmentedManifestLength)]);
+const versionSevenRestored = await importHistory(versionSevenHistory);
+assert.equal(versionSevenRestored.sourceHistoryVersion, 7, "the previous segmented format must remain readable");
+const refreshed = await rebuildHistoryFromSources(versionSevenHistory, [new File([source], "fixture.zip", { type: "application/zip" })], [], () => {}, { mode: "desktop", memoryBudgetBytes: 2_000_000_000 });
+assert.equal(refreshed.version, CURRENT_HISTORY_VERSION);
+assert.equal(refreshed.sourceHistoryVersion, CURRENT_HISTORY_VERSION);
+assert.equal(buildSnapshot(refreshed).trips.length, snapshot.trips.length, "RAW refresh must rebuild current analytics");
+assert.equal(refreshed.customCharts[0].id, "distance", "RAW refresh must preserve personal charts");
+assert.equal(refreshed.journeyGroups[0].groupId, "manual-test", "RAW refresh must preserve journey groups");
+assert.equal(refreshed.rawArchives[0].driveFileId, "drive-original-1", "RAW refresh must preserve source archive references");
 const firstShard = segmentedManifest.shards[0].payload;
 const legacyBytes = historyBytes.slice(12 + segmentedManifestLength + firstShard.offset, 12 + segmentedManifestLength + firstShard.offset + firstShard.bytes);
 const originalManifestLength = new DataView(legacyBytes.buffer, legacyBytes.byteOffset + 8, 4).getUint32(0, false);
@@ -137,7 +155,7 @@ olderHeader[7] = 4;
 new DataView(olderLength.buffer).setUint32(0, olderManifestBytes.byteLength, false);
 const olderHistory = new Blob([olderHeader, olderLength, olderManifestBytes, legacyBytes.subarray(12 + originalManifestLength)]);
 const olderRestored = await importHistory(olderHistory);
-assert.equal(olderRestored.version, 7);
+assert.equal(olderRestored.version, CURRENT_HISTORY_VERSION);
 assert.equal(olderRestored.sourceHistoryVersion, 4, "older portable histories must retain their original source version");
 const olderDetails = await loadRecordDetails(olderRestored, { journeyIds: buildSnapshot(olderRestored).journeys.map((row) => row.journeyId) });
 assert.ok(olderDetails.trips.every((trip) => trip.series.every((row) => row.steeringAngleDeg == null)), "signals absent from older histories must be restored as unavailable");

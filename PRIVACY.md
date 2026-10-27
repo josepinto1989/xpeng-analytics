@@ -67,9 +67,10 @@ patterns, charging behaviour, and other personal information. Users should
 store exported histories as sensitive files and should not attach them to bug
 reports or commit them to Git.
 
-Version 7 portable histories contain normalised telemetry, model information
+Version 8 portable histories contain normalised telemetry, model information
 when available, import provenance such as source filenames and archive hashes,
-and validated personal-chart definitions. If the user imports GPX data, the
+validated personal-chart definitions, journey/charging classifications, and
+tariff definitions used for estimated costs. If the user imports GPX data, the
 same history also contains precise timestamps and coordinates for route slices
 automatically matched to XPENG trips. Complete unmatched recordings are also
 retained while they end within five days of the latest imported vehicle

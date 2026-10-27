@@ -113,7 +113,7 @@ telemetry is not written to `localStorage`.
 
 Google Drive backup is an optional boundary layered on the same export path.
 After an explicit Google authorisation, React asks the worker for the current
-version 7 `.xpeng` Blob and uploads it directly to the Drive API using a
+version 8 `.xpeng` Blob and uploads it directly to the Drive API using a
 resumable session. The static app requests only `drive.file`, creates one
 visible folder and one current backup. Older recovery copies created by prior
 versions are pruned after a successful upload. File app-properties
@@ -144,10 +144,10 @@ complete location recordings.
 
 ## Portable history
 
-New exports use `xpeng-analytics-segmented-history` version 7 with the `.xpeng`
+New exports use `xpeng-analytics-segmented-history` version 8 with the `.xpeng`
 extension. Its top-level manifest indexes independent calendar-month shards.
 Every shard contains the established compressed columnar history and a
-compressed compact dashboard summary. Opening v7 validates and loads those
+compressed compact dashboard summary. Opening v8 validates and loads those
 summaries while retaining monthly telemetry as Blob ranges. Detailed telemetry
 is decompressed only when a journey, charge, replay, or mapped route from that
 month is opened. Adding a ZIP rebuilds only its overlapping months.
@@ -156,7 +156,7 @@ Versions 3–6 use `xpeng-analytics-columnar-history`: a small JSON manifest
 followed by individually gzip-compressed timeline and signal columns. Each
 block has its own SHA-256 checksum, original size, and byte range. Restoring an
 older history validates the format, version, bounds, checksum, decompressed
-size, and required streams before migrating it locally to monthly v7 shards.
+size, and required streams before migrating it locally to monthly v8 shards.
 Version 4 adds individually
 compressed GPS time, latitude, longitude, elevation, speed, and segment blocks,
 plus GPX import provenance, the matched trip identifier, and discarded-source
@@ -173,12 +173,20 @@ display name and stable references to existing journeys and trips. Combined
 metrics, charging stops, maps, and charts are derived again whenever the
 dashboard is rebuilt, so grouping never rewrites the original telemetry.
 
+Version 7 introduced the monthly segmented layout. Version 8 keeps that shard
+structure and adds validated journey/charging classifications and tariff
+definitions. When an older Drive backup is opened, the UI can offer an explicit
+local rebuild from retained RAW sources. The rebuild is allowed only when the
+source intervals continuously cover the backup period, processes one source at
+a time, preserves personal metadata and GPS, and uploads a replacement only
+after successful completion.
+
 Per-column compression avoids Base64 and SQLite overhead and lets the file stay
 close to the size of the original XPENG ZIP. Histories remain unencrypted and
 must be treated as sensitive personal files. Version 1 JSON.GZ and version 2
 SQLite/XZ histories remain importable through the compatibility processor; new
-exports always use version 7. The native reader accepts versions 3, 4, 5, 6,
-and 7.
+exports always use version 8. The native reader accepts versions 3, 4, 5, 6,
+7, and 8.
 
 ## Attribution
 

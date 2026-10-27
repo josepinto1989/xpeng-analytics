@@ -128,6 +128,11 @@ apenas os segmentos originais, pelo que o carregamento não é tratado como
 consumo negativo. As definições são guardadas nos históricos `.xpeng`
 exportados, locais e do Google Drive.
 
+Usa a classificação para marcar uma jornada como pessoal, profissional,
+deslocação habitual ou com uma etiqueta personalizada. Esta informação não
+altera a telemetria XPENG e permanece disponível na pesquisa, relatórios, CSV
+e futuros restauros do `.xpeng`.
+
 A jornada selecionada utiliza gráficos empilhados a toda a largura. A lista de
 jornadas continua disponível na área de detalhe para facilitar comparações.
 
@@ -154,6 +159,10 @@ Mostra energia da bateria e da rede, eficiência, duração, potência, perdas
 estimadas, hábitos e totais AC/DC separados. Seleciona uma sessão para consultar
 a telemetria técnica. A lista do histórico pode ser filtrada por Todos, AC ou
 DC; cores distintas identificam o tipo antes de abrir a sessão.
+
+Também podes categorizar carregamentos como casa, trabalho, público ou
+personalizado. Quando existe uma tarifa de eletricidade ativa, a aplicação
+estima o custo com base na energia disponível. Não é uma fatura nem recibo.
 
 A telemetria de carregamento também utiliza gráficos empilhados a toda a
 largura, mantendo a lista de sessões disponível para comparação rápida.
@@ -287,6 +296,10 @@ Podes indicar:
 - um preço médio da eletricidade para calcular custos estimados; e
 - uma referência como condutor, empresa ou centro de custo.
 
+Também podes incluir My Charts guardados, resumos mensais e Destaques de
+sempre, ou exportar um CSV compacto com jornadas classificadas e carregamentos
+categorizados.
+
 Se existirem jornadas com GPX no período, podes incluir os respetivos traçados
 no PDF. Estes diagramas são compostos localmente e não descarregam um mapa de
 fundo online.
@@ -310,6 +323,11 @@ resumo das associações GPS automáticas, substituir a sessão por um históric
 exportar a sessão atual, consultar os
 ficheiros importados ou limpar a sessão. Inclui também os controlos opcionais
 de histórico local persistente.
+
+Ficheiros GPS CSV reconhecidos podem ser importados diretamente ou dentro de
+um ZIP. A associação continua automática pelos timestamps; os diagnósticos
+assinalam correspondências parciais, registos esparsos e possíveis diferenças
+de relógio.
 
 ## 6. Filtros e apresentação
 
@@ -400,6 +418,12 @@ Se um envio retomável for interrompido, a aplicação confirma a posição acei
 pela Google e continua quando isso é possível. Falta de espaço, limite
 temporário, autorização expirada e ficheiro inexistente continuam a produzir
 mensagens claras em vez de uma falsa confirmação de sucesso.
+
+Ao abrir uma cópia antiga do Drive, a aplicação pode propor a atualização para
+os cálculos mais recentes. A reconstrução exige autorização explícita, confirma
+cobertura RAW contínua, processa um ficheiro de cada vez, preserva GPS e dados
+pessoais e só substitui a cópia depois de terminar com sucesso. Também podes
+abrir o histórico existente sem o atualizar.
 
 A página Dados também pode assinalar pausas longas entre os períodos cobertos
 pelos ficheiros XPENG importados. São **possíveis falhas de importação**, não

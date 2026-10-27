@@ -1,6 +1,96 @@
 # Roadmap
 
-## Completed
+## Status after v2.4.0
+
+The browser application has completed and publicly released the core work from
+phases 1–17: local import, portable and remembered history, detailed analytics,
+long-term trends, GPS maps, My Charts, journey replay, consolidated navigation,
+guided onboarding, Google Drive backup and source archiving, Insights,
+long-history sharding, manual journey grouping, data-gap warnings, and Lifetime
+Highlights.
+
+Phases 7 and 10 remain open only for compatibility, performance, and map-format
+improvements. They are not blockers for the current public product.
+
+## Next implementation order
+
+### Next 1 — Ownership, expenses, and useful labels
+
+**Status: implemented, owner-validated, and released in v2.4.0.**
+
+This is the recommended next product phase because it improves everyday use,
+company-car reporting, search, and PDFs without requiring additional vehicle
+signals or location data.
+
+1. Add journey labels: personal, business, commute, and custom.
+2. Add charging categories: home, work, public, and custom.
+3. Add reusable electricity tariffs, beginning with a simple flat rate.
+4. Calculate estimated cost per charge, month, distance unit, and category.
+5. Add label/category filters to journeys, charging, search, Insights, monthly
+   summaries, and reports.
+6. Preserve labels, categories, and tariff definitions in `.xpeng`, remembered
+   history, and Google Drive restore.
+7. Add business/personal distance and estimated-cost summaries to PDF and CSV.
+
+### Next 2 — Report and My Charts integration
+
+**Status: implemented, owner-validated, and released in v2.4.0.**
+
+1. Let users select saved My Charts for inclusion in a PDF report.
+2. Add a report preview and reliable page breaks for selected charts.
+3. Allow selected monthly summaries and Lifetime Highlights in reports.
+4. Add a compact CSV summary for labelled journeys and categorized charges.
+
+### Next 3 — Advanced exports and encrypted history
+
+1. Add local consolidated CSV export for recognised operation, energy, and
+   status streams using the production parser and deduplication rules.
+2. Include a manifest with coverage, checksums, conflicts, and skipped inputs.
+3. Stream large exports so multi-year histories remain practical.
+4. Research an optional password-encrypted `.xpeng` container using versioned,
+   authenticated Web Crypto primitives.
+5. Validate wrong passwords, corruption, recovery, large files, and browser
+   compatibility before offering encrypted Google Drive backups.
+
+### Next 4 — GPS and map refinements
+
+**Status: implemented, owner-validated, and released in v2.4.0.**
+
+1. Add validated CSV GPS import for loggers that cannot export GPX. **Done
+   locally**, including direct files and ZIPs containing recognised GPS CSVs.
+2. Add a clearly labelled software estimate of urban/road/motorway context
+   from matched route speeds while keeping GPS optional. A future road-class
+   implementation must use a suitable routing dataset rather than the public
+   OpenStreetMap tile service. **Done locally for the speed-based estimate.**
+3. Improve diagnostics for clock drift, sparse recordings, and partial matches.
+   **Done locally**, with journey-level warnings and aggregate counts in Data.
+4. Research a legally compatible offline basemap for a future desktop app;
+   never bulk-download the standard OpenStreetMap tile service. **Research
+   item retained for the native-app phase.**
+
+### Later — Multi-vehicle and native applications
+
+- Investigate isolated multi-vehicle histories only if owners request them.
+- Package the shared interface and engine for Windows, macOS, and Linux.
+- Keep native analysis local and usable offline, except for optional maps or
+  Google Drive.
+- Follow platform signing and permission requirements and publish reproducible,
+  signed artefacts.
+
+## Continuous work
+
+- Test more XPENG models, countries, software versions, and time zones.
+- Monitor import speed, memory use, long histories, and mobile behaviour in
+  Firefox, Chrome, and Edge.
+- Keep detailed records lazily loaded and long-running progress responsive.
+- Review privacy, security, accessibility, dependencies, and bilingual text
+  before every public release.
+- Treat gaps, battery values, driving context, costs, anomalies, and performance
+  records as observations rather than official vehicle claims.
+
+## Historical phase detail
+
+### Original completed foundation
 
 ### Phase 1 — Public-project foundation
 
@@ -35,7 +125,7 @@ Validate the deployed application in Firefox, Chrome, and Edge; complete a
 real 30-day import; verify populated battery charts; export and restore a
 JSON.GZ history; and publish the first stable release.
 
-## Active and planned
+### Original implementation phases
 
 ### Phase 7 — User acceptance and operational improvements
 
@@ -74,10 +164,9 @@ driving context, and exportable Lifetime Highlights.
 Allow returning users to keep a working history on the same device without
 having to select the portable file on every visit.
 
-The feature-complete implementation is available in private staging as
-`1.6.0-beta.2`. It supports one remembered history per browser profile and has
-passed owner testing, including the configurable reminder. Phase 8 is complete
-and can be promoted with the next reviewed public release.
+**Status: implemented, owner-validated, and publicly released.** It supports
+one remembered history per browser profile, including the configurable
+reminder and explicit local-history deletion.
 
 - Add a disabled-by-default `Remember this history on this device` option.
 - Store the processed history in browser-local storage, with no account or
@@ -178,7 +267,7 @@ Phase 10 iterations.
 
 ### Phase 11 — Personal chart studio
 
-**Status: implemented and owner-validated locally for v2.1; not published.**
+**Status: implemented, owner-validated, and publicly released.**
 The core builder, live preview, saved-chart management, responsive layout,
 allow-list validation, unit conversion, and `.xpeng` v5 round trip are ready.
 Selection of saved charts for PDF reports remains an optional v2.1 finishing
@@ -225,7 +314,7 @@ the timestamped telemetry already present in the XPENG export. The experience
 must be presented as a visual reconstruction, not as an official XPENG vehicle
 simulation or a safety-accurate digital twin.
 
-**Status: implemented and owner-validated locally for v2.1; not published.** It
+**Status: implemented, owner-validated, and publicly released.** It
 includes a three-month activity calendar, journey selection, telemetry
 playback and seeking, 1x/2x/3x/5x/10x speed, a generic animated vehicle,
 responsive analytical HUD, synchronized charts, compressed data gaps, and a
@@ -269,7 +358,7 @@ Refresh the information architecture before the v2.1 release so the growing
 feature set remains calm and easy to navigate rather than accumulating more
 permanent controls in the left sidebar.
 
-**Status: implemented and owner-validated locally for v2.1; not published.** The desktop
+**Status: implemented, owner-validated, and publicly released.** The desktop
 navigation is grouped into driving, vehicle, tools, and data areas; the mobile
 icon strip has been replaced by a labelled section selector; data import stays
 one click away; and theme, language, measurement, and tyre-pressure preferences
@@ -297,7 +386,8 @@ structure has been finalised. The tutorial should help a first-time user
 understand the application without interrupting returning users or collecting
 any usage information.
 
-**Status: implemented and owner-validated locally for v2.1; not published.** The guide
+**Status: implemented, owner-validated, publicly released, and refreshed for
+v2.3.0.** The guide
 is split between the first import screen and the populated dashboard, opens
 automatically only for a new user, can be skipped permanently, and can be
 restarted from the landing page or Settings. It is bilingual, responsive,
@@ -343,9 +433,9 @@ preserving local processing and avoiding an XPENG Analytics backend.
 - Validate cancellation, expired authorisation, missing files, quota errors,
   large resumable uploads, and cross-device restore before release.
 
-Status: implemented, owner-validated with multiple Google accounts, and
-published in v2.1. The following resilience improvements are planned for the
-next iteration:
+**Status: implemented, owner-validated with multiple Google accounts, and
+publicly released.** The resilience improvements listed below were subsequently
+completed through versions 2.2 and 2.3 unless explicitly described as research:
 
 - Automatically refresh the user's Drive backup after a successful XPENG ZIP,
   GPX, or portable-history import when automatic backup is explicitly enabled.
@@ -377,12 +467,12 @@ phase combines the selected roadmap ideas: anomaly detection, a coverage
 calendar, battery-health history, seasonal comparisons, monthly summaries,
 shareable cards, and global search.
 
-**Current status:** complete and owner-validated locally on 2026-10-26. The
+**Current status:** complete, owner-validated, and publicly released. The
 data-coverage calendar, battery-health confidence view, personal-baseline
 anomaly detection, automatic monthly summary, seasonal comparison, global
 search, and privacy-safe shareable cards have passed local automated testing
-and production build. Nothing from this phase has been published yet; it will
-remain part of the combined next release while further features are developed.
+and production build. Version 2.3 added dismissible observations and charts to
+the automatic monthly summary.
 
 Recommended implementation order:
 
@@ -434,18 +524,19 @@ Strengthen the optional Google Drive workflow before the next combined public
 release. Keep one current consolidated `.xpeng` backup as the simple default,
 while making automatic updates, coverage, and restoration easier to understand.
 
-**Current status:** the core resilience work is implemented locally and awaiting
-owner validation. The current backup now carries coverage and format metadata;
+**Current status:** implemented, owner-validated, and publicly released. The
+current backup carries coverage and format metadata;
 the app shows the connected account, keeps only the latest processed backup,
 allows an explicit restore choice, warns about likely import-period gaps, and
 retries interrupted resumable uploads. Separate, disabled-by-default archiving
-of original XPENG ZIPs and GPX sources is also implemented locally with
-hash-based deduplication, download, and deletion controls. Live owner validation
-of both Drive source archives is still required. Long-history storage is now
-implemented locally in `.xpeng` v7: telemetry is divided into calendar-month
-shards, compact summaries remain loaded, and record details are restored only
-when requested. Large-history validation in Chrome, Edge, Firefox, and on a
-phone is still required before publication.
+of original XPENG ZIPs and GPX sources is also implemented with
+hash-based deduplication, download, and deletion controls. Long-history storage
+uses calendar-month shards: compact summaries remain loaded and record details
+are restored only when requested. A local v8 update now detects an older Drive
+backup, asks permission to rebuild it from the retained RAW sources, preserves
+personal metadata and GPS, and replaces the Drive copy only after a successful
+refresh. Continued multi-year and cross-browser testing remains part of normal
+maintenance.
 
 - Automatically update the Drive backup after a successful XPENG ZIP, GPX, or
   portable-history import only when the user has explicitly enabled automatic
@@ -459,6 +550,13 @@ phone is still required before publication.
   remove older app-created recovery copies after a successful save.
 - Let the user inspect creation date, coverage, size, and format version before
   restoring a backup.
+- When the Drive history format is older than the current calculation format,
+  offer an explicit RAW refresh. Rebuild the analytics from the retained source
+  ZIPs, preserve labels, tariffs, manual groups, charts, and GPS, then upload
+  the replacement only after the refresh succeeds. **Implemented,
+  owner-validated, and released in `.xpeng` v8 with v2.4.0.**
+- Show real upload progress for large resumable history and RAW-file backups,
+  together with a persistent warning not to close or refresh the tab.
 - Handle cancellation, expired authorisation, quota failures, interrupted
   resumable uploads, missing files, and cross-device restoration with clear
   recoverable states.
@@ -488,7 +586,7 @@ phone is still required before publication.
   location history. Store recognised `.gpx` files and GPX ZIPs unchanged in a
   separate folder, deduplicate them by importer SHA-256, and never enable it
   silently when the user enables XPENG ZIP preservation. **Implemented
-  locally; awaiting owner validation.**
+  and publicly released.**
 - Preserve the limited `drive.file` permission and access only files created by
   XPENG Analytics. Do not add an application storage backend.
 

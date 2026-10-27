@@ -27,10 +27,11 @@ The checksum detects accidental corruption; it is not a digital signature and
 does not prove who created a history file. Only import histories from sources
 you trust.
 
-A portable history remains sensitive even though version 6 does not retain the
+A portable history remains sensitive even though current versions do not retain the
 original vehicle identifier. It contains timestamped vehicle telemetry and
 import provenance that may reveal personal routines, plus user-authored chart
-titles or descriptions. When GPX has been added, it also contains the precise
+titles, classifications, charging categories, and tariff definitions. When
+GPX has been added, it also contains the precise
 location history of automatically matched trip slices and recent complete
 recordings awaiting delayed XPENG data. Pending recordings are retained until
 the latest imported vehicle telemetry is more than five days beyond them;

@@ -122,6 +122,11 @@ driving segments, so charging is not treated as negative consumption. Group
 definitions are retained in exported, locally saved, and Google Drive `.xpeng`
 histories.
 
+Use the classification control to mark a journey as personal, business,
+commute, or a custom label. Classifications do not alter the original XPENG
+telemetry and remain available in search, reports, CSV exports, and future
+`.xpeng` restores.
+
 The selected journey uses stacked full-width charts. Its journey list remains
 available while the detail area is open, making it quicker to compare records.
 
@@ -148,6 +153,10 @@ Shows battery and grid energy, efficiency, duration, power, estimated losses,
 charging habits, and separate AC/DC totals. Select a session to inspect its
 technical telemetry. The history list can be filtered to All, AC, or DC;
 distinct colours make the charging type visible before opening a session.
+
+Charging sessions can also be categorized as home, work, public, or custom.
+When a reusable electricity tariff is active, the app estimates charging cost
+from the available energy. This is not an invoice or receipt.
 
 Charging telemetry also uses stacked full-width charts while the session list
 remains available for quick comparison between charges.
@@ -274,6 +283,10 @@ You may enter:
 - an average electricity price to calculate estimated charging costs; and
 - a reference such as a driver, company, or cost centre.
 
+You can also include selected saved My Charts, monthly summaries, and Lifetime
+Highlights, or export a compact CSV with labelled journeys and categorized
+charging sessions.
+
 If journeys in the selected period have matched GPX data, you may also include
 their route traces in the PDF. These diagrams are composed locally and do not
 download an online basemap.
@@ -297,6 +310,10 @@ GPS matching summary, replaces the session from a portable history, exports
 the current session, displays
 imported-file history, or clears the session. It also contains the optional
 persistent-history controls.
+
+Recognised GPS CSV files can be imported directly or inside a ZIP. Matching is
+still automatic and based on timestamps; diagnostics identify partial matches,
+sparse tracks, and likely clock differences.
 
 ## 6. Filters and display settings
 
@@ -382,6 +399,12 @@ trash after the next successful save.
 Interrupted resumable uploads are probed and continued when Google reports a
 recoverable position. Quota, rate-limit, expired-authorisation, and missing-file
 errors remain explicit instead of being reported as a successful save.
+
+When an older Drive backup is opened, the app may offer to refresh it for the
+latest calculations. The rebuild requires explicit approval, verifies
+continuous RAW coverage, processes sources one at a time, preserves personal
+metadata and GPS, and replaces the Drive backup only after success. You may
+instead open the existing history without refreshing it.
 
 The Data page may also highlight long breaks between the coverage periods of
 imported XPENG files. These are **likely import gaps**, not proof that vehicle

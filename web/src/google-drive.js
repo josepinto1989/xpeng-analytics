@@ -27,6 +27,7 @@ const GPS_FOLDER_NAME = "Original GPX files";
 const GPS_ARCHIVE_PROPERTY = "xpengOriginalGps";
 const GPS_ARCHIVE_PROPERTY_VALUE = "1";
 const RECOVERY_LIMIT = 0;
+const UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
 const SETTINGS_KEY = "xpeng-analytics.google-drive.v1";
 const GIS_SCRIPT = "https://accounts.google.com/gsi/client";
 
@@ -176,17 +177,24 @@ export function createGoogleDriveClient({
     return match ? Number(match[1]) + 1 : 0;
   };
 
-  const resumableUpload = async (uploadUrl, blob, mimeType = HISTORY_MIME) => {
+  const resumableUpload = async (uploadUrl, blob, mimeType = HISTORY_MIME, onProgress = () => {}) => {
+    if (!(blob instanceof Blob) || !blob.size) throw Object.assign(new Error("The upload is empty."), { code: "driveUpload" });
     let offset = 0;
     let lastError = null;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    onProgress(0);
+    for (let attempt = 0; attempt < 3 && offset < blob.size; attempt += 1) {
       try {
-        const body = offset ? blob.slice(offset) : blob;
-        const headers = { "Content-Type": mimeType };
-        if (offset) headers["Content-Range"] = `bytes ${offset}-${blob.size - 1}/${blob.size}`;
-        const response = await request(uploadUrl, { method: "PUT", headers, body }, [308]);
-        if (response.ok) return response;
-        offset = uploadedBytes(response);
+        while (offset < blob.size) {
+          const end = Math.min(blob.size, offset + UPLOAD_CHUNK_BYTES);
+          const body = blob.slice(offset, end);
+          const headers = { "Content-Type": mimeType, "Content-Range": `bytes ${offset}-${end - 1}/${blob.size}` };
+          const response = await request(uploadUrl, { method: "PUT", headers, body }, [308]);
+          if (response.ok) { onProgress(1); return response; }
+          const acknowledged = uploadedBytes(response);
+          if (acknowledged <= offset) throw Object.assign(new Error("Google Drive did not acknowledge the uploaded chunk."), { code: "driveNetwork" });
+          offset = acknowledged;
+          onProgress(Math.min(1, offset / Math.max(1, blob.size)));
+        }
       } catch (error) {
         lastError = error;
         if (!["driveNetwork", "driveRateLimit"].includes(error.code)) throw error;
@@ -195,8 +203,9 @@ export function createGoogleDriveClient({
             method: "PUT",
             headers: { "Content-Length": "0", "Content-Range": `bytes */${blob.size}` },
           }, [308]);
-          if (status.ok) return status;
+          if (status.ok) { onProgress(1); return status; }
           offset = uploadedBytes(status);
+          onProgress(Math.min(1, offset / Math.max(1, blob.size)));
         } catch (statusError) {
           lastError = statusError;
         }
@@ -417,11 +426,11 @@ export function createGoogleDriveClient({
     return { originals: plan.retained, retired: plan.retired, registryUpdates: updates, overlapDays: plan.overlapDays };
   };
 
-  const uploadOriginalExport = async (file, { sha256, coverageStartUtc = null, coverageEndUtc = null } = {}) => {
+  const uploadOriginalExport = async (file, { sha256, coverageStartUtc = null, coverageEndUtc = null, onProgress = () => {} } = {}) => {
     if (!(file instanceof Blob) || !file.size || !sha256) throw Object.assign(new Error("The original XPENG export is invalid."), { code: "driveOriginalInvalid" });
     const digest = String(sha256).toLowerCase();
     const existing = (await listOriginalExports()).find((candidate) => candidate.digest === digest);
-    if (existing) return { skipped: true, file: existing, ...(await optimiseOriginalExports([existing])) };
+    if (existing) { onProgress(1); return { skipped: true, file: existing, ...(await optimiseOriginalExports([existing])) }; }
     const folder = await ensureOriginalFolder();
     const appProperties = {
       [ORIGINAL_ARCHIVE_PROPERTY]: ORIGINAL_ARCHIVE_PROPERTY_VALUE,
@@ -442,20 +451,20 @@ export function createGoogleDriveClient({
     });
     const uploadUrl = start.headers.get("Location");
     if (!uploadUrl) throw Object.assign(new Error("Google Drive did not return an upload location."), { code: "driveUpload" });
-    const completed = await resumableUpload(uploadUrl, file, mimeType);
+    const completed = await resumableUpload(uploadUrl, file, mimeType, onProgress);
     const uploaded = originalMetadata({ ...(await completed.json()), appProperties });
     return { skipped: false, file: uploaded, ...(await optimiseOriginalExports([uploaded])) };
   };
 
-  const uploadGpsExport = async (file, { sha256 } = {}) => {
-    if (!(file instanceof Blob) || !file.size || !sha256) throw Object.assign(new Error("The original GPX source is invalid."), { code: "driveGpsInvalid" });
+  const uploadGpsExport = async (file, { sha256, onProgress = () => {} } = {}) => {
+    if (!(file instanceof Blob) || !file.size || !sha256) throw Object.assign(new Error("The original GPS source is invalid."), { code: "driveGpsInvalid" });
     const digest = String(sha256).toLowerCase();
     const existing = (await listGpsExports()).find((candidate) => candidate.digest === digest);
-    if (existing) return { skipped: true, file: existing, gpsOriginals: await listGpsExports() };
+    if (existing) { onProgress(1); return { skipped: true, file: existing, gpsOriginals: await listGpsExports() }; }
     const folder = await ensureGpsFolder();
     const appProperties = { [GPS_ARCHIVE_PROPERTY]: GPS_ARCHIVE_PROPERTY_VALUE, [ORIGINAL_DIGEST_PROPERTY]: digest };
     const lower = String(file.name || "").toLowerCase();
-    const mimeType = file.type || (lower.endsWith(".gpx") ? "application/gpx+xml" : "application/zip");
+    const mimeType = file.type || (lower.endsWith(".gpx") ? "application/gpx+xml" : lower.endsWith(".csv") ? "text/csv" : "application/zip");
     const metadata = { name: file.name || `gps-source-${new Date().toISOString().slice(0, 10)}.gpx`, mimeType, parents: [folder.id], appProperties };
     const start = await request(`${DRIVE_UPLOAD_API}/files?uploadType=resumable&fields=id,name,modifiedTime,createdTime,size,parents,appProperties`, {
       method: "POST",
@@ -468,7 +477,7 @@ export function createGoogleDriveClient({
     });
     const uploadUrl = start.headers.get("Location");
     if (!uploadUrl) throw Object.assign(new Error("Google Drive did not return an upload location."), { code: "driveUpload" });
-    const completed = await resumableUpload(uploadUrl, file, mimeType);
+    const completed = await resumableUpload(uploadUrl, file, mimeType, onProgress);
     const uploaded = originalMetadata({ ...(await completed.json()), appProperties });
     const gpsOriginals = [uploaded, ...(await listGpsExports()).filter((candidate) => candidate.id !== uploaded.id)];
     return { skipped: false, file: uploaded, gpsOriginals };
@@ -517,7 +526,7 @@ export function createGoogleDriveClient({
     }
   };
 
-  const uploadHistory = async (blob, historyMetadata = {}) => {
+  const uploadHistory = async (blob, historyMetadata = {}, onProgress = () => {}) => {
     const folder = await ensureFolder();
     const current = await findBackup();
     if (current && RECOVERY_LIMIT > 0) await preserveCurrent(current);
@@ -539,7 +548,7 @@ export function createGoogleDriveClient({
     });
     const uploadUrl = start.headers.get("Location");
     if (!uploadUrl) throw Object.assign(new Error("Google Drive did not return an upload location."), { code: "driveUpload" });
-    const completed = await resumableUpload(uploadUrl, blob);
+    const completed = await resumableUpload(uploadUrl, blob, HISTORY_MIME, onProgress);
     const file = await completed.json();
     const enriched = fileMetadata({ ...file, appProperties });
     persist({ fileId: file.id, folderId: folder.id, modifiedTime: file.modifiedTime || new Date().toISOString(), size: Number(file.size || blob.size), coverageStartUtc: enriched.coverageStartUtc, coverageEndUtc: enriched.coverageEndUtc, historyVersion: enriched.historyVersion });

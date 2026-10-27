@@ -1,10 +1,12 @@
 // Streaming, columnar browser architecture inspired by LogbooX.
 // See THIRD_PARTY_NOTICES.md for attribution and the MIT licence notice.
-import { GPX_LIMITS, gpsSnapshot, parseGpxText } from "./gpx.js";
+import { GPX_LIMITS, gpsSnapshot, looksLikeGpsCsv, parseGpxText, parseGpsCsvText } from "./gpx.js";
 import { validateCustomCharts } from "../custom-charts.js";
 import { validateJourneyGroups } from "../journey-groups.js";
+import { validateOwnershipMetadata } from "../ownership-metadata.js";
 import { mergeRawArchiveRegistry, normaliseRawArchiveRegistry, rawArchiveRecord } from "../raw-archive-registry.js";
 import { bestZeroToHundredSeconds } from "../lifetime-highlights.js";
+import { CURRENT_HISTORY_VERSION, SUPPORTED_HISTORY_VERSIONS } from "../history-version.js";
 
 const FAMILY_MARKERS = {
   operation: "driving_operation",
@@ -55,9 +57,8 @@ const CENTRAL = 0x02014b50, END = 0x06054b50, LOCAL = 0x04034b50;
 const MOVING = 1, TRIP_BREAK = 300, JOURNEY_BREAK = 3600, CHARGE_POWER = 0.2, CHARGE_BREAK = 600, MAX_GAP = 10;
 const REPLAY_CONTEXT_SECONDS = 60, REPLAY_SERIES_LIMIT = 300;
 const HISTORY_MAGIC_PREFIX = new Uint8Array([88, 80, 69, 78, 71, 65, 0]);
-const HISTORY_VERSION = 7;
+const HISTORY_VERSION = CURRENT_HISTORY_VERSION;
 const LEGACY_HISTORY_VERSION = 6;
-const SUPPORTED_HISTORY_VERSIONS = [3, 4, 5, 6, 7];
 const HISTORY_MAGIC = new Uint8Array([...HISTORY_MAGIC_PREFIX, HISTORY_VERSION]);
 const HISTORY_FORMAT = "xpeng-analytics-columnar-history";
 const GPS_PENDING_RETENTION_SECONDS = 5 * 24 * 60 * 60;
@@ -331,7 +332,7 @@ function mergeStream(oldStream, fresh) {
   return { family: fresh.family, time, columns, model: fresh.model || oldStream.model, stats: { ...fresh.stats, uniqueRows: n, mergedRows: n, emptyColumns, unknownColumns } };
 }
 
-export function emptyState() { return { format: HISTORY_FORMAT, version: HISTORY_VERSION, streams: {}, imports: [], rawArchives: [], model: "", gpsTracks: [], gpsSelectedTracks: [], gpsImports: [], customCharts: [], journeyGroups: [] }; }
+export function emptyState() { return { format: HISTORY_FORMAT, version: HISTORY_VERSION, streams: {}, imports: [], rawArchives: [], model: "", gpsTracks: [], gpsSelectedTracks: [], gpsImports: [], customCharts: [], journeyGroups: [], ownership: validateOwnershipMetadata() }; }
 
 export function setCustomCharts(state, charts) {
   const customCharts = validateCustomCharts(charts);
@@ -343,6 +344,12 @@ export function setJourneyGroups(state, groups) {
   const journeyGroups = validateJourneyGroups(groups);
   if (state.segmented) return { ...state, version: HISTORY_VERSION, journeyGroups, snapshot: { ...state.snapshot, journeyGroups } };
   return { ...state, version: HISTORY_VERSION, journeyGroups };
+}
+
+export function setOwnershipMetadata(state, value) {
+  const ownership = validateOwnershipMetadata(value);
+  if (state.segmented) return { ...state, version: HISTORY_VERSION, ownership, snapshot: { ...state.snapshot, ownership } };
+  return { ...state, version: HISTORY_VERSION, ownership };
 }
 
 export function setRawArchives(state, updates) {
@@ -381,24 +388,28 @@ async function importGpsRaw(state, source, filename, options = {}, report = () =
   const lower = String(filename || "").toLowerCase();
   const tracks = [];
   const parse = (name, text) => {
-    const parsed = parseGpxText(text, { sourceName: name, sourceSha256: digest, startIndex: tracks.length, trimMeters: options.trimMeters || 0 });
+    const parsed = name.toLowerCase().endsWith(".csv")
+      ? parseGpsCsvText(text, { sourceName: name, sourceSha256: digest, startIndex: tracks.length, trimMeters: options.trimMeters || 0 })
+      : parseGpxText(text, { sourceName: name, sourceSha256: digest, startIndex: tracks.length, trimMeters: options.trimMeters || 0 });
     const pointCount = tracks.reduce((total, track) => total + track.time.length, 0) + parsed.reduce((total, track) => total + track.time.length, 0);
     if (pointCount > GPX_LIMITS.maxPoints) throw new Error("invalid_gpx");
     tracks.push(...parsed);
   };
-  if (lower.endsWith(".gpx")) {
+  if (lower.endsWith(".gpx")||lower.endsWith(".csv")) {
     if (sourceLength(source) > GPX_LIMITS.maxBytes) throw new Error("invalid_gpx");
     const text = typeof Blob !== "undefined" && source instanceof Blob
       ? await source.text()
       : new TextDecoder().decode(sourceBytes(source));
-    parse(filename || "track.gpx", text);
+    parse(filename || (lower.endsWith(".csv")?"track.csv":"track.gpx"), text);
   } else if (lower.endsWith(".zip")) {
-    const entries = (await listEntries(source)).filter((entry) => entry.name.toLowerCase().endsWith(".gpx"));
+    const candidates=(await listEntries(source)).filter((entry)=>/\.(gpx|csv)$/i.test(entry.name)&&entry.uncompressedSize<=GPX_LIMITS.maxBytes);
+    const entries=[];
+    for(const entry of candidates){if(entry.name.toLowerCase().endsWith(".gpx")){entries.push(entry);continue;}const preview=await streamText(await entryStream(source,entry));if(looksLikeGpsCsv(preview))entries.push({...entry,cachedText:preview});}
     const totalBytes = entries.reduce((total, entry) => total + entry.uncompressedSize, 0);
     if (!entries.length || entries.length > 500 || totalBytes > GPX_LIMITS.maxBytes * 2 || entries.some((entry) => entry.uncompressedSize > GPX_LIMITS.maxBytes)) throw new Error("invalid_gpx");
     for (let index = 0; index < entries.length; index++) {
       report(8 + index / entries.length * 52, "gps_parse", entries[index].name);
-      parse(entries[index].name, await streamText(await entryStream(source, entries[index])));
+      parse(entries[index].name, entries[index].cachedText??await streamText(await entryStream(source, entries[index])));
     }
   } else throw new Error("invalid_gpx");
   const imported = { name: filename, sha256: digest, trackCount: tracks.length, pointCount: tracks.reduce((total, track) => total + track.time.length, 0), trimMeters: Number(options.trimMeters || 0), completedAtUtc: new Date().toISOString() };
@@ -415,11 +426,17 @@ async function importGpsRaw(state, source, filename, options = {}, report = () =
 export async function detectAdditionalFileKind(source, filename) {
   const lower = String(filename || "").toLowerCase();
   if (lower.endsWith(".gpx")) return "gps";
+  if(lower.endsWith(".csv")){
+    if(sourceLength(source)>GPX_LIMITS.maxBytes)throw new Error("invalid_gpx");
+    const text=typeof Blob!=="undefined"&&source instanceof Blob?await source.text():new TextDecoder().decode(sourceBytes(source));
+    if(looksLikeGpsCsv(text))return "gps";throw new Error("invalid_gpx");
+  }
   if (!lower.endsWith(".zip")) throw new Error("invalid_archive");
   const entries = await listEntries(source);
-  if (entries.some((entry) => entry.name.toLowerCase().endsWith(".gpx"))) return "gps";
   const families = new Set(entries.map((entry) => familyForName(entry.name)).filter(Boolean));
   if (["operation", "energy", "status"].every((family) => families.has(family))) return "xpeng";
+  if (entries.some((entry) => entry.name.toLowerCase().endsWith(".gpx"))) return "gps";
+  for(const entry of entries.filter((item)=>item.name.toLowerCase().endsWith(".csv")&&item.uncompressedSize<=GPX_LIMITS.maxBytes)){if(looksLikeGpsCsv(await streamText(await entryStream(source,entry))))return "gps";}
   throw new Error("invalid_archive");
 }
 
@@ -771,7 +788,7 @@ async function exportLegacyHistory(state, report = () => {}) {
     });
   }
   const legacyMagic = new Uint8Array([...HISTORY_MAGIC_PREFIX, LEGACY_HISTORY_VERSION]);
-  const manifest = new TextEncoder().encode(JSON.stringify({ format: HISTORY_FORMAT, version: LEGACY_HISTORY_VERSION, exportedAtUtc: new Date().toISOString(), model: state.model, imports: state.imports, rawArchives: normaliseRawArchiveRegistry(state.rawArchives, state.imports), streams, gps: { imports: state.gpsImports || [], tracks: gpsTracks }, customCharts: validateCustomCharts(state.customCharts), journeyGroups: validateJourneyGroups(state.journeyGroups) }));
+  const manifest = new TextEncoder().encode(JSON.stringify({ format: HISTORY_FORMAT, version: LEGACY_HISTORY_VERSION, exportedAtUtc: new Date().toISOString(), model: state.model, imports: state.imports, rawArchives: normaliseRawArchiveRegistry(state.rawArchives, state.imports), streams, gps: { imports: state.gpsImports || [], tracks: gpsTracks }, customCharts: validateCustomCharts(state.customCharts), journeyGroups: validateJourneyGroups(state.journeyGroups), ownership: validateOwnershipMetadata(state.ownership) }));
   const length = new Uint8Array(4); new DataView(length.buffer).setUint32(0, manifest.byteLength, false);
   return new Blob([legacyMagic, length, manifest, ...chunks]).arrayBuffer();
 }
@@ -847,7 +864,7 @@ async function importLegacyHistory(source, report = () => {}) {
     gpsTracks.push(track);
   }
   const imports = Array.isArray(manifest.imports) ? manifest.imports : [];
-  return { format: HISTORY_FORMAT, version: HISTORY_VERSION, sourceHistoryVersion: manifest.version, model: manifest.model || "", imports, rawArchives: normaliseRawArchiveRegistry(manifest.rawArchives, imports), streams, gpsTracks, gpsSelectedTracks: [], gpsImports: Array.isArray(manifest.gps?.imports) ? manifest.gps.imports : [], customCharts: validateCustomCharts(manifest.version >= 5 ? manifest.customCharts : []), journeyGroups: validateJourneyGroups(manifest.version >= 6 ? manifest.journeyGroups : []) };
+  return { format: HISTORY_FORMAT, version: HISTORY_VERSION, sourceHistoryVersion: manifest.version, model: manifest.model || "", imports, rawArchives: normaliseRawArchiveRegistry(manifest.rawArchives, imports), streams, gpsTracks, gpsSelectedTracks: [], gpsImports: Array.isArray(manifest.gps?.imports) ? manifest.gps.imports : [], customCharts: validateCustomCharts(manifest.version >= 5 ? manifest.customCharts : []), journeyGroups: validateJourneyGroups(manifest.version >= 6 ? manifest.journeyGroups : []), ownership: validateOwnershipMetadata(manifest.ownership) };
 }
 
 const SEGMENTED_HISTORY_FORMAT = "xpeng-analytics-segmented-history";
@@ -896,13 +913,13 @@ function sliceRawState(state, key) {
     streams[family] = { ...stream, time: copyRange(stream.time, from, to), columns, stats: { ...(stream.stats || {}), uniqueRows: to - from, mergedRows: to - from } };
   }
   const gpsTracks = (state.gpsTracks || []).map((track) => sliceTrack(track, start, end, key)).filter(Boolean);
-  return { format: HISTORY_FORMAT, version: HISTORY_VERSION, streams, imports: [], rawArchives: [], model: state.model || "", gpsTracks, gpsSelectedTracks: [], gpsImports: [], customCharts: [], journeyGroups: [] };
+  return { format: HISTORY_FORMAT, version: HISTORY_VERSION, streams, imports: [], rawArchives: [], model: state.model || "", gpsTracks, gpsSelectedTracks: [], gpsImports: [], customCharts: [], journeyGroups: [], ownership: validateOwnershipMetadata() };
 }
 
 function emptyRawMonthState(model = "") {
   const streams = {};
   for (const family of ["operation", "energy", "status"]) streams[family] = { family, model, time: new Uint32Array(0), columns: Object.fromEntries(SPECS[family].map(([, target]) => [target, new Float32Array(0)])), stats: { inputRows: 0, uniqueRows: 0, mergedRows: 0, emptyColumns: SPECS[family].map(([, target]) => target), unknownColumns: [] } };
-  return { format: HISTORY_FORMAT, version: HISTORY_VERSION, streams, imports: [], rawArchives: [], model, gpsTracks: [], gpsSelectedTracks: [], gpsImports: [], customCharts: [], journeyGroups: [] };
+  return { format: HISTORY_FORMAT, version: HISTORY_VERSION, streams, imports: [], rawArchives: [], model, gpsTracks: [], gpsSelectedTracks: [], gpsImports: [], customCharts: [], journeyGroups: [], ownership: validateOwnershipMetadata() };
 }
 
 function rawMonthKeys(state) {
@@ -1006,8 +1023,8 @@ function combineSnapshots(shards, metadata = {}) {
     driving: { speed: rows(["driving", "speed"]), pedal: rows(["driving", "pedal"]), gg: rows(["driving", "gg"]), events: rows(["driving", "events"]), contexts: rows(["driving", "contexts"]) },
     battery: { capacityKwh: rounded(median(health.map((row) => row.capacityKwh))), latestRelativeSohPct: health.at(-1)?.relativeSohPct ?? null, qualifiedCharges: health.length, history: health, parking: rows(["battery", "parking"]).sort((a, b) => String(b.startedAtUtc).localeCompare(String(a.startedAtUtc))), daily: uniqueRows(rows(["battery", "daily"]), "date").sort((a, b) => String(a.date).localeCompare(String(b.date))), rangeSamples: rows(["battery", "rangeSamples"]), tyres: uniqueRows(rows(["battery", "tyres"]), "date").sort((a, b) => String(a.date).localeCompare(String(b.date))) },
     activity: { monthly: [...monthly.values()].map((row) => ({ ...row, distanceKm: rounded(row.distanceKm), netEnergyKwh: rounded(row.netEnergyKwh) })), weekday: weekday.map((row) => ({ ...row, distanceKm: rounded(row.distanceKm) })), hours, heatmap: rows(["activity", "heatmap"]) },
-    gps: { tracks: gpsTracks, matchedCount: journeys.filter((row) => row.gps).length, matchedTripCount: mappedTripIds.size, duplicateCount: snapshots.reduce((total, snapshot) => total + Number(snapshot.gps?.duplicateCount || 0), 0), ignoredTrackCount: snapshots.reduce((total, snapshot) => total + Number(snapshot.gps?.ignoredTrackCount || 0), 0) },
-    customCharts: validateCustomCharts(metadata.customCharts), quality: { analysisVersion: shards.every((shard) => Number(shard.summary?.quality?.analysisVersion || 0) >= 2) ? 2 : 1, coverage, events: combineQualityEvents(rows(["quality", "events"])) }, imports: metadata.imports || [], rawArchives: normaliseRawArchiveRegistry(metadata.rawArchives, metadata.imports), gpsImports: metadata.gpsImports || [], storage: { segmented: true, months: shards.length },
+    gps: { tracks: gpsTracks, matchedCount: journeys.filter((row) => row.gps).length, matchedTripCount: mappedTripIds.size, duplicateCount: snapshots.reduce((total, snapshot) => total + Number(snapshot.gps?.duplicateCount || 0), 0), ignoredTrackCount: snapshots.reduce((total, snapshot) => total + Number(snapshot.gps?.ignoredTrackCount || 0), 0), diagnosticCounts: { partial: gpsTracks.filter((row) => row.partialMatch).length, sparse: gpsTracks.filter((row) => row.sparseRecording).length, clockAdjusted: gpsTracks.filter((row) => Number(row.clockOffsetMinutes)).length } },
+    customCharts: validateCustomCharts(metadata.customCharts), ownership: validateOwnershipMetadata(metadata.ownership), quality: { analysisVersion: shards.every((shard) => Number(shard.summary?.quality?.analysisVersion || 0) >= 2) ? 2 : 1, coverage, events: combineQualityEvents(rows(["quality", "events"])) }, imports: metadata.imports || [], rawArchives: normaliseRawArchiveRegistry(metadata.rawArchives, metadata.imports), gpsImports: metadata.gpsImports || [], storage: { segmented: true, months: shards.length },
   };
 }
 
@@ -1020,7 +1037,7 @@ async function createShard(rawState, key, report = () => {}) {
 async function toSegmentedState(rawState, report = () => {}) {
   const keys = rawMonthKeys(rawState), shards = [];
   for (let index = 0; index < keys.length; index++) { report(70 + index / Math.max(1, keys.length) * 24, "history_segment", keys[index]); shards.push(await createShard(rawState, keys[index], report)); }
-  const metadata = { imports: rawState.imports || [], rawArchives: normaliseRawArchiveRegistry(rawState.rawArchives, rawState.imports), gpsImports: rawState.gpsImports || [], customCharts: rawState.customCharts || [], journeyGroups: rawState.journeyGroups || [] };
+  const metadata = { imports: rawState.imports || [], rawArchives: normaliseRawArchiveRegistry(rawState.rawArchives, rawState.imports), gpsImports: rawState.gpsImports || [], customCharts: rawState.customCharts || [], journeyGroups: rawState.journeyGroups || [], ownership: validateOwnershipMetadata(rawState.ownership) };
   return { format: HISTORY_FORMAT, version: HISTORY_VERSION, sourceHistoryVersion: rawState.sourceHistoryVersion || rawState.version || LEGACY_HISTORY_VERSION, segmented: true, model: rawState.model || "", shards, ...metadata, snapshot: combineSnapshots(shards, metadata) };
 }
 
@@ -1054,7 +1071,7 @@ async function updateSegmentedWithRaw(state, fresh, report = () => {}) {
     report(72 + index / Math.max(1, freshKeys.length) * 23, "history_segment", key);
     byKey.set(key, await createShard(merged, key, report));
   }
-  const metadata = { imports: state.imports, rawArchives: state.rawArchives, gpsImports: state.gpsImports, customCharts: state.customCharts, journeyGroups: state.journeyGroups }, shards = [...byKey.values()].sort((a, b) => a.key.localeCompare(b.key));
+  const metadata = { imports: state.imports, rawArchives: state.rawArchives, gpsImports: state.gpsImports, customCharts: state.customCharts, journeyGroups: state.journeyGroups, ownership: validateOwnershipMetadata(state.ownership) }, shards = [...byKey.values()].sort((a, b) => a.key.localeCompare(b.key));
   return { ...state, shards, snapshot: combineSnapshots(shards, metadata) };
 }
 
@@ -1068,7 +1085,7 @@ async function updateSegmentedWithGps(state, gpsState, report = () => {}) {
     report(72 + index / Math.max(1, keys.length) * 23, "history_segment", key);
     byKey.set(key, await createShard(raw, key, report));
   }
-  const metadata = { imports: state.imports, rawArchives: state.rawArchives, gpsImports: state.gpsImports, customCharts: state.customCharts, journeyGroups: state.journeyGroups }, shards = [...byKey.values()].sort((a, b) => a.key.localeCompare(b.key));
+  const metadata = { imports: state.imports, rawArchives: state.rawArchives, gpsImports: state.gpsImports, customCharts: state.customCharts, journeyGroups: state.journeyGroups, ownership: validateOwnershipMetadata(state.ownership) }, shards = [...byKey.values()].sort((a, b) => a.key.localeCompare(b.key));
   return { ...state, shards, snapshot: combineSnapshots(shards, metadata) };
 }
 
@@ -1082,7 +1099,7 @@ export async function importArchive(state, source, filename, report = () => {}, 
     const segmented = await toSegmentedState(freshResult.state, report);
     return { ...freshResult, state: segmented };
   }
-  const imported = freshResult.state.imports[0], metadata = { imports: [imported, ...(state.imports || []).filter((item) => item.sha256 !== imported.sha256)], rawArchives: mergeRawArchiveRegistry(state.rawArchives, freshResult.state.rawArchives), gpsImports: state.gpsImports || [], customCharts: state.customCharts || [], journeyGroups: state.journeyGroups || [] };
+  const imported = freshResult.state.imports[0], metadata = { imports: [imported, ...(state.imports || []).filter((item) => item.sha256 !== imported.sha256)], rawArchives: mergeRawArchiveRegistry(state.rawArchives, freshResult.state.rawArchives), gpsImports: state.gpsImports || [], customCharts: state.customCharts || [], journeyGroups: state.journeyGroups || [], ownership: validateOwnershipMetadata(state.ownership) };
   const base = { ...state, ...metadata };
   return { ...freshResult, state: await updateSegmentedWithRaw(base, freshResult.state, report) };
 }
@@ -1102,6 +1119,70 @@ export async function importGps(state, source, filename, options = {}, report = 
   return { ...gpsResult, state: updated };
 }
 
+async function carryForwardGps(previous, rebuilt, report = () => {}) {
+  const tracks = [];
+  if (previous?.segmented) {
+    for (let index = 0; index < previous.shards.length; index++) {
+      const shard = previous.shards[index];
+      const raw = await loadShard(shard, report);
+      tracks.push(...(raw.gpsTracks || []));
+      report(78 + (index + 1) / Math.max(1, previous.shards.length) * 8, "drive_history_refresh", shard.key);
+    }
+  } else tracks.push(...(previous?.gpsTracks || []));
+  if (!tracks.length) return rebuilt;
+  const carried = await updateSegmentedWithGps({ ...rebuilt, gpsImports: previous.gpsImports || [] }, { gpsTracks: tracks }, report);
+  return { ...carried, gpsImports: previous.gpsImports || [] };
+}
+
+export async function rebuildHistoryFromSources(historySource, xpengSources = [], gpsSources = [], report = () => {}, processingProfile = {}) {
+  let context = await beginHistoryRebuild(historySource, (percent, phase, detail) => report(2 + percent * .06, phase, detail));
+  for (let index = 0; index < xpengSources.length; index++) {
+    const source = xpengSources[index];
+    const start = 8 + index / xpengSources.length * 62;
+    const span = 62 / xpengSources.length;
+    context = await addHistoryRebuildSource(context, source, "xpeng", (percent, _phase, detail) => report(start + percent / 100 * span, "drive_history_refresh", `${index + 1}/${xpengSources.length} · ${detail || source.name || "XPENG ZIP"}`), processingProfile);
+  }
+  if (gpsSources.length) {
+    for (let index = 0; index < gpsSources.length; index++) {
+      const source = gpsSources[index];
+      const start = 72 + index / gpsSources.length * 16;
+      const span = 16 / gpsSources.length;
+      context = await addHistoryRebuildSource(context, source, "gps", (percent, _phase, detail) => report(start + percent / 100 * span, "drive_history_refresh", `${index + 1}/${gpsSources.length} · ${detail || source.name || "GPS"}`), processingProfile);
+    }
+  }
+  return finishHistoryRebuild(context, report);
+}
+
+export async function beginHistoryRebuild(historySource, report = () => {}) {
+  const previous = await importHistory(historySource, report);
+  return { previous, rebuilt: emptyState(), xpengSourceCount: 0, gpsSourceCount: 0 };
+}
+
+export async function addHistoryRebuildSource(context, source, kind, report = () => {}, processingProfile = {}) {
+  if (!context?.previous || !context?.rebuilt) throw new Error("history_integrity");
+  const input = source.file ?? source.blob ?? source;
+  const filename = source.name || source.file?.name || (kind === "gps" ? "gps-source.gpx" : "xpeng-source.zip");
+  if (kind === "gps") {
+    const result = await importGps(context.rebuilt, input, filename, {}, report);
+    return { ...context, rebuilt: result.state, gpsSourceCount: context.gpsSourceCount + 1 };
+  }
+  const result = await importArchive(context.rebuilt, input, filename, report, processingProfile);
+  return { ...context, rebuilt: result.state, xpengSourceCount: context.xpengSourceCount + 1 };
+}
+
+export async function finishHistoryRebuild(context, report = () => {}) {
+  if (!context?.xpengSourceCount) throw new Error("missing_raw_sources");
+  const { previous } = context;
+  let rebuilt = context.rebuilt;
+  if (!context.gpsSourceCount) rebuilt = await carryForwardGps(previous, rebuilt, report);
+  rebuilt = setRawArchives(rebuilt, mergeRawArchiveRegistry(rebuilt.rawArchives, previous.rawArchives));
+  rebuilt = setCustomCharts(rebuilt, previous.customCharts);
+  rebuilt = setJourneyGroups(rebuilt, previous.journeyGroups);
+  rebuilt = setOwnershipMetadata(rebuilt, previous.ownership);
+  report(99, "drive_history_refresh", "Finalising refreshed history");
+  return { ...rebuilt, version: HISTORY_VERSION, sourceHistoryVersion: HISTORY_VERSION };
+}
+
 async function exportSegmentedHistory(state, report = () => {}) {
   const chunks = [], shardRecords = []; let offset = 0;
   for (let index = 0; index < state.shards.length; index++) {
@@ -1111,7 +1192,7 @@ async function exportSegmentedHistory(state, report = () => {}) {
     shardRecords.push({ key: shard.key, rawBytes: shard.rawBytes || 0, summary: summaryRecord, payload: payloadRecord });
     report(8 + (index + 1) / Math.max(1, state.shards.length) * 88, "history_export", shard.key);
   }
-  const manifest = new TextEncoder().encode(JSON.stringify({ format: SEGMENTED_HISTORY_FORMAT, version: HISTORY_VERSION, exportedAtUtc: new Date().toISOString(), model: state.model, imports: state.imports || [], rawArchives: normaliseRawArchiveRegistry(state.rawArchives, state.imports), gpsImports: state.gpsImports || [], customCharts: validateCustomCharts(state.customCharts), journeyGroups: validateJourneyGroups(state.journeyGroups), shards: shardRecords }));
+  const manifest = new TextEncoder().encode(JSON.stringify({ format: SEGMENTED_HISTORY_FORMAT, version: HISTORY_VERSION, exportedAtUtc: new Date().toISOString(), model: state.model, imports: state.imports || [], rawArchives: normaliseRawArchiveRegistry(state.rawArchives, state.imports), gpsImports: state.gpsImports || [], customCharts: validateCustomCharts(state.customCharts), journeyGroups: validateJourneyGroups(state.journeyGroups), ownership: validateOwnershipMetadata(state.ownership), shards: shardRecords }));
   const length = new Uint8Array(4); new DataView(length.buffer).setUint32(0, manifest.byteLength, false);
   return new Blob([HISTORY_MAGIC, length, manifest, ...chunks], { type: "application/octet-stream" });
 }
@@ -1131,8 +1212,8 @@ async function importSegmentedHistory(source, manifest, manifestLength, report =
     report(8 + (index + 1) / manifest.shards.length * 86, "history_read", record.key);
   }
   const imports = Array.isArray(manifest.imports) ? manifest.imports : [];
-  const metadata = { imports, rawArchives: normaliseRawArchiveRegistry(manifest.rawArchives, imports), gpsImports: Array.isArray(manifest.gpsImports) ? manifest.gpsImports : [], customCharts: validateCustomCharts(manifest.customCharts), journeyGroups: validateJourneyGroups(manifest.journeyGroups) };
-  return { format: HISTORY_FORMAT, version: HISTORY_VERSION, sourceHistoryVersion: HISTORY_VERSION, segmented: true, model: manifest.model || "", shards, ...metadata, snapshot: combineSnapshots(shards, metadata) };
+  const metadata = { imports, rawArchives: normaliseRawArchiveRegistry(manifest.rawArchives, imports), gpsImports: Array.isArray(manifest.gpsImports) ? manifest.gpsImports : [], customCharts: validateCustomCharts(manifest.customCharts), journeyGroups: validateJourneyGroups(manifest.journeyGroups), ownership: validateOwnershipMetadata(manifest.ownership) };
+  return { format: HISTORY_FORMAT, version: HISTORY_VERSION, sourceHistoryVersion: Number(manifest.version || HISTORY_VERSION), segmented: true, model: manifest.model || "", shards, ...metadata, snapshot: combineSnapshots(shards, metadata) };
 }
 
 export async function exportHistory(state, report = () => {}) {
@@ -1147,7 +1228,7 @@ export async function importHistory(source, report = () => {}) {
   if (manifestLength > 64_000_000 || 12 + manifestLength > sourceSize) throw new Error("history_integrity");
   let manifest;
   try { manifest = JSON.parse(new TextDecoder().decode(await readSourceRange(source, 12, 12 + manifestLength))); } catch { throw new Error("history_integrity"); }
-  if (header[7] === HISTORY_VERSION && manifest.format === SEGMENTED_HISTORY_FORMAT) return importSegmentedHistory(source, manifest, manifestLength, report);
+  if (manifest.format === SEGMENTED_HISTORY_FORMAT && manifest.version === header[7] && SUPPORTED_HISTORY_VERSIONS.includes(manifest.version)) return importSegmentedHistory(source, manifest, manifestLength, report);
   const legacy = await importLegacyHistory(source, report);
   return toSegmentedState(legacy, report);
 }

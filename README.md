@@ -186,7 +186,8 @@ Read the full [privacy notes](PRIVACY.md), [security guidance](SECURITY.md), and
 | [Privacy](PRIVACY.md) | What stays local and how to handle sensitive files |
 | [Security](SECURITY.md) | Safe reporting and importer security boundaries |
 | [Architecture](docs/ARCHITECTURE.md) | Browser engine, data flow, and portable-history design |
-| [`.xpeng` v7 format](docs/XPENG_HISTORY_V7_SPEC.md) | Segmented long-history format, lazy detail loading, compatibility, and integrity checks |
+| [Segmented `.xpeng` v7–v8 format](docs/XPENG_HISTORY_V7_SPEC.md) | Long-history shards, ownership metadata, lazy detail loading, compatibility, and integrity checks |
+| [v2.4.0 release notes](docs/RELEASE_NOTES_2.4.0.md) | Labels, tariffs, report exports, GPS CSV, and safe Drive history refresh |
 | [v2.3.0 release notes](docs/RELEASE_NOTES_2.3.0.md) | Lifetime highlights, manageable observations, monthly charts, and charging filters |
 | [v2.2.2 release notes](docs/RELEASE_NOTES_2.2.2.md) | Session source cache, latest-only Drive backup, telemetry-gap detection, and quality/search corrections |
 | [v2.2.1 release notes](docs/RELEASE_NOTES_2.2.1.md) | One-day Raw Files overlap and automatic re-evaluation on the next ZIP import |
@@ -220,7 +221,7 @@ The normal import path is a dedicated JavaScript Web Worker that streams the
 ZIP, keeps the required signals in typed columns, and computes the dashboard in
 memory. The earlier Python/WebAssembly processor remains bundled only so that
 existing version 1 and 2 history files can still be opened. The native reader
-accepts versions 3 through 7; new exports use segmented version 7.
+accepts versions 3 through 8; new exports use segmented version 8.
 
 ## Open-source acknowledgement
 

@@ -1,5 +1,8 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { consumptionUnit, consumptionValue, distanceUnit, distanceValue } from "./units.js";
+import { buildCustomChart } from "./custom-charts.js";
+import { buildLifetimeHighlights } from "./lifetime-highlights.js";
+import { ownershipMaps } from "./ownership-metadata.js";
 
 const PAGE = [595.28, 841.89];
 const MARGIN = 42;
@@ -28,9 +31,9 @@ function formatNumber(value, locale, digits = 1) {
   return new Intl.NumberFormat(locale, { minimumFractionDigits: 0, maximumFractionDigits: digits }).format(Number(value));
 }
 
-function formatMoney(value, locale) {
+function formatMoney(value, locale, currency = "EUR") {
   if (value == null || !Number.isFinite(Number(value))) return "-";
-  return new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" }).format(Number(value));
+  return new Intl.NumberFormat(locale, { style: "currency", currency }).format(Number(value));
 }
 
 function formatDate(value, locale) {
@@ -68,7 +71,7 @@ function wrapText(text, font, size, maxWidth) {
   return lines;
 }
 
-export async function downloadReportPdf({ data, locale, t, startDate, endDate, energyPrice, reference, includeMaps = false, units = { system: "metric", pressure: "bar" } }) {
+export async function downloadReportPdf({ data, locale, t, startDate, endDate, energyPrice, currency = "EUR", reference, includeMaps = false, includeMonthly = true, includeHighlights = true, selectedChartIds = [], units = { system: "metric", pressure: "bar" } }) {
   const first = startDate && endDate && startDate > endDate ? endDate : startDate;
   const last = startDate && endDate && startDate > endDate ? startDate : endDate;
   const inside = (row) => {
@@ -100,6 +103,7 @@ export async function downloadReportPdf({ data, locale, t, startDate, endDate, e
   const acEnergy = total(charges.filter((row) => row.chargeType === "AC"), "batteryEnergyKwh");
   const dcEnergy = total(charges.filter((row) => row.chargeType === "DC"), "batteryEnergyKwh");
   const peakChargingPower = charges.reduce((peak, row) => Math.max(peak, number(row.maxPowerKw)), 0) || null;
+  const ownership = ownershipMaps(data.ownership);
 
   const pdf = await PDFDocument.create();
   pdf.setTitle(clean(t("reportPdfTitle")));
@@ -152,8 +156,8 @@ export async function downloadReportPdf({ data, locale, t, startDate, endDate, e
     [t("averageConsumption"), `${formatNumber(consumptionValue(consumption, units.system), locale)} ${consumptionLabel}`],
     [t("charges"), formatNumber(charges.length, locale, 0)],
     [t("gridEnergy"), `${formatNumber(wallEnergy, locale)} kWh`],
-    [t("reportEstimatedCost"), hasPrice ? formatMoney(estimatedCost, locale) : t("reportNotProvided")],
-    [`${t("reportCostPer100")} ${distanceLabel}`, hasPrice ? `${formatMoney(costPer100, locale)} / 100 ${distanceLabel}` : t("reportNotProvided")],
+    [t("reportEstimatedCost"), hasPrice ? formatMoney(estimatedCost, locale, currency) : t("reportNotProvided")],
+    [`${t("reportCostPer100")} ${distanceLabel}`, hasPrice ? `${formatMoney(costPer100, locale, currency)} / 100 ${distanceLabel}` : t("reportNotProvided")],
   ];
   const gap = 10;
   const cardWidth = (CONTENT_WIDTH - gap) / 2;
@@ -201,7 +205,7 @@ export async function downloadReportPdf({ data, locale, t, startDate, endDate, e
   page.drawRectangle({ x: MARGIN, y: y - 42, width: CONTENT_WIDTH, height: 42, color: COLORS.amberSoft });
   y -= 13;
   drawWrapped(hasPrice
-    ? `${t("reportCostBasis")}: ${formatMoney(energyPrice, locale)}/kWh. ${t("reportDisclaimer")}`
+    ? `${t("reportCostBasis")}: ${formatMoney(energyPrice, locale, currency)}/kWh. ${t("reportDisclaimer")}`
     : `${t("reportPriceMissing")} ${t("reportDisclaimer")}`,
   { x: MARGIN + 12, width: CONTENT_WIDTH - 24, size: 8, lineHeight: 11, color: COLORS.muted });
   y -= 22;
@@ -255,7 +259,7 @@ export async function downloadReportPdf({ data, locale, t, startDate, endDate, e
       `${formatNumber(row.energyUsedKwh, locale)} kWh`,
       `${formatNumber(consumptionValue(row.consumptionKwh100, units.system), locale)} ${consumptionLabel}`,
       `${formatNumber(row.wallEnergyKwh, locale)} kWh`,
-      hasPrice ? formatMoney(number(row.wallEnergyKwh) * energyPrice, locale) : "-",
+      hasPrice ? formatMoney(number(row.wallEnergyKwh) * energyPrice, locale, currency) : "-",
     ]),
     [73, 71, 74, 100, 88, 105],
   );
@@ -270,10 +274,46 @@ export async function downloadReportPdf({ data, locale, t, startDate, endDate, e
       formatDuration(row.durationMinutes, t),
       `${formatNumber(row.batteryEnergyKwh, locale)} kWh`,
       `${formatNumber(row.wallEnergyKwh, locale)} kWh`,
-      hasPrice ? formatMoney(number(row.wallEnergyKwh) * energyPrice, locale) : "-",
+      hasPrice ? formatMoney(number(row.wallEnergyKwh) * energyPrice, locale, currency) : "-",
     ]),
     [73, 55, 82, 94, 88, 119],
   );
+
+  drawTable(
+    t("classifiedJourneys"),
+    t("classifiedJourneysHelp"),
+    [t("date"), t("classification"), t("customLabel"), t("distance"), t("duration")],
+    journeys.map((row) => { const tag=ownership.journeys.get(row.journeyId); return [formatDate(row.date||row.startedAtUtc,locale),clean(tag?.kind? t(`journeyKind_${tag.kind}`):t("unlabelled")),clean(tag?.label||"-"),`${formatNumber(distanceValue(row.distanceKm,units.system),locale)} ${distanceLabel}`,formatDuration(row.durationMinutes,t)]; }),
+    [76, 92, 135, 96, 112],
+  );
+
+  const categoryTotals=["home","work","public","custom"].map((category)=>{const categoryRows=charges.filter((row)=>ownership.charges.get(row.chargeId)?.category===category);return [t(`chargeCategory_${category}`),`${categoryRows.length}`,`${formatNumber(total(categoryRows,"wallEnergyKwh"),locale)} kWh`,hasPrice?formatMoney(total(categoryRows,"wallEnergyKwh")*energyPrice,locale,currency):"-"];}).filter((row)=>row[1]!=="0");
+  drawTable(t("chargingByLocation"),t("chargingByLocationHelp"),[t("classification"),t("sessions"),t("gridEnergy"),t("reportEstimatedCost")],categoryTotals,[130,90,135,156]);
+
+  if(includeMonthly&&daily.length){
+    addPage(); sectionTitle(t("automaticMonthlySummary"),t("includeMonthlySummaryHelp"));
+    const shown=daily.slice(-31),maxDistance=Math.max(1,...shown.map((row)=>number(row.distanceKm))),barWidth=CONTENT_WIDTH/Math.max(1,shown.length);
+    page.drawLine({start:{x:MARGIN,y:y-170},end:{x:PAGE[0]-MARGIN,y:y-170},thickness:.6,color:COLORS.line});
+    shown.forEach((row,index)=>{const height=number(row.distanceKm)/maxDistance*145;page.drawRectangle({x:MARGIN+index*barWidth+1,y:y-170,width:Math.max(1,barWidth-2),height,color:COLORS.mint});});
+    y-=196;
+    drawWrapped(`${t("distance")}: ${formatNumber(displayDistance,locale)} ${distanceLabel} · ${t("averageConsumption")}: ${formatNumber(consumptionValue(consumption,units.system),locale)} ${consumptionLabel} · ${t("reportEstimatedCost")}: ${hasPrice?formatMoney(estimatedCost,locale,currency):t("reportNotProvided")}`,{size:9,font:bold,color:COLORS.ink});
+  }
+
+  if(includeHighlights){
+    const highlights=buildLifetimeHighlights(data); addPage(); sectionTitle(t("nav_highlights"),t("section_highlights_help"));
+    const highlightRows=[[t("highlightTopSpeed"),`${formatNumber(highlights.fastest?.maxSpeedKmh,locale)} km/h`],[t("highlightPeakPower"),`${formatNumber(highlights.power?.peakDrivePowerKw,locale)} kW`],[t("highlightLongestDistance"),`${formatNumber(distanceValue(highlights.distance?.distanceKm,units.system),locale)} ${distanceLabel}`],[t("highlightLongestTime"),formatDuration(highlights.duration?.durationMinutes,t)],[t("highlightZeroToHundred"),highlights.sprint?`${formatNumber(highlights.sprint.zeroToHundredSeconds,locale,2)} s`:t("notObserved")],[t("highlightRegenerated"),`${formatNumber(highlights.totalRegeneratedKwh,locale)} kWh`]];
+    highlightRows.forEach(([label,value],index)=>{const column=index%2,row=Math.floor(index/2),x=MARGIN+column*(cardWidth+gap),top=y-row*74;page.drawRectangle({x,y:top-58,width:cardWidth,height:58,color:COLORS.panel,borderColor:COLORS.line,borderWidth:.5});page.drawText(fitText(label,regular,8,cardWidth-20),{x:x+10,y:top-19,size:8,font:regular,color:COLORS.muted});page.drawText(fitText(value,bold,14,cardWidth-20),{x:x+10,y:top-42,size:14,font:bold,color:COLORS.ink});});
+    y-=238;
+  }
+
+  const selectedCharts=safe(data.customCharts).filter((chart)=>selectedChartIds.includes(chart.id));
+  for(const config of selectedCharts){
+    const model=buildCustomChart(data,config,units,locale);if(model.missing)continue;addPage();sectionTitle(config.title||t("nav_mycharts"),config.description||"");
+    const chartRows=model.rows.slice(-100),series=model.series.slice(0,3),values=chartRows.flatMap((row)=>series.map((item)=>number(row[item.key]))),min=Math.min(0,...values),max=Math.max(1,...values),height=270,width=CONTENT_WIDTH,palette=[COLORS.mint,rgb(.39,.72,.83),rgb(.89,.65,.18)];
+    page.drawRectangle({x:MARGIN,y:y-height,width,height,color:COLORS.panel,borderColor:COLORS.line,borderWidth:.6});
+    series.forEach((item,seriesIndex)=>{let previous=null;chartRows.forEach((row,index)=>{const point={x:MARGIN+(chartRows.length===1?.5:index/(chartRows.length-1))*width,y:y-12-(number(row[item.key])-min)/(max-min)*(height-30)};if(config.type==="bar"||config.type==="histogram")page.drawRectangle({x:point.x,y:y-height,width:Math.max(1,width/chartRows.length/series.length-1),height:Math.max(0,point.y-(y-height)),color:palette[seriesIndex]});else if(previous)page.drawLine({start:previous,end:point,thickness:1.3,color:palette[seriesIndex]});previous=point;});page.drawText(fitText(t(item.label),regular,8,150),{x:MARGIN+seriesIndex*165,y:y-height-16,size:8,font:regular,color:palette[seriesIndex]});});
+    y-=height+34;
+  }
 
   if (includeMaps) {
     const mappedJourneys = journeys.filter((journey) => safe(journey.gps?.segments).some((segment) => safe(segment).length > 1));

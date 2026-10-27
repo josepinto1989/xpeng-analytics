@@ -2,6 +2,11 @@ const MAX_GPX_BYTES = 50 * 1024 * 1024;
 const MAX_TRACK_POINTS = 1_000_000;
 const ROUTE_PREVIEW_POINTS = 2_000;
 const MAP_GAP_SECONDS = 30;
+const CSV_HEADER_ALIASES = {
+  time: ["time","timestamp","datetime","date_time","recorded_at","recordedat","utc","timeutc","date"],
+  lat: ["lat","latitude","gps_latitude"], lon: ["lon","lng","longitude","gps_longitude"],
+  elevation: ["ele","elevation","alt","altitude","height"], speed: ["speed","speed_mps","speed_ms","speed_kmh","velocity"],
+};
 
 const finite = Number.isFinite;
 const clamp = (value, minimum = 0, maximum = 1) => Math.max(minimum, Math.min(maximum, value));
@@ -22,6 +27,31 @@ function optionalNumber(value) {
   if (value == null || value === "") return NaN;
   const parsed = Number(value);
   return finite(parsed) ? parsed : NaN;
+}
+
+function csvRows(text, delimiter) {
+  const output=[];let row=[],field="",quoted=false;
+  for(let index=0;index<text.length;index++){
+    const char=text[index];
+    if(quoted){if(char==='"'&&text[index+1]==='"'){field+='"';index++;}else if(char==='"')quoted=false;else field+=char;continue;}
+    if(char==='"'){quoted=true;continue;}if(char===delimiter){row.push(field);field="";continue;}
+    if(char==='\n'||char==='\r'){if(char==='\r'&&text[index+1]==='\n')index++;row.push(field);field="";if(row.some((value)=>value.trim()))output.push(row);row=[];continue;}field+=char;
+  }
+  row.push(field);if(row.some((value)=>value.trim()))output.push(row);return output;
+}
+
+function normalHeader(value){return String(value||"").trim().toLowerCase().replace(/^\ufeff/,"").replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");}
+function headerIndex(headers,aliases){for(const alias of aliases){const index=headers.indexOf(alias);if(index>=0)return index;}return -1;}
+function parsedTimestamp(value){
+  const raw=String(value??"").trim();if(!raw)return NaN;const numeric=Number(raw);
+  if(finite(numeric)){if(numeric>1e12)return Math.floor(numeric/1000);if(numeric>1e9)return Math.floor(numeric);}
+  const milliseconds=Date.parse(raw);return finite(milliseconds)?Math.floor(milliseconds/1000):NaN;
+}
+
+export function looksLikeGpsCsv(text){
+  if(typeof text!=="string"||!text.trim())return false;const first=text.split(/\r?\n/,1)[0]||"";
+  const delimiter=[",",";","\t"].sort((a,b)=>first.split(b).length-first.split(a).length)[0],headers=csvRows(first,delimiter)[0]?.map(normalHeader)||[];
+  return headerIndex(headers,CSV_HEADER_ALIASES.time)>=0&&headerIndex(headers,CSV_HEADER_ALIASES.lat)>=0&&headerIndex(headers,CSV_HEADER_ALIASES.lon)>=0;
 }
 
 function creator(text) {
@@ -169,6 +199,25 @@ export function parseGpxText(text, { sourceName = "track.gpx", sourceSha256 = "u
   return tracks;
 }
 
+export function parseGpsCsvText(text, { sourceName = "track.csv", sourceSha256 = "unknown", startIndex = 0, trimMeters = 0 } = {}) {
+  if(typeof text!=="string"||!text.trim()||new TextEncoder().encode(text).byteLength>MAX_GPX_BYTES||!looksLikeGpsCsv(text))throw new Error("invalid_gpx");
+  const first=text.split(/\r?\n/,1)[0]||"",delimiter=[",",";","\t"].sort((a,b)=>first.split(b).length-first.split(a).length)[0],records=csvRows(text,delimiter);
+  if(records.length<3)throw new Error("invalid_gpx");
+  const headers=records.shift().map(normalHeader),timeIndex=headerIndex(headers,CSV_HEADER_ALIASES.time),latIndex=headerIndex(headers,CSV_HEADER_ALIASES.lat),lonIndex=headerIndex(headers,CSV_HEADER_ALIASES.lon),elevationIndex=headerIndex(headers,CSV_HEADER_ALIASES.elevation),speedIndex=headerIndex(headers,CSV_HEADER_ALIASES.speed),speedIsKmh=speedIndex>=0&&/kmh|kph/.test(headers[speedIndex]);
+  const points=[];let segment=0,previousTime=null;
+  for(const record of records){
+    const timestamp=parsedTimestamp(record[timeIndex]),lat=Number(String(record[latIndex]??"").trim().replace(",",".")),lon=Number(String(record[lonIndex]??"").trim().replace(",","."));
+    if(!finite(timestamp)||!finite(lat)||!finite(lon)||Math.abs(lat)>90||Math.abs(lon)>180)continue;
+    if(previousTime!=null&&timestamp-previousTime>600)segment++;
+    const speed=optionalNumber(record[speedIndex]);
+    points.push({timestamp,lat,lon,elevation:optionalNumber(record[elevationIndex]),speedMps:finite(speed)?(speedIsKmh?speed/3.6:speed):NaN,segment});previousTime=timestamp;
+    if(points.length>MAX_TRACK_POINTS)throw new Error("invalid_gpx");
+  }
+  points.sort((a,b)=>a.timestamp-b.timestamp);const unique=points.filter((point,index)=>!index||point.timestamp!==points[index-1].timestamp);
+  if(unique.length<2)throw new Error("invalid_gpx");
+  const track=buildTrack(sourceName,sourceSha256,startIndex,unique,0,"GPS CSV");track.requestedTrimMeters=Math.max(0,Number(trimMeters)||0);return [track];
+}
+
 function confidence(score) {
   return score >= .86 ? "high" : score >= .65 ? "medium" : "low";
 }
@@ -185,12 +234,12 @@ function upperBound(values, target) {
   return low;
 }
 
-function candidateForTrip(track, trip) {
+function candidateForTrip(track, trip, clockOffsetSeconds = 0) {
   const tripStart = Date.parse(trip.startedAtUtc) / 1000, tripEnd = Date.parse(trip.endedAtUtc) / 1000;
-  if (!finite(tripStart) || !finite(tripEnd) || tripEnd <= tripStart || track.time.at(-1) < tripStart || track.time[0] > tripEnd) return null;
-  const first = lowerBound(track.time, tripStart), last = upperBound(track.time, tripEnd), points = [];
+  if (!finite(tripStart) || !finite(tripEnd) || tripEnd <= tripStart || track.time.at(-1)+clockOffsetSeconds < tripStart || track.time[0]+clockOffsetSeconds > tripEnd) return null;
+  const first = lowerBound(track.time, tripStart-clockOffsetSeconds), last = upperBound(track.time, tripEnd-clockOffsetSeconds), points = [];
   for (let index = first; index < last; index++) points.push({
-    timestamp: track.time[index], lat: track.lat[index], lon: track.lon[index], elevation: track.elevation[index], speedMps: track.speedMps[index], segment: track.segment[index],
+    timestamp: track.time[index]+clockOffsetSeconds, lat: track.lat[index], lon: track.lon[index], elevation: track.elevation[index], speedMps: track.speedMps[index], segment: track.segment[index],
   });
   if (points.length < 2) return null;
   let route;
@@ -216,9 +265,21 @@ function candidateForTrip(track, trip) {
   const tripSpeed = Number(trip.avgSpeedKmh) || tripDistance / (duration / 3600), routeSpeed = routeDistance / (routeDuration / 3600);
   const speedScore = clamp(1 - Math.abs(routeSpeed - tripSpeed) / Math.max(10, tripSpeed));
   const qualityScore = clamp(Number(route.stats.qualityScore) / 100);
-  const score = .4 * coverageScore + .12 * startScore + .1 * endScore + .2 * distanceScore + .1 * speedScore + .08 * qualityScore;
+  const offsetPenalty=clockOffsetSeconds?Math.min(.08,Math.abs(clockOffsetSeconds)/3600*.004):0;
+  const score = .4 * coverageScore + .12 * startScore + .1 * endScore + .2 * distanceScore + .1 * speedScore + .08 * qualityScore-offsetPenalty;
   const eligible = route.time.length >= 2 && coverageScore >= .2 && routeDistance >= Math.min(.03, tripDistance * .2) && score >= .45;
-  return { route, trip, score, eligible, coverageScore, distanceScore, speedScore };
+  return { route, trip, score, eligible, coverageScore, distanceScore, speedScore, clockOffsetSeconds };
+}
+
+function routeContext(route){
+  const seconds={urban:0,road:0,motorway:0};let validSeconds=0;
+  for(let index=1;index<route.time.length;index++){
+    const elapsed=route.time[index]-route.time[index-1];if(elapsed<=0||elapsed>60||route.segment[index]!==route.segment[index-1])continue;
+    let speed=Number(route.speedMps[index])*3.6;if(!finite(speed))speed=pointDistance({lat:route.lat[index-1],lon:route.lon[index-1]},{lat:route.lat[index],lon:route.lon[index]})/elapsed*3.6;
+    if(!finite(speed)||speed<2)continue;const context=speed>=90?"motorway":speed>=50?"road":"urban";seconds[context]+=elapsed;validSeconds+=elapsed;
+  }
+  const ranked=Object.entries(seconds).sort((a,b)=>b[1]-a[1]),dominant=ranked[0]?.[0]||"urban",share=validSeconds?ranked[0][1]/validSeconds:0;
+  return {dominant,confidence:share>=.7?"high":share>=.5?"medium":"low",shares:Object.fromEntries(Object.entries(seconds).map(([key,value])=>[key,rounded(validSeconds?value/validSeconds*100:0,0)]))};
 }
 
 function routePreview(track) {
@@ -244,7 +305,10 @@ export function gpsSnapshot(tracks = [], journeys = [], trips = []) {
   for (const trip of trips) {
     const bestBySource = new Map();
     for (const track of tracks) {
-      const candidate = candidateForTrip(track, trip);
+      let candidate = candidateForTrip(track, trip, 0);
+      if(!candidate||candidate.score<.62){
+        for(let hour=-12;hour<=14;hour++){if(!hour)continue;const shifted=candidateForTrip(track,trip,hour*3600);if(shifted&&(!candidate||shifted.score>candidate.score))candidate=shifted;}
+      }
       if (!candidate) continue;
       const sourceId = candidate.route.sourceTrackId;
       const previous = bestBySource.get(sourceId);
@@ -264,6 +328,8 @@ export function gpsSnapshot(tracks = [], journeys = [], trips = []) {
     ignoredSourceIds.delete(chosen.route.sourceTrackId);
     chosen.route.ignoredSourceIds = [...ignoredSourceIds].sort();
     chosen.route.ignoredDuplicates = chosen.route.ignoredSourceIds.length;
+    chosen.route.clockOffsetSeconds=chosen.clockOffsetSeconds;
+    chosen.route.stats={...chosen.route.stats,matchCoveragePct:rounded(chosen.coverageScore*100,1),partialMatch:chosen.coverageScore<.8,sparseRecording:Number(chosen.route.stats.medianIntervalSeconds)>10||Number(chosen.route.stats.largestGapSeconds)>60,clockOffsetMinutes:Math.round(chosen.clockOffsetSeconds/60),routeContext:routeContext(chosen.route)};
     duplicateCount += chosen.route.ignoredDuplicates;
     chosenByTrip.set(trip.tripId, chosen);
     selectedTracks.push(chosen.route);
@@ -276,6 +342,9 @@ export function gpsSnapshot(tracks = [], journeys = [], trips = []) {
     const sourceNames = [...new Set(chosen.map((row) => row.route.sourceName))], creators = [...new Set(chosen.map((row) => row.route.creator))];
     const weight = chosen.reduce((total, row) => total + Math.max(1, row.route.time.at(-1) - row.route.time[0]), 0);
     const score = chosen.reduce((total, row) => total + row.score * Math.max(1, row.route.time.at(-1) - row.route.time[0]), 0) / weight;
+    const contextTotals={urban:0,road:0,motorway:0};chosen.forEach((row)=>{const context=row.route.stats.routeContext;for(const key of Object.keys(contextTotals))contextTotals[key]+=Number(context?.shares?.[key]||0)*Math.max(1,row.route.time.at(-1)-row.route.time[0]);});
+    const contextShares=Object.fromEntries(Object.entries(contextTotals).map(([key,value])=>[key,rounded(value/weight,0)])),dominantContext=Object.entries(contextShares).sort((a,b)=>b[1]-a[1])[0]?.[0]||"urban";
+    const offsets=[...new Set(chosen.map((row)=>Math.round(row.clockOffsetSeconds/60)).filter(Boolean))];
     return {
       ...journey,
       gps: {
@@ -286,6 +355,9 @@ export function gpsSnapshot(tracks = [], journeys = [], trips = []) {
         distanceKm: rounded(chosen.reduce((total, row) => total + Number(row.route.stats.distanceKm || 0), 0), 3),
         points: chosen.reduce((total, row) => total + row.route.time.length, 0),
         trimMeters: Math.max(...chosen.map((row) => Number(row.route.trimMeters || 0))),
+        coveragePct:rounded(chosen.reduce((total,row)=>total+row.coverageScore*Math.max(1,row.route.time.at(-1)-row.route.time[0]),0)/weight*100,1),
+        diagnostics:{partial:chosen.some((row)=>row.route.stats.partialMatch),sparse:chosen.some((row)=>row.route.stats.sparseRecording),clockOffsetMinutes:offsets.length===1?offsets[0]:offsets.length?offsets:null},
+        routeContext:{dominant:dominantContext,shares:contextShares,confidence:contextShares[dominantContext]>=70?"high":contextShares[dominantContext]>=50?"medium":"low"},
         segments: chosen.flatMap((row) => routePreview(row.route)),
       },
     };
@@ -294,7 +366,7 @@ export function gpsSnapshot(tracks = [], journeys = [], trips = []) {
     trackId: track.trackId, sourceName: track.sourceName, creator: track.creator, startedAtUtc: iso(track.time[0]), endedAtUtc: iso(track.time.at(-1)),
     trimMeters: track.trimMeters, ...track.stats, matchedTripId: track.matchedTripId, confidence: confidence(chosenByTrip.get(track.matchedTripId)?.score || 0), confidenceScore: rounded((chosenByTrip.get(track.matchedTripId)?.score || 0) * 100, 0),
   }));
-  return { journeys: journeyRows, selectedTracks, gps: { tracks: trackRows, matchedCount: journeyRows.filter((row) => row.gps).length, matchedTripCount: chosenByTrip.size, duplicateCount, ignoredTrackCount } };
+  return { journeys: journeyRows, selectedTracks, gps: { tracks: trackRows, matchedCount: journeyRows.filter((row) => row.gps).length, matchedTripCount: chosenByTrip.size, duplicateCount, ignoredTrackCount, diagnosticCounts:{partial:trackRows.filter((row)=>row.partialMatch).length,sparse:trackRows.filter((row)=>row.sparseRecording).length,clockAdjusted:trackRows.filter((row)=>row.clockOffsetMinutes).length} } };
 }
 
 export const GPX_LIMITS = { maxBytes: MAX_GPX_BYTES, maxPoints: MAX_TRACK_POINTS };

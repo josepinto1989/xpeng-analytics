@@ -1,12 +1,15 @@
-# XPENG Analytics portable history format v7
+# XPENG Analytics portable history format v7–v8
 
-Version 7 is the long-history `.xpeng` container used by XPENG Analytics. It
+Version 7 introduced the long-history `.xpeng` container used by XPENG
+Analytics. Version 8 keeps the same segmented layout and adds validated
+ownership metadata for classifications and tariffs. It
 keeps the application local-first while avoiding the need to decompress an
 entire multi-year telemetry archive into browser memory.
 
 ## Container
 
-The file begins with the seven-byte `XPENGA\0` prefix, byte `7`, a four-byte
+The file begins with the seven-byte `XPENGA\0` prefix, a supported version byte
+(`7` or `8`), a four-byte
 big-endian manifest length, the UTF-8 JSON manifest, and the binary payload.
 The manifest format is `xpeng-analytics-segmented-history`.
 
@@ -28,6 +31,10 @@ optional Google Drive retention state. The ZIP payload is never embedded in
 has been moved to Drive trash. Older v7 files without this field derive basic
 registry entries from their existing import provenance.
 
+Version 8 may also include an `ownership` object containing validated journey
+and charging classifications plus reusable tariff definitions. It contains no
+credentials and does not alter the original telemetry.
+
 ## Runtime behaviour
 
 Opening the file reads the manifest and compact summaries. It does not
@@ -48,15 +55,15 @@ performs matching automatically.
 
 ## Compatibility
 
-Readers accept versions 3, 4, 5, and 6. Those formats are validated and migrated
-locally into v7 monthly shards. This first migration temporarily requires the
-memory used by the older monolithic history. Subsequent v7 openings are lazy.
+Readers accept versions 3 through 8. Older formats are validated and migrated
+locally into v8 monthly shards. This first migration temporarily requires the
+memory used by the older monolithic history. Subsequent segmented openings are lazy.
 Version 1 JSON/GZ and version 2 SQLite/XZ remain handled by the established
-compatibility processor before entering the native v7 path.
+compatibility processor before entering the native segmented path.
 
 ## Privacy and security
 
-Version 7 is compressed but not encrypted. It may contain complete vehicle
+Versions 7 and 8 are compressed but not encrypted. They may contain complete vehicle
 telemetry, precise GPS coordinates, personal chart definitions, and manual
 journey groups. Treat it as sensitive personal data. The normal local and
 Google Drive workflows transport the container as a Blob; they do not upload

@@ -44,17 +44,17 @@ const fetchImpl = async (url, options = {}) => {
       throw new TypeError("Simulated interrupted upload");
     }
     backupCreated = true;
-    assert.equal(options.body, backupPayload);
+    assert.deepEqual(new Uint8Array(await options.body.arrayBuffer()), new Uint8Array(await backupPayload.arrayBuffer()));
     return jsonResponse({ id: "backup-1", name: googleDriveConstants.HISTORY_NAME, modifiedTime: "2026-10-18T12:00:00Z", size: String(backupPayload.size), parents: ["folder-1"], appProperties: currentProperties });
   }
   if (String(url) === "https://upload.example/session-original" && options.method === "PUT") {
-    assert.equal(options.body, originalPayload);
+    assert.deepEqual(new Uint8Array(await options.body.arrayBuffer()), new Uint8Array(await originalPayload.arrayBuffer()));
     const file = { id: "original-1", name: originalPayload.name, createdTime: "2026-10-26T12:00:00Z", modifiedTime: "2026-10-26T12:00:00Z", size: String(originalPayload.size), parents: ["original-folder-1"], appProperties: currentProperties };
     originalFiles.splice(0, originalFiles.length, file);
     return jsonResponse(file);
   }
   if (String(url) === "https://upload.example/session-gps" && options.method === "PUT") {
-    assert.equal(options.body, gpsPayload);
+    assert.deepEqual(new Uint8Array(await options.body.arrayBuffer()), new Uint8Array(await gpsPayload.arrayBuffer()));
     const file = { id: "gps-1", name: gpsPayload.name, createdTime: "2026-10-26T13:00:00Z", modifiedTime: "2026-10-26T13:00:00Z", size: String(gpsPayload.size), parents: ["gps-folder-1"], appProperties: currentProperties };
     gpsFiles.splice(0, gpsFiles.length, file);
     return jsonResponse(file);
@@ -141,8 +141,10 @@ const initial = await client.refreshBackup();
 assert.equal(initial.exists, false);
 assert.equal(initial.user.emailAddress, "synthetic-account");
 const metadata = { coverageStartUtc: "2026-09-01T00:00:00.000Z", coverageEndUtc: "2026-10-18T12:00:00.000Z", historyVersion: 5, importCount: 3 };
-const uploaded = await client.uploadHistory(backupPayload, metadata);
+const uploadProgress = [];
+const uploaded = await client.uploadHistory(backupPayload, metadata, (value) => uploadProgress.push(value));
 assert.equal(uploaded.file.id, "backup-1");
+assert.deepEqual(uploadProgress, [0, 1]);
 assert.equal(uploaded.file.historyVersion, 5);
 assert.equal(readGoogleDriveSettings(storage).fileId, "backup-1");
 const uploadStartCall = calls.find((call) => call.method === "POST" && call.url.includes("upload/drive/v3/files"));

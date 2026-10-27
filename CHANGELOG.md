@@ -4,6 +4,28 @@ All notable public changes are documented here.
 
 ## Unreleased
 
+## 2.4.0 — 2026-10-27
+
+- Added personal, business, commute, and custom journey classification plus
+  home, work, public, and custom charging categories.
+- Added reusable electricity tariffs and local estimated charging costs by
+  session, period, distance, and category.
+- Added labelled journey and categorized charging CSV exports, report chart
+  selection, Lifetime Highlights, and monthly-summary options to PDF reports.
+- Added GPS CSV import, ZIP discovery, clock/coverage diagnostics, and a
+  software-estimated urban/road/motorway context while keeping GPS optional.
+- Added portable-history version 8 for ownership metadata and transparent
+  recalculation of older Google Drive histories from retained RAW sources.
+- Drive refresh now verifies continuous RAW coverage, preserves GPS and
+  personal metadata, processes source files one at a time, and replaces the
+  backup only after a successful rebuild.
+- Added real progress for large resumable Drive uploads and a clear warning to
+  keep the tab open while the backup is running.
+- Improved recovery after worker or network failures and prevented an
+  unacknowledged Drive upload chunk from being treated as complete.
+- Improved landing-page accessibility, contrast, form labelling, and crawler
+  metadata without changing the established visual layout.
+
 ## 2.3.0 — 2026-10-27
 
 - Added a fullscreen Lifetime Highlights view with top speed, peak drive power

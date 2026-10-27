@@ -6,7 +6,9 @@ import TutorialOverlay from "./TutorialOverlay.jsx";
 import { completeTutorialMode, nextTutorialMode, readTutorialState, shouldShowDashboardTutorialForHistory, tutorialStates, writeTutorialState } from "./onboarding.js";
 import { createGoogleDriveClient, googleDriveConfiguration, readGoogleDriveSettings } from "./google-drive.js";
 import { buildDriveBackupMetadata } from "./drive-backup-metadata.js";
+import { rawSourcesCoverBackup } from "./drive-history-refresh.js";
 import { mergeRawArchiveRegistry } from "./raw-archive-registry.js";
+import { CURRENT_HISTORY_VERSION, SUPPORTED_HISTORY_VERSIONS } from "./history-version.js";
 import { forgetUploadedSessionArchives, rememberSessionArchive, sessionArchivesToUpload } from "./session-archive-cache.js";
 import {
   deletePersistentHistory,
@@ -43,6 +45,7 @@ const phaseKeys = {
   drive_backup_saved: "phaseDriveBackupSaved",
   drive_backup_open: "phaseDriveBackupOpen",
   drive_original_archive: "phaseDriveOriginalArchive",
+  drive_history_refresh: "phaseDriveHistoryRefresh",
   complete: "phaseComplete",
   reset: "phaseReset",
   native_ready: "phaseNativeReady",
@@ -118,7 +121,7 @@ function processingProfile() {
 const nativeHistoryPrefix = [88, 80, 69, 78, 71, 65, 0];
 const isNativeHistory = (buffer) => {
   const bytes = new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 8));
-  return bytes.length === 8 && nativeHistoryPrefix.every((value, index) => bytes[index] === value) && [3, 4, 5, 6, 7].includes(bytes[7]);
+  return bytes.length === 8 && nativeHistoryPrefix.every((value, index) => bytes[index] === value) && SUPPORTED_HISTORY_VERSIONS.includes(bytes[7]);
 };
 
 export default function App() {
@@ -174,6 +177,7 @@ export default function App() {
       error: null,
     };
   });
+  const [driveRefreshPrompt, setDriveRefreshPrompt] = useState(null);
   const inputRef = useRef(null);
   const workerRef = useRef(null);
   const workerModeRef = useRef("native");
@@ -200,6 +204,8 @@ export default function App() {
   const driveArchiveGpsRef = useRef(drive.archiveGps);
   const pendingOriginalArchivesRef = useRef([]);
   const restoringDriveRef = useRef(false);
+  const driveRefreshQueueRef = useRef(null);
+  const processDriveRefreshNextRef = useRef(null);
   const tutorialAutoStartedRef = useRef({ landing: false, dashboard: false });
   const detailRequestsRef = useRef(new Set());
   const t = useMemo(() => translator(locale), [locale]);
@@ -298,7 +304,10 @@ export default function App() {
     const onMessage = (event) => {
       const message = event.data ?? {};
       if (message.type === "progress") {
-        setProgress({ percent: message.percent ?? 0, phase: message.phase, detail: message.detail || "" });
+        const exportingForDrive = exportPurposeRef.current === "drive" && ["history_export", "history_export_complete"].includes(message.phase);
+        setProgress(exportingForDrive
+          ? { percent: 5 + Math.min(100, message.percent ?? 0) * .62, phase: "drive_backup_save", detail: message.detail || "" }
+          : { percent: message.percent ?? 0, phase: message.phase, detail: message.detail || "" });
       } else if (message.type === "ready") {
         setEngineReady(true);
         if (pendingMessageRef.current) {
@@ -350,10 +359,24 @@ export default function App() {
           setBusy(false);
           setProgress({ percent: 100, phase: "complete" });
         }
+      } else if (message.type === "history_refresh_ready" || message.type === "history_refresh_source_imported") {
+        processDriveRefreshNextRef.current?.();
+      } else if (message.type === "history_refreshed") {
+        driveRefreshQueueRef.current = null;
+        setDashboardTutorialEligible(false);
+        snapshotRef.current = message.snapshot;
+        setSnapshot(message.snapshot);
+        setHistory([{ name: activeFileRef.current?.name ?? "Google Drive", status: "historyRefreshed", rows: message.snapshot?.overview?.tripCount ?? 0 }]);
+        activeFileRef.current = null;
+        setDrive((current) => ({ ...current, historyVersion: Number(message.metadata?.version || CURRENT_HISTORY_VERSION), busy: true, error: null }));
+        if (persistenceEnabledRef.current) {
+          driveAfterPersistenceRef.current = true;
+          queuePersistentSave();
+        } else queueDriveSave(false);
       } else if (message.type === "additional_imported") {
         const importedFile = activeFileRef.current;
         if (message.kind !== "gps" && importedFile?.name?.toLowerCase().endsWith(".zip")) pendingOriginalArchivesRef.current = rememberSessionArchive(pendingOriginalArchivesRef.current, { kind: "xpeng", file: importedFile, sha256: message.result?.archiveSha256, coverageStartUtc: message.result?.sourceStartUtc, coverageEndUtc: message.result?.sourceEndUtc });
-        if (message.kind === "gps" && /\.(gpx|zip)$/i.test(importedFile?.name || "")) pendingOriginalArchivesRef.current = rememberSessionArchive(pendingOriginalArchivesRef.current, { kind: "gps", file: importedFile, sha256: message.result?.sourceSha256 });
+        if (message.kind === "gps" && /\.(gpx|csv|zip)$/i.test(importedFile?.name || "")) pendingOriginalArchivesRef.current = rememberSessionArchive(pendingOriginalArchivesRef.current, { kind: "gps", file: importedFile, sha256: message.result?.sourceSha256 });
         snapshotRef.current = message.snapshot;
         setSnapshot(message.snapshot);
         setHistory((current) => [{
@@ -374,6 +397,14 @@ export default function App() {
         } else if (driveConnectedRef.current && driveAutoSyncRef.current) queueDriveSave(true);
       } else if (message.type === "journey_groups_updated") {
         const updated = message.snapshot || { ...snapshotRef.current, journeyGroups: message.groups || [] };
+        snapshotRef.current = updated;
+        setSnapshot(updated);
+        if (persistenceEnabledRef.current) {
+          driveAfterPersistenceRef.current = driveConnectedRef.current && driveAutoSyncRef.current;
+          queuePersistentSave();
+        } else if (driveConnectedRef.current && driveAutoSyncRef.current) queueDriveSave(true);
+      } else if (message.type === "ownership_updated") {
+        const updated = { ...snapshotRef.current, ownership: message.ownership };
         snapshotRef.current = updated;
         setSnapshot(updated);
         if (persistenceEnabledRef.current) {
@@ -448,7 +479,7 @@ export default function App() {
         if (purpose === "drive") {
           const backupMetadata = buildDriveBackupMetadata(snapshotRef.current, message.metadata?.version || 0);
           setDrive((current) => ({ ...current, busy: true, error: null }));
-          driveClientRef.current.uploadHistory(blob, backupMetadata).then((result) => {
+          driveClientRef.current.uploadHistory(blob, backupMetadata, (value) => setProgress({ percent: 68 + Math.round(value * 31), phase: "drive_backup_save", detail: "" })).then((result) => {
             driveConnectedRef.current = true;
             setDrive((current) => ({
               ...current,
@@ -495,6 +526,10 @@ export default function App() {
         setBusy(false);
         setProgress({ percent: 100, phase: "reset" });
       } else if (message.type === "error") {
+        driveRefreshQueueRef.current = null;
+        exportPurposeRef.current = null;
+        driveAfterPersistenceRef.current = false;
+        setDrive((current) => ({ ...current, busy: false, originalArchiveBusy: false }));
         if (message.code === "cancelled") {
           queueRef.current = [];
           historyFollowupQueueRef.current = [];
@@ -519,6 +554,10 @@ export default function App() {
       }
     };
     const onError = () => {
+      driveRefreshQueueRef.current = null;
+      exportPurposeRef.current = null;
+      driveAfterPersistenceRef.current = false;
+      setDrive((current) => ({ ...current, busy: false, originalArchiveBusy: false }));
       setError("engine_error");
       setBusy(false);
     };
@@ -581,10 +620,12 @@ export default function App() {
         try {
           let archived = null, archivedGps = null;
           const registryUpdates = [];
-          for (const original of originals) {
-            if (original.kind === "gps") archivedGps = await driveClientRef.current.uploadGpsExport(original.file, original);
+          for (let index = 0; index < originals.length; index++) {
+            const original = originals[index];
+            const onProgress = (value) => setProgress({ percent: 5 + Math.round((index + value) / originals.length * 90), phase: "drive_original_archive", detail: `${index + 1}/${originals.length} · ${original.file?.name || ""}` });
+            if (original.kind === "gps") archivedGps = await driveClientRef.current.uploadGpsExport(original.file, { ...original, onProgress });
             else {
-              archived = await driveClientRef.current.uploadOriginalExport(original.file, original);
+              archived = await driveClientRef.current.uploadOriginalExport(original.file, { ...original, onProgress });
               registryUpdates.push(...(archived.registryUpdates || []));
             }
             uploadedOriginals.push(original);
@@ -677,7 +718,7 @@ export default function App() {
   };
 
   const chooseAdditionalFiles = (files, options = {}) => {
-    const selected = [...(files || [])].filter((file) => /\.(gpx|zip)$/i.test(file.name));
+    const selected = [...(files || [])].filter((file) => /\.(gpx|csv|zip)$/i.test(file.name));
     if (!selected.length || busy || !engineReady || workerModeRef.current !== "native") return;
     additionalQueueRef.current = selected.map((file) => ({ file, options }));
     processAdditionalNext();
@@ -877,6 +918,65 @@ export default function App() {
     if (authorised) queueDriveSave(false);
   };
 
+  const importDriveHistory = (metadata, blob) => {
+    setDriveRefreshPrompt(null);
+    restoringDriveRef.current = true;
+    const file = new File([blob], metadata.name || "xpeng-analytics-history.xpeng", { type: "application/octet-stream" });
+    importHistoryFile(file, [], { skipConfirm: true });
+  };
+
+  const failDriveHistoryRefresh = (driveError) => {
+    console.error("Could not refresh the Google Drive history:", driveError);
+    driveRefreshQueueRef.current = null;
+    if (["driveReconnect", "driveAuthorisation"].includes(driveError.code)) driveConnectedRef.current = false;
+    setDrive((current) => ({ ...current, connected: driveConnectedRef.current, busy: false, error: driveError.code || "driveDownload" }));
+    setBusy(false);
+    setProgress({ percent: 100, phase: "complete" });
+  };
+
+  processDriveRefreshNextRef.current = async () => {
+    const queue = driveRefreshQueueRef.current;
+    if (!queue || queue.downloading) return;
+    if (queue.index >= queue.sources.length) {
+      workerRef.current.postMessage({ type: "refresh_history_finish" });
+      return;
+    }
+    const index = queue.index, source = queue.sources[index];
+    queue.downloading = true;
+    setProgress({ percent: 8 + Math.round((index / Math.max(1, queue.sources.length)) * 82), phase: "drive_history_refresh", detail: `${index + 1}/${queue.sources.length} · ${source.name}` });
+    try {
+      const result = await driveClientRef.current.downloadOriginalExport(source.id);
+      if (driveRefreshQueueRef.current !== queue) return;
+      queue.index += 1;
+      queue.downloading = false;
+      const file = new File([result.blob], result.file.name || source.name, { type: result.file.mimeType || result.blob.type || "application/octet-stream" });
+      workerRef.current.postMessage({ type: "refresh_history_source", kind: source.kind, file, filename: file.name, index, total: queue.sources.length, processingProfile: processingProfile() });
+    } catch (driveError) {
+      failDriveHistoryRefresh(driveError);
+    }
+  };
+
+  const refreshDriveHistory = async () => {
+    const pending = driveRefreshPrompt;
+    if (!pending?.canRefresh || busy) return;
+    setDriveRefreshPrompt(null);
+    setDrive((current) => ({ ...current, busy: true, error: null }));
+    setBusy(true);
+    setError(null);
+    setProgress({ percent: 3, phase: "drive_history_refresh", detail: "" });
+    try {
+      const sources = [
+        ...pending.rawFiles.map((source) => ({ ...source, kind: "xpeng" })),
+        ...pending.gpsFiles.map((source) => ({ ...source, kind: "gps" })),
+      ];
+      activeFileRef.current = new File([pending.blob], pending.metadata.name || "xpeng-analytics-history.xpeng", { type: "application/octet-stream" });
+      driveRefreshQueueRef.current = { sources, index: 0, downloading: false };
+      workerRef.current.postMessage({ type: "refresh_history_begin", history: pending.blob });
+    } catch (driveError) {
+      failDriveHistoryRefresh(driveError);
+    }
+  };
+
   const openGoogleDrive = async (backupId = null) => {
     if (busy || drive.busy || !engineReady) return;
     if (snapshotRef.current && !window.confirm(t("replaceWithHistoryConfirm"))) return;
@@ -899,9 +999,14 @@ export default function App() {
         historyVersion: Number(metadata.historyVersion || current.historyVersion || 0),
         error: null,
       }));
-      restoringDriveRef.current = true;
-      const file = new File([blob], metadata.name || "xpeng-analytics-history.xpeng", { type: "application/octet-stream" });
-      importHistoryFile(file, [], { skipConfirm: true });
+      const sourceVersion = Number(metadata.historyVersion || 0);
+      if (sourceVersion < CURRENT_HISTORY_VERSION) {
+        const [rawFiles, gpsFiles] = await Promise.all([driveClientRef.current.listOriginalExports(), driveClientRef.current.listGpsExports()]);
+        setDriveRefreshPrompt({ metadata, blob, sourceVersion, rawFiles, gpsFiles, canRefresh: rawSourcesCoverBackup(rawFiles, metadata) });
+        setDrive((current) => ({ ...current, busy: false, originals: rawFiles, gpsOriginals: gpsFiles }));
+        setBusy(false);
+        setProgress({ percent: 0, phase: null });
+      } else importDriveHistory(metadata, blob);
     } catch (driveError) {
       console.error("Could not open the Google Drive backup:", driveError);
       if (["driveReconnect", "driveAuthorisation"].includes(driveError.code)) driveConnectedRef.current = false;
@@ -1015,6 +1120,11 @@ export default function App() {
     workerRef.current.postMessage({ type: "set_journey_groups", groups });
   };
 
+  const saveOwnership = (ownership) => {
+    if (!snapshotRef.current || !engineReady || workerModeRef.current !== "native") return;
+    workerRef.current.postMessage({ type: "set_ownership", ownership });
+  };
+
   const reset = () => {
     if (!window.confirm(t("resetConfirm"))) return;
     startupRestoreAttemptedRef.current = true;
@@ -1037,6 +1147,21 @@ export default function App() {
     : error
       ? t(errorKeys[error] ?? "errorUnknown")
       : t(phaseKeys[progress.phase] ?? "ready");
+  const longDriveOperation = ["drive_backup_save", "drive_original_archive", "drive_history_refresh"].includes(progress.phase);
+  const driveRefreshDialog = driveRefreshPrompt ? <div className="drive-refresh-backdrop" role="presentation">
+    <section className="drive-refresh-dialog" role="dialog" aria-modal="true" aria-labelledby="drive-refresh-title">
+      <span>{t("driveRefreshKicker")}</span>
+      <h2 id="drive-refresh-title">{t("driveRefreshTitle")}</h2>
+      <p>{t("driveRefreshBody").replace("{old}", String(driveRefreshPrompt.sourceVersion || "—")).replace("{current}", String(CURRENT_HISTORY_VERSION))}</p>
+      <div className="drive-refresh-summary"><span><strong>{driveRefreshPrompt.rawFiles.length}</strong>{t("driveRefreshRawFiles")}</span><span><strong>{driveRefreshPrompt.gpsFiles.length}</strong>{t("driveRefreshGpsFiles")}</span></div>
+      {driveRefreshPrompt.canRefresh ? <p className="drive-refresh-warning">{t("driveRefreshWarning")}</p> : <p className="drive-refresh-warning is-error">{t(driveRefreshPrompt.rawFiles.length?"driveRefreshCoverageUnavailable":"driveRefreshUnavailable")}</p>}
+      <div className="drive-refresh-actions">
+        <button type="button" className="secondary-button" onClick={()=>importDriveHistory(driveRefreshPrompt.metadata,driveRefreshPrompt.blob)}>{t("driveOpenWithoutRefresh")}</button>
+        <button type="button" className="secondary-button" onClick={()=>setDriveRefreshPrompt(null)}>{t("cancel")}</button>
+        <button type="button" className="primary-action" disabled={!driveRefreshPrompt.canRefresh} onClick={refreshDriveHistory}>{t("driveRefreshNow")}</button>
+      </div>
+    </section>
+  </div> : null;
 
   if (snapshot) {
     return <><React.Suspense fallback={<main className="app-shell"><div className="section-empty"><strong>{t("loadingEngine")}</strong></div></main>}><Dashboard
@@ -1052,10 +1177,11 @@ export default function App() {
       onExport={exportHistory}
       onSaveCustomCharts={saveCustomCharts}
       onSaveJourneyGroups={saveJourneyGroups}
+      onSaveOwnership={saveOwnership}
       onRequestRecordDetails={requestRecordDetails}
       onReset={reset}
       onCancel={cancelProcessing}
-      canCancel={workerModeRef.current === "native"}
+      canCancel={workerModeRef.current === "native" && !longDriveOperation}
       history={history}
       persistence={persistence}
       onToggleRememberHistory={toggleRememberHistory}
@@ -1075,22 +1201,22 @@ export default function App() {
       theme={theme}
       onToggleTheme={() => setTheme((current) => current === "light" ? "dark" : "light")}
       onStartTutorial={startTutorial}
-    /></React.Suspense>{tutorialMode ? <TutorialOverlay steps={tutorialSteps} onComplete={finishTutorial} onSkip={skipTutorial} t={t} /> : null}</>;
+    /></React.Suspense>{tutorialMode ? <TutorialOverlay steps={tutorialSteps} onComplete={finishTutorial} onSkip={skipTutorial} t={t} /> : null}{driveRefreshDialog}</>;
   }
 
   return (
     <main className="app-shell">
       <header className="topbar">
-        <a className="brand" href="./" aria-label="XPENG Analytics">
+        <a className="brand" href="./">
           <span className="brand-mark" aria-hidden="true"><img src={`${import.meta.env.BASE_URL}assets/xpeng-analytics-mark-minimal.png`} alt="" /></span>
           <span><strong>XPENG</strong><small>Analytics</small></span>
         </a>
         <div className="topbar-actions">
           <button className="tutorial-launch" type="button" onClick={startTutorial}>{t("tutorialOpen")}</button>
           <button className="theme-toggle" type="button" onClick={() => setTheme((current) => current === "light" ? "dark" : "light")} aria-label={theme === "light" ? t("darkTheme") : t("lightTheme")}><span aria-hidden="true" />{theme === "light" ? t("dark") : t("light")}</button>
-          <label className="language-picker">
+          <label className="language-picker" htmlFor="landing-language">
             <span>{t("language")}</span>
-            <select value={locale} onChange={(event) => setLocale(event.target.value)}>
+            <select id="landing-language" name="language" value={locale} onChange={(event) => setLocale(event.target.value)}>
               <option value="pt-PT">Português</option>
               <option value="en">English</option>
             </select>
@@ -1123,7 +1249,7 @@ export default function App() {
             {busy ? <strong className="progress-percent">{Math.round(progress.percent ?? 0)}%</strong> : <><span className={`status-dot ${error ? "is-error" : engineReady ? "is-ready" : ""}`} /><strong>{statusText}</strong></>}
             <span className="local-badge">{t("localOnly")}</span>
           </div>
-          {busy ? <><div className="progress"><span style={{ width: `${Math.max(3, progress.percent)}%` }} /></div><p className="progress-phase" aria-live="polite">{statusText}{progress.detail ? ` · ${progress.detail}` : ""}</p>{engineReady&&workerModeRef.current==="native"?<button className="cancel-processing" type="button" onClick={cancelProcessing}>{t("cancelProcessing")}</button>:null}</> : null}
+          {busy ? <><div className="progress"><span style={{ width: `${Math.max(3, progress.percent)}%` }} /></div><p className="progress-phase" aria-live="polite">{statusText}{progress.detail ? ` · ${progress.detail}` : ""}</p>{longDriveOperation?<p className="drive-progress-warning">{t("driveLongOperationWarning")}</p>:null}{engineReady&&workerModeRef.current==="native"&&!longDriveOperation?<button className="cancel-processing" type="button" onClick={cancelProcessing}>{t("cancelProcessing")}</button>:null}</> : null}
           {error ? <div className="error-message" role="alert">{t(errorKeys[error] ?? "errorUnknown")}</div> : null}
           <input
             ref={inputRef}
@@ -1200,6 +1326,7 @@ export default function App() {
 
       <footer className="site-footer"><span>{t("unofficial")}</span><span>{t("ownerLabel")}: Miguel Pinto</span><span>v{APP_VERSION}</span><a href={`${import.meta.env.BASE_URL}about.html`} target="_blank" rel="noreferrer">{t("aboutProject")}</a><a href={`${import.meta.env.BASE_URL}privacy.html`} target="_blank" rel="noreferrer">{t("privacyPolicy")}</a><a href="https://github.com/josepinto1989/xpeng-analytics/issues" target="_blank" rel="noreferrer">{t("reportIssue")}</a><a href="https://ko-fi.com/mpinto" target="_blank" rel="noreferrer">Ko-fi</a></footer>
       {tutorialMode ? <TutorialOverlay steps={tutorialSteps} onComplete={finishTutorial} onSkip={skipTutorial} t={t} /> : null}
+      {driveRefreshDialog}
     </main>
   );
 }
