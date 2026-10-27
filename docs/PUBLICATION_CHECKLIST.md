@@ -12,8 +12,8 @@
 - [x] Translation parity, full browser tests, production build, real-history
   import, console review, and documentation pass locally.
 - [x] Local Lighthouse audit: Accessibility 100, Best Practices 100, SEO 100.
-- [ ] GitHub Quality and Pages workflows, deployed version, and `v2.4.0` tag
-  verified after publication.
+- [x] GitHub Quality and Pages workflows, deployed version, and `v2.4.0` tag
+  verified after publication on 2026-10-27.
 
 ## v2.3.0 — 2026-10-27
 
