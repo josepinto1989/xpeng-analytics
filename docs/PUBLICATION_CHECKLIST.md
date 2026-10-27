@@ -16,6 +16,8 @@
   ranges shown for imported sources.
 - [x] English and Portuguese text, documentation, tests, and production build
   were reviewed locally before publication.
+- [x] Public Quality and GitHub Pages workflows completed successfully; the
+  deployed bundle and `v2.2.2` tag were verified on 2026-10-27.
 
 ## v2.2.1 — 2026-10-27
 
